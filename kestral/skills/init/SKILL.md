@@ -5,17 +5,17 @@ disable-model-invocation: true
 
 # Init
 
-Authenticate with Kestral (if needed) and onboard a local folder into a new project with documents,
-brain generation, and task import from connected task MCPs.
+Authenticate with Kestral (if needed) and onboard a local folder into a new project with documents, brain generation,
+and task import from connected task MCPs.
 
 ## Prerequisites
 
 - The Kestral MCP server must be configured in `.mcp.json` (already set up by the plugin).
 - The `kestral` MCP server must show as **connected** in Claude Code (`/mcp`). Auth ceremony tools
   (`kestral_auth_start`, `kestral_auth_poll`) work **without** an API key.
-- If MCP is **disconnected** (server not running): start `cd server && pnpm run dev` (MCP is at `localhost:3000/mcp`),
-  confirm `curl http://localhost:3000/health` returns OK, then **fully quit and restart**
-  Claude with `--plugin-dir` (config changes only — not required after a successful auth).
+- If MCP is **disconnected**: check that the MCP server URL in `.mcp.json` is reachable (e.g.
+  `curl <url from .mcp.json>` should respond). If the server is down or unreachable, the plugin cannot
+  function. After fixing the connection, **fully quit and restart** Claude Code so it reconnects.
 
 ## Workflow
 
@@ -97,7 +97,10 @@ Accept either a directory path or a comma/newline-separated list of files.
 If explicit files were given, validate each exists.
 
 - If the folder doesn't exist: "I couldn't find `<path>`. Try another folder or file set."
-- If no eligible files found: "I didn't find any `.md`, `.txt`, `.doc`, or `.docx` files in `<path>`. Point me somewhere else?"
+- If no eligible files found: note the absence but **do not stop** — continue to step 3a (MCP documents) first.
+  MCP-sourced docs alone are sufficient to create a project. Only if no documents exist after step 3a, show: "I didn't
+  find any documents to upload — no eligible local files in `<path>` and no MCP document sources available. Point me
+  somewhere else?"
 
 **Always exclude:** hidden directories/files (paths with `/.`), `.DS_Store`, `node_modules/`, `dist/`, `build/`,
 `.git/`, lockfiles, generated artifacts.
@@ -107,8 +110,9 @@ If explicit files were given, validate each exists.
 **Capture file sizes.** For each retained eligible file, record its byte size (via `stat` in Bash or Glob metadata).
 Carry `byteSize` through the manifest so rendering and budget checks do not require re-reading files.
 
-**Read top candidates.** Read ~5 remaining files (prefer README, docs/, architecture, overview). From those contents,
-draft a **title** (short project name) and **description** (1–2 sentences).
+**Read top candidates.** If eligible local files exist, read ~5 (prefer README, docs/, architecture, overview). From
+those contents, draft a **title** (short project name) and **description** (1–2 sentences). If no local files were
+found, defer title/description drafting to after step 3a — derive them from MCP-sourced doc titles instead.
 
 **Select documents to upload.**
 
@@ -152,24 +156,25 @@ orchestrator (`init`) owns MCP tool enumeration because it has visibility into t
 2. **Prompt the user.** For each detected source, ask: "Want me to include relevant documents from `<source>` too?"
 3. **List and filter.** If yes, call the listing tool with a sensible default filter (e.g. recently modified). Use
    judgment to limit to relevant docs — do not dump hundreds of items.
-4. **Record docs.** For each included doc, record `{ filename, relativePath, contentText }`. Derive `filename` from
-   the doc title (e.g. `"Q4 Planning Notes"` → `"Q4 Planning Notes.md"`). Use `<source>/<filename>` as `relativePath`
-   (e.g. `"granola/Q4 Planning Notes.md"`). These fields match the `kestral_create_project_with_documents` document
-   schema.
-5. **Add to manifest.** MCP-sourced docs appear in the manifest with source label `[<source>]` and size `(—)`.
+4. **Record docs.** For each included doc, record `{ filename, relativePath, contentText, contentLength }`. Derive
+   `filename` from the doc title (e.g. `"Q4 Planning Notes"` → `"Q4 Planning Notes.md"`). Use `<source>/<filename>` as
+   `relativePath` (e.g. `"granola/Q4 Planning Notes.md"`). Set `contentLength` to the character count of `contentText`
+   (approximate byte size). These fields match the `kestral_create_project_with_documents` document schema.
+5. **Add to manifest.** MCP-sourced docs appear in the manifest with source label `[<source>]` and approximate size
+   derived from `contentLength` (e.g. `(~12.3 KB)`).
 
 If no doc MCPs detected: skip silently — do not tell the user about the absence.
 
-**Error handling:** If listing fails for a source: "I couldn't list documents from `<source>` — skipping. Local files
-still included." Continue with remaining sources.
+**Error handling:** If listing fails for a source: "I couldn't list documents from `<source>` — skipping." If local
+files or other MCP sources remain, note them ("Other sources still included."). Continue with remaining sources.
 
 ### 3b. Scan tasks
 
-Follow the `scan-tasks/SKILL.md` workflow. This detects connected task MCPs (Linear, Jira, GitHub Issues,
-etc.), lists open + recently completed tasks, and translates them to the Kestral import schema.
+Follow the `scan-tasks/SKILL.md` workflow. This detects connected task MCPs (Linear, Jira, GitHub Issues, etc.), lists
+open + recently completed tasks, and translates them to the Kestral import schema.
 
-Store the result: `{ tasks, warnings, sources }`. If `tasks` is empty, the manifest simply omits the
-Tasks section — no user-facing message about missing task MCPs.
+Store the result: `{ tasks, warnings, sources }`. If `tasks` is empty, the manifest simply omits the Tasks section — no
+user-facing message about missing task MCPs.
 
 ### 4. Render manifest
 
@@ -184,7 +189,7 @@ Description: <first ~120 chars of description>
 Documents (N total, ~<total KB> KB):
   • README.md                       (4.2 KB)   [local]
   • docs/architecture.md            (8.1 KB)   [local]
-  • Q4 planning notes               (—)        [granola]
+  • Q4 planning notes               (~12.3 KB) [granola]
 
 Tasks (X total):
   • Fix login redirect loop                    [linear, high]
@@ -197,7 +202,8 @@ Approve, edit, or cancel?
 ```
 
 **Source labels:** Every item has a bracket label — `[local]` for local files, `[<source>]` for MCP-sourced docs/tasks.
-Never silently omit the label. Local file sizes shown in parentheses; MCP-sourced docs show `(—)`.
+Never silently omit the label. Local file sizes shown in parentheses; MCP-sourced docs show approximate size from
+`contentLength` prefixed with `~` (e.g. `(~12.3 KB)`).
 
 **Tasks section rules:**
 
@@ -206,8 +212,8 @@ Never silently omit the label. Local file sizes shown in parentheses; MCP-source
 - Show up to 10 task titles with `[source, priority-label]` annotation.
 - If more than 10 tasks, show first 10 and "`… and N more`".
 
-**Truncation:** Documents: if > 50 items, show the first 50 then `… and N more`. Tasks use the tighter 10-item
-display limit above. Both rules apply independently to each category.
+**Truncation:** Documents: if > 50 items, show the first 50 then `… and N more`. Tasks use the tighter 10-item display
+limit above. Both rules apply independently to each category.
 
 **Large folder (> 15 eligible files, selection applied):**
 
@@ -258,18 +264,18 @@ List dropped noise files (e.g. `node_modules/`) under **Dropped** when relevant.
 
 Wait for user input. Supported commands:
 
-| Command                                        | Effect                                                                                              |
-| ---------------------------------------------- | --------------------------------------------------------------------------------------------------- |
-| **approve** / **yes** / **go**                 | Proceed to upload                                                                                   |
-| **cancel** / **no**                            | Exit cleanly — no Kestral API calls                                                                 |
-| **remove** `<path>`                            | Remove a file from the document list                                                                |
-| **remove** `<source>` **documents**            | Bulk-remove all documents from a specific source (e.g. `remove granola documents`)                  |
-| **add** `<path>`                               | Validate path, `stat` for `byteSize`, append metadata only (do not read file contents until upload) |
-| **skip tasks**                                 | Remove the Tasks section — no tasks will be imported                                                |
-| **change title** / **title:** `<new title>`    | Override project title                                                                              |
-| **change description** / **description:** `<text>` | Override project description                                                                    |
-| **look at** `<folder>` **instead**             | Alias for `change folder` — re-scan a new folder                                                    |
-| **change folder** `<path>`                     | Re-scan a new folder — **resets** title, description, document list, and tasks                      |
+| Command                                            | Effect                                                                                              |
+| -------------------------------------------------- | --------------------------------------------------------------------------------------------------- |
+| **approve** / **yes** / **go**                     | Proceed to upload                                                                                   |
+| **cancel** / **no**                                | Exit cleanly — no Kestral API calls                                                                 |
+| **remove** `<path>`                                | Remove a file from the document list                                                                |
+| **remove** `<source>` **documents**                | Bulk-remove all documents from a specific source (e.g. `remove granola documents`)                  |
+| **add** `<path>`                                   | Validate path, `stat` for `byteSize`, append metadata only (do not read file contents until upload) |
+| **skip tasks**                                     | Remove the Tasks section — no tasks will be imported                                                |
+| **change title** / **title:** `<new title>`        | Override project title                                                                              |
+| **change description** / **description:** `<text>` | Override project description                                                                        |
+| **look at** `<folder>` **instead**                 | Alias for `change folder` — re-scan a new folder                                                    |
+| **change folder** `<path>`                         | Re-scan a new folder — **resets** title, description, document list, and tasks                      |
 
 **Budget feedback on `add`:** Before appending, `stat` the file and check whether total selected `byteSize` would exceed
 **500 KB**. If so, warn immediately:
@@ -289,8 +295,8 @@ Re-render the manifest after each edit. Loop until the user approves or cancels.
 
 On approve:
 
-**Content budget check.** Sum `byteSize` from the manifest. If **> 500 KB**, warn the user and proceed only if they
-confirm.
+**Content budget check.** Sum `byteSize` (local docs) and `contentLength` (MCP docs) from the manifest. If **> 500 KB**,
+warn the user and proceed only if they confirm.
 
 **Extract `.doc`/`.docx`** — for each document ending in `.doc`/`.docx`, run
 `pandoc -t plain --wrap=none "<path>" -o "<path>.txt"` via Bash. If pandoc is missing: skip those files (warn) if other
@@ -323,17 +329,17 @@ The MCP server reads file contents from disk — do NOT pass file contents in th
 The response includes per-file success/failure:
 
 - If some files failed, report which ones and why.
-- If all failed: "Upload failed partway through. No documents were saved — run `/kestral:init` again."
+- If all failed: "Upload failed — no documents were saved. The project is at `<url>` — you can add files manually, or
+  delete it and run `/kestral:init` again."
 
 #### Path B: Local + MCP documents (mixed sources)
 
-When MCP-sourced docs are present, use a single atomic call that creates the project and uploads all documents
-together. This avoids the need for a separate "add document to existing project" tool (which doesn't exist as an
-MCP tool).
+When MCP-sourced docs are present, use a single atomic call that creates the project and uploads all documents together.
+This avoids the need for a separate "add document to existing project" tool (which doesn't exist as an MCP tool).
 
 **Read local file contents** — for each local document in the manifest, read its content as plain text. For `.doc`/
-`.docx` files, extract via pandoc first (same as Path A). This is required because `kestral_create_project_with_documents`
-accepts content text, not file paths.
+`.docx` files, extract via pandoc first (same as Path A). This is required because
+`kestral_create_project_with_documents` accepts content text, not file paths.
 
 **Create project with all documents** — call `kestral_create_project_with_documents` with the project title,
 description, and all documents (local + MCP-sourced) combined:
@@ -345,34 +351,42 @@ description, and all documents (local + MCP-sourced) combined:
   "documents": [
     { "filename": "README.md", "relativePath": "README.md", "contentText": "<file contents>" },
     { "filename": "architecture.md", "relativePath": "docs/architecture.md", "contentText": "<file contents>" },
-    { "filename": "Q4 Planning Notes.md", "relativePath": "granola/Q4 Planning Notes.md", "contentText": "<doc text from MCP>" }
+    { "filename": "Q4 Planning Notes.md", "relativePath": "granola/Q4 Planning Notes.md", "contentText": "<doc text from MCP>", "source": "granola" }
   ]
 }
 ```
 
-The tool accepts at most 50 documents per call. The 15-file selection cap means this limit is unlikely to be hit,
-but if MCP docs push the total past 50, split into a `kestral_create_project_with_documents` call for the first
-batch and subsequent `kestral_upload_documents` calls for the remainder (local files only — they can use disk paths).
+**Source attribution:** For MCP-sourced documents, include the `source` field (e.g. `"granola"`, `"notion"`, `"gdrive"`)
+so the server stores the correct origin in `metadata.claudeCodePlugin.source`. Omit `source` for local files — the
+server defaults to `"local-folder"`.
+
+The tool accepts at most 50 documents per call. The 15-file selection cap means this limit is unlikely to be hit, but if
+MCP docs push the total past 50, split the upload as follows:
+
+1. **First batch** (`kestral_create_project_with_documents`, up to 50): include **all MCP-sourced documents first**
+   (they require `contentText` and have no disk path), then fill remaining slots with local documents.
+2. **Overflow local docs** (`kestral_upload_documents`): any local documents that didn't fit in the first batch. These
+   have on-disk `filePath`s so the file-path-based tool works.
+3. **Overflow MCP docs** (unlikely — requires 50+ MCP-sourced docs alone): write each overflow MCP document's
+   `contentText` to a temporary file (`mktemp`) and upload via `kestral_upload_documents` using that temp path. Clean up
+   temp files after upload completes.
 
 Store `projectId` and `url` from the response.
 
-**Known limitation:** all documents are tagged with `source: 'local-folder'` server-side regardless of actual source.
-Custom source metadata (e.g. `'granola'`) requires a server-side schema change — tracked as a follow-up.
-
 On 401 from any tool, delete `~/.kestral/credentials` and re-run the auth ceremony, then retry.
 
-**Trigger brain generation** — call `kestral_trigger_project_brain_build` with `{ projectId }`. Capture
-the response (do not fail the overall flow on error). Three response cases:
+**Trigger brain generation** — call `kestral_trigger_project_brain_build` with `{ projectId }`. Capture the response (do
+not fail the overall flow on error). Three response cases:
 
-| Response | User-facing message |
-| --- | --- |
-| `enqueued: true` | "Brain is generating — usually 1–2 minutes." |
+| Response                                           | User-facing message                                                                                                                       |
+| -------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
+| `enqueued: true`                                   | "Brain is generating — usually 1–2 minutes."                                                                                              |
 | `enqueued: false, reason: 'feature-flag-disabled'` | "Project created. Project Brain isn't enabled for this workspace — ask your admin to turn it on, then open `<url>` and click 'Generate'." |
-| `enqueued: false, reason: 'system-error'` | "Project created. Brain generation couldn't start (ref `<supportRef>`). Open `<url>` and click 'Generate' to retry." |
+| `enqueued: false, reason: 'system-error'`          | "Project created. Brain generation couldn't start (ref `<supportRef>`). Open `<url>` and click 'Generate' to retry."                      |
 
 **Import tasks** — if the manifest includes tasks (non-empty `tasks` array from `scan-tasks`), call
-`kestral_create_project_tasks` with `{ projectId, tasks }`. Capture `created` and `failed` from the
-response. Do not fail the overall flow if some tasks fail.
+`kestral_create_project_tasks` with `{ projectId, tasks }`. Capture `created` and `failed` from the response. Do not
+fail the overall flow if some tasks fail.
 
 - Per-task translation failure: "Skipped `<title>` from `<source>` — couldn't map to a Kestral task."
 - Per-task upload failure: "Skipped `<title>` on upload — see report below."
@@ -406,5 +420,5 @@ Do not call any write MCP tools.
 
 ## Error message reference
 
-See `docs/manifest-copy-spec.md` for the full error message table. All error messages in this skill MUST match the
-exact wording specified there.
+See `docs/manifest-copy-spec.md` for the full error message table. All error messages in this skill MUST match the exact
+wording specified there.

@@ -83,10 +83,9 @@ Based on the user's selection:
 For each selected document, call `get_document_content({ workContextId: "<id>" })`.
 
 - Default read: up to 50,000 characters (the tool's default `length`).
-- If the returned content length equals the requested `length` (50,000 chars), there may be more
-  content. Call again with `offset` advanced by the returned length. Repeat until a shorter response
-  is returned (end of document) or total loaded content exceeds **200 KB** — then stop and note the
-  truncation.
+- The response includes `isTruncated` (boolean) and `nextOffset` (number or null). If `isTruncated`
+  is `true`, call again with `offset` set to `nextOffset`. Repeat until `isTruncated` is `false` or
+  total loaded content exceeds **200 KB** — then stop and note the truncation.
 - Present each document's content in the chat with a clear header:
 
 ```

@@ -30,12 +30,12 @@ Run `/kestral:init` first to authenticate and create your first project.
 
 ```bash
 codex plugin marketplace add Kestral-Team/kestral-plugins
-codex plugin install kestral@kestral-plugins
+codex plugin add kestral@kestral-plugins
 ```
 
 ## Version
 
-Current release: **v0.2.0**
+Current release: **v0.2.1**
 
 ## Links
 

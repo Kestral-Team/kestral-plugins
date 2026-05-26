@@ -32,7 +32,7 @@ tasks.
 
 ```
 codex plugin marketplace add Kestral-Team/kestral-plugins
-codex plugin install kestral@kestral-plugins
+codex plugin add kestral@kestral-plugins
 ```
 
 > Codex install commands are provisional — verify the literal syntax during first Codex walkthrough.
@@ -139,36 +139,3 @@ If `pandoc` is not installed, `.doc`/`.docx` files are skipped with a warning.
 ## Re-running `/kestral:init`
 
 Each run creates a **fresh project**. There is no update-in-place yet.
-
-## For contributors
-
-### Local development
-
-1. Start `server` (port 3000) and `client` (port 5173). The MCP endpoint is at `localhost:3000/mcp`.
-2. Set `CLIENT_URL=http://localhost:5173` in `server/.env` for CLI auth redirects.
-3. `.mcp.json` points at `http://localhost:3000/mcp` — the port must match.
-4. After changing `.mcp.json`, fully quit Claude Code and restart. Run `/mcp` — `kestral` must show
-   **connected**.
-5. Type `/kestral:` and use autocomplete to see all available slash commands.
-
-### Skills reference
-
-| Skill | Purpose |
-| --- | --- |
-| [`init`](skills/init/SKILL.md) | Authenticate, scan folder, build manifest, upload to Kestral |
-| [`tasks`](skills/tasks/SKILL.md) | Search, view, and update tasks |
-| [`context`](skills/context/SKILL.md) | Pull docs, projects, and tasks into the chat |
-| [`plan`](skills/plan/SKILL.md) | Scaffold a project with seed tasks from a brief |
-| [`scan-folder`](skills/scan-folder/SKILL.md) | Preview folder scan without uploading |
-| [`scan-tasks`](skills/scan-tasks/SKILL.md) | Detect and list tasks from connected tools |
-| [`upload`](skills/upload/SKILL.md) | Upload documents and create a project |
-
-### Spec reference
-
-- [Manifest copy spec](docs/manifest-copy-spec.md) — canonical manifest format, edit grammar, error
-  messages for `init` and `plan` skills
-
-## Links
-
-- [Kestral app](https://app.kestral.ai)
-- [Public plugin repo](https://github.com/Kestral-Team/kestral-plugins)

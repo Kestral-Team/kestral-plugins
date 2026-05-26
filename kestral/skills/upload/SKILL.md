@@ -5,8 +5,8 @@ disable-model-invocation: true
 
 # Upload
 
-Create a Kestral project with documents from the scan manifest, trigger brain generation, and import
-tasks (if provided by the caller).
+Create a Kestral project with documents from the scan manifest, trigger brain generation, and import tasks (if provided
+by the caller).
 
 ## Prerequisites
 
@@ -87,19 +87,19 @@ The MCP server reads files from disk — do NOT pass file contents. Use absolute
 
 ### 4. Trigger brain generation
 
-Call `kestral_trigger_project_brain_build` with `{ projectId }`. Capture the response — do not fail the
-overall flow on error. Three response cases:
+Call `kestral_trigger_project_brain_build` with `{ projectId }`. Capture the response — do not fail the overall flow on
+error. Three response cases:
 
-| Response | User-facing message |
-| --- | --- |
-| `enqueued: true` | "Brain is generating — usually 1–2 minutes." |
+| Response                                           | User-facing message                                                                                                          |
+| -------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------- |
+| `enqueued: true`                                   | "Brain is generating — usually 1–2 minutes."                                                                                 |
 | `enqueued: false, reason: 'feature-flag-disabled'` | "Project Brain isn't enabled for this workspace — ask your admin to turn it on, or generate it from the project page later." |
-| `enqueued: false, reason: 'system-error'` | "Brain couldn't start (`<supportRef>`) — open the project and click 'Generate'." |
+| `enqueued: false, reason: 'system-error'`          | "Brain couldn't start (`<supportRef>`) — open the project and click 'Generate'."                                             |
 
 ### 5. Import tasks
 
-If `tasks` input is non-empty, call `kestral_create_project_tasks` with `{ projectId, tasks }`. Capture
-`created` and `failed` from the response. Do not fail the overall flow if some tasks fail.
+If `tasks` input is non-empty, call `kestral_create_project_tasks` with `{ projectId, tasks }`. Capture `created` and
+`failed` from the response. Do not fail the overall flow if some tasks fail.
 
 Skip this step entirely if `tasks` is empty or not provided.
 
@@ -121,8 +121,8 @@ Task summary format:
 - Some failed: "Imported X tasks from \<source\>; Y could not be imported."
 - All failed: "Could not import tasks — you can add them manually in Kestral."
 
-If all documents failed: suggest **deleting the incomplete project** in the Kestral UI and re-running, or
-keeping it and adding missing files manually.
+If all documents failed: "Upload failed — no documents were saved. The project is at `<url>` — you can add files
+manually, or delete it and try again."
 
 ## Error handling
 

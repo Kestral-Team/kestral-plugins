@@ -20,18 +20,18 @@ Read `~/.kestral/credentials`. If it exists and contains an `api_key = ...` line
 
 If not: tell the user to run `/kestral:init` first, then stop.
 
-If any MCP tool call later fails with 401 or "invalid API key", delete `~/.kestral/credentials` and tell
-the user to re-run `/kestral:init`.
+If any MCP tool call later fails with 401 or "invalid API key", delete `~/.kestral/credentials` and tell the user to
+re-run `/kestral:init`.
 
 ### 2. Parse intent
 
 The user's prompt determines which path to follow:
 
-| User says | Intent | Path |
-| --- | --- | --- |
-| "show my tasks", "list open tasks in auth project" | **List** | Step 3 |
-| "show task AbC123", "get details on AbC123" | **Drill-down** | Step 4 |
-| "mark AbC123 done", "assign AbC123 to Sarah", "comment on AbC123: shipped in PR #42" | **Update** | Step 5 |
+| User says                                                                            | Intent         | Path   |
+| ------------------------------------------------------------------------------------ | -------------- | ------ |
+| "show my tasks", "list open tasks in auth project"                                   | **List**       | Step 3 |
+| "show task AbC123", "get details on AbC123"                                          | **Drill-down** | Step 4 |
+| "mark AbC123 done", "assign AbC123 to Sarah", "comment on AbC123: shipped in PR #42" | **Update**     | Step 5 |
 
 If the intent is ambiguous, ask one clarifying question.
 
@@ -43,15 +43,13 @@ If the user asks for "my" tasks (or any assignee-filtered query) and no `member_
 
 1. Call `list_workspace_members` (limit 50).
 2. Show the list and ask: "Which one is you?"
-3. When the user picks one, rewrite `~/.kestral/credentials` to include `member_id` via Bash.
-   Read the existing file, then write it back with the new field appended:
+3. When the user picks one, write `member_id` to `~/.kestral/credentials` via Bash. Remove any existing `member_id` line
+   first to keep the file idempotent:
 
 ```bash
-existing=$(cat ~/.kestral/credentials)
-cat > ~/.kestral/credentials << EOF
-${existing}
-member_id = <id>
-EOF
+grep -v '^member_id ' ~/.kestral/credentials > ~/.kestral/credentials.tmp
+echo "member_id = <id>" >> ~/.kestral/credentials.tmp
+mv ~/.kestral/credentials.tmp ~/.kestral/credentials
 chmod 600 ~/.kestral/credentials
 ```
 
@@ -61,17 +59,18 @@ On subsequent runs, read `member_id` from the credentials file and skip this ste
 
 Map the user's prompt to `search_tasks` parameters:
 
-| User phrase | Parameter |
-| --- | --- |
-| "open", "todo", "in progress", "done" | `statuses` — call `list_task_statuses` first to discover the exact keys for the workspace |
-| "urgent", "high", "medium", "low" | `priority` |
-| "in project X" | `projectId` — call `search_projects({ query: "X", limit: 5 })` to resolve the ID |
-| "my tasks" | `assigneeFilter: "assigned"` with the cached `member_id` as a post-filter (match on `assigneeId`). Use `limit: 50` (the maximum) when post-filtering, since the API has no `assigneeId` parameter and results for other assignees consume page slots. |
-| "unassigned" | `assigneeFilter: "unassigned"` |
-| "tagged bug" | `tagIds` — call `list_workspace_tags({ search: "bug" })` to resolve the ID |
-| "due this week" / "due before June 1" | `dueDateFrom` / `dueDateTo` |
+| User phrase                           | Parameter                                                                                                                                                                                                                                                                                                                                                                 |
+| ------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| "open", "todo", "in progress", "done" | `statuses` — call `list_task_statuses` first to discover the exact keys for the workspace                                                                                                                                                                                                                                                                                 |
+| "urgent", "high", "medium", "low"     | `priority`                                                                                                                                                                                                                                                                                                                                                                |
+| "in project X"                        | `projectId` — call `search_projects({ query: "X", limit: 5 })` to resolve the ID                                                                                                                                                                                                                                                                                          |
+| "my tasks"                            | `assigneeFilter: "assigned"` with the cached `member_id` as a post-filter (match on `assigneeId`). The API has no `assigneeId` parameter, so **paginate**: fetch pages of 50 (`limit: 50`), post-filter each page, accumulate matches until you have 20 user tasks or the page returns fewer than 50 results (end of data). Cap at 3 pages (150 rows) to bound API calls. |
+| "unassigned"                          | `assigneeFilter: "unassigned"`                                                                                                                                                                                                                                                                                                                                            |
+| "tagged bug"                          | `tagIds` — call `list_workspace_tags({ search: "bug" })` to resolve the ID                                                                                                                                                                                                                                                                                                |
+| "due this week" / "due before June 1" | `dueDateFrom` / `dueDateTo`                                                                                                                                                                                                                                                                                                                                               |
 
-Call `search_tasks` with the assembled filters. Default `limit: 20` (or `50` when post-filtering by assignee).
+Call `search_tasks` with the assembled filters. Default `limit: 20`. For "my tasks" (assignee post-filter), use
+`limit: 50` per page and paginate as described above.
 
 #### 3c. Render results
 
@@ -132,8 +131,7 @@ Before writing, resolve any human-readable references to IDs:
 
 - **Status:** call `list_task_statuses` to map "done" → the workspace's status ID/key.
 - **Assignee:** call `list_workspace_members` to map "Sarah" → member ID.
-- **Tag:** call `list_workspace_tags({ search: "<name>" })` to verify the tag exists (or note it will
-  be auto-created).
+- **Tag:** call `list_workspace_tags({ search: "<name>" })` to verify the tag exists (or note it will be auto-created).
 - **Project:** call `search_projects({ query: "<name>" })` to resolve project ID.
 
 #### 5b. Confirm
@@ -154,25 +152,25 @@ Wait for explicit confirmation. On "no", cancel and return to the drill-down or 
 
 Depending on the update type, call one or more tools:
 
-| Action | Tool | Key params |
-| --- | --- | --- |
-| Change status | `update_task` | `taskId`, `statusKey` or `statusId` |
-| Change priority | `update_task` | `taskId`, `priority` |
-| Change assignee | `update_task` | `taskId`, `assigneeId` |
-| Unassign | `update_task` | `taskId`, `unassign: true` |
-| Change title | `update_task` | `taskId`, `title` |
-| Change description | `update_task` | `taskId`, `description` |
-| Set due date | `update_task` | `taskId`, `dueDate` (YYYY-MM-DD) |
-| Clear due date | `update_task` | `taskId`, `dueDate: null` |
-| Move to project | `update_task` | `taskId`, `projectId` |
-| Remove from project | `update_task` | `taskId`, `projectId: null` |
-| Archive | `update_task` | `taskId`, `archive: true` |
-| Add comment | `add_task_comment` | `taskId`, `content` (markdown) |
-| Add tag | `assign_tag` | `workObjectId: taskId`, `workObjectType: "Task"`, `tagName` |
-| Remove tag | `unassign_tag` | `workObjectId: taskId`, `workObjectType: "Task"`, `tagId` |
+| Action              | Tool               | Key params                                                  |
+| ------------------- | ------------------ | ----------------------------------------------------------- |
+| Change status       | `update_task`      | `taskId`, `statusKey` or `statusId`                         |
+| Change priority     | `update_task`      | `taskId`, `priority`                                        |
+| Change assignee     | `update_task`      | `taskId`, `assigneeId`                                      |
+| Unassign            | `update_task`      | `taskId`, `unassign: true`                                  |
+| Change title        | `update_task`      | `taskId`, `title`                                           |
+| Change description  | `update_task`      | `taskId`, `description`                                     |
+| Set due date        | `update_task`      | `taskId`, `dueDate` (YYYY-MM-DD)                            |
+| Clear due date      | `update_task`      | `taskId`, `dueDate: null`                                   |
+| Move to project     | `update_task`      | `taskId`, `projectId`                                       |
+| Remove from project | `update_task`      | `taskId`, `projectId: null`                                 |
+| Archive             | `update_task`      | `taskId`, `archive: true`                                   |
+| Add comment         | `add_task_comment` | `taskId`, `content` (markdown)                              |
+| Add tag             | `assign_tag`       | `workObjectId: taskId`, `workObjectType: "Task"`, `tagName` |
+| Remove tag          | `unassign_tag`     | `workObjectId: taskId`, `workObjectType: "Task"`, `tagId`   |
 
-Multiple updates to the same task can be batched into one `update_task` call (e.g. status + assignee).
-Comments and tags are separate calls.
+Multiple updates to the same task can be batched into one `update_task` call (e.g. status + assignee). Comments and tags
+are separate calls.
 
 #### 5d. Report
 
@@ -184,10 +182,10 @@ If the write fails, show the error and suggest retrying or running `/kestral:ini
 
 ## Error handling
 
-| Failure | Message |
-| --- | --- |
-| Credentials missing | "No Kestral credentials found. Run `/kestral:init` to authenticate first." |
-| 401 / invalid API key | "Your API key is invalid or expired. Run `/kestral:init` to re-authenticate." |
-| Task not found | "Task `<id>` not found in your workspace. Double-check the ID." |
-| Project not found for filter | "I couldn't find a project matching `<query>`. Try a different name." |
-| Write failed | "Update failed: `<error>`. Try again, or run `/kestral:init` if it's an auth issue." |
+| Failure                      | Message                                                                              |
+| ---------------------------- | ------------------------------------------------------------------------------------ |
+| Credentials missing          | "No Kestral credentials found. Run `/kestral:init` to authenticate first."           |
+| 401 / invalid API key        | "Your API key is invalid or expired. Run `/kestral:init` to re-authenticate."        |
+| Task not found               | "Task `<id>` not found in your workspace. Double-check the ID."                      |
+| Project not found for filter | "I couldn't find a project matching `<query>`. Try a different name."                |
+| Write failed                 | "Update failed: `<error>`. Try again, or run `/kestral:init` if it's an auth issue." |
