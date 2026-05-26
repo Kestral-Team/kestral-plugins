@@ -2,7 +2,7 @@
   "mcpServers": {
     "kestral": {
       "type": "http",
-      "url": "https://mcp.kestral.ai/mcp",
+      "url": "https://app.kestral.ai/mcp",
       "headers": {
         "x-api-key": "${KESTRAL_API_KEY:-}"
       }
