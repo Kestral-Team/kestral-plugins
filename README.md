@@ -35,7 +35,7 @@ codex plugin add kestral@kestral-plugins
 
 ## Version
 
-Current release: **v0.2.1**
+Current release: **v0.2.2**
 
 ## Links
 

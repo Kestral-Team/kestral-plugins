@@ -46,15 +46,15 @@ Documents (15 of 342 found, ~480 KB):
   • docs/api/webhooks.md              (10.2 KB)  [local]
   • docs/faq.md                       (3.7 KB)   [local]
 
-Notable omissions:
-  • CHANGELOG.md                      (45.0 KB)
-  • docs/internal/team-processes.md   (6.2 KB)
-  • docs/legacy/v1-migration.md       (3.8 KB)
+Dropped:
+  • CHANGELOG.md                      (45.0 KB)  [local]
+  • docs/internal/team-processes.md   (6.2 KB)   [local]
+  • docs/legacy/v1-migration.md       (3.8 KB)   [local]
 
 Tasks (42 total):
   • Fix login redirect loop                      [linear]
-  • Add dark mode toggle                          [linear]
-  • Upgrade auth library                          [linear]
+  • Add dark mode toggle                         [linear]
+  • Upgrade auth library                         [linear]
   • … and 39 more
 
 327 more files not included.
@@ -140,8 +140,9 @@ Approve, edit, or cancel?
 
 ### Plan edit grammar
 
-Extends the shared grammar from the **Edit grammar** section above — `approve`, `cancel`, `title:`, `description:` all
-work in plan manifests too. Additional plan-specific phrases:
+Extends the shared grammar from the **Edit grammar** section above — `approve` and `cancel` work in all plan manifests.
+`title:` and `description:` are only available in the **new-project** flow; the existing-project checkpoint is
+tasks-only so title/description edits are disabled. Additional plan-specific phrases:
 
 | Phrase                                | Effect                                          |
 | ------------------------------------- | ----------------------------------------------- |

@@ -5,8 +5,8 @@ disable-model-invocation: true
 
 # Plan
 
-Create a new Kestral project with seed tasks from a goal, brief, or conversation. The skill drafts a
-project plan, lets you review and edit it, then creates everything in Kestral with one approval.
+Create a new Kestral project with seed tasks from a goal, brief, or conversation. The skill drafts a project plan, lets
+you review and edit it, then creates everything in Kestral with one approval.
 
 ## Prerequisites
 
@@ -46,8 +46,8 @@ I found existing projects that might overlap:
 Create a new project anyway, or add tasks to one of these? (new / 1 / 2)
 ```
 
-- If the user picks an existing project, skip project creation (step 6) and go straight to task
-  creation within that project.
+- If the user picks an existing project, skip project creation (step 6) and go straight to task creation within that
+  project.
 - If the user says "new" or there are no matches, continue to step 4.
 
 ### 4. Draft the plan
@@ -58,16 +58,16 @@ From the brief, draft:
 - **Description** — 1–3 sentences explaining the goal.
 - **Tasks** — 3–15 actionable tasks, each with:
   - `title` — clear, imperative ("Migrate OAuth tokens", not "Token migration").
-  - `priority` — `urgent` (1), `high` (2), `medium` (3), `low` (4), or `none` (0). Default to
-    `medium` unless the brief signals urgency.
+  - `priority` — `urgent` (1), `high` (2), `medium` (3), `low` (4), or `none` (0). Default to `medium` unless the brief
+    signals urgency.
   - `description` — optional, 1–2 sentences if the task needs clarification.
 
-Order tasks by suggested execution sequence (dependencies first). Omit the priority bracket
-for `none` (0) priority tasks — only display `[urgent]`, `[high]`, `[medium]`, or `[low]` when set.
+Order tasks by suggested execution sequence (dependencies first). Omit the priority bracket for `none` (0) priority
+tasks — only display `[urgent]`, `[high]`, `[medium]`, or `[low]` when set.
 
 ### 5. Render the plan manifest and checkpoint
 
-Show the plan for review using the checkpoint grammar from `docs/manifest-copy-spec.md`:
+Show the plan for review using the checkpoint grammar from `../../docs/manifest-copy-spec.md`:
 
 ```
 Project: Auth OIDC Migration
@@ -90,23 +90,23 @@ Approve, edit, or cancel?
 
 **Supported checkpoint commands:**
 
-| Command | Effect |
-| --- | --- |
-| **approve** / **yes** / **go** | Create the project and tasks in Kestral |
-| **cancel** / **no** | Exit — no Kestral API calls |
-| **add** `<task title>` | Append a task (default priority: medium) |
-| **add** `<task title>` `[high]` | Append a task with explicit priority |
-| **remove** `<number>` or **remove** `<title>` | Remove a task by number or title match |
-| **title:** `<new title>` / **change title** `<new>` | Override project title |
-| **description:** `<new>` / **change description** `<new>` | Override project description |
-| **reorder** `<number>` **to** `<position>` | Move a task to a different position |
-| **reprioritize** `<number>` `<priority>` | Change a task's priority |
-| **tag:** `<tag1>, <tag2>` | Set tags to apply to the project after creation |
+| Command                                                   | Effect                                          |
+| --------------------------------------------------------- | ----------------------------------------------- |
+| **approve** / **yes** / **go**                            | Create the project and tasks in Kestral         |
+| **cancel** / **no**                                       | Exit — no Kestral API calls                     |
+| **add** `<task title>`                                    | Append a task (default priority: medium)        |
+| **add** `<task title>` `[high]`                           | Append a task with explicit priority            |
+| **remove** `<number>` or **remove** `<title>`             | Remove a task by number or title match          |
+| **title:** `<new title>` / **change title** `<new>`       | Override project title (new-project only)       |
+| **description:** `<new>` / **change description** `<new>` | Override project description (new-project only) |
+| **reorder** `<number>` **to** `<position>`                | Move a task to a different position             |
+| **reprioritize** `<number>` `<priority>`                  | Change a task's priority                        |
+| **tag:** `<tag1>, <tag2>`                                 | Set tags to apply to the project after creation |
 
 Re-render the manifest after each edit. Loop until the user approves or cancels.
 
-**Task count limit:** If the user `add`s beyond **15 tasks**, warn: "That's a lot of tasks for one
-project. Consider splitting into multiple projects, or approve and I'll create them all."
+**Task count limit:** If the user `add`s beyond **15 tasks**, warn: "That's a lot of tasks for one project. Consider
+splitting into multiple projects, or approve and I'll create them all."
 
 ### 6. Create the project
 
@@ -141,8 +141,7 @@ Store `projectId` and `url` from the response.
 
 The `source` field is always `"plugin"` for tasks created by this skill.
 
-**6c. Apply tags** (optional). If the user specified tags at the checkpoint, call `assign_tag` for
-each tag:
+**6c. Apply tags** (optional). If the user specified tags at the checkpoint, call `assign_tag` for each tag:
 
 ```json
 {
@@ -195,10 +194,10 @@ On cancel: "Cancelled. No changes were made in Kestral."
 
 ## Error handling
 
-| Failure | Message |
-| --- | --- |
-| Credentials missing | "No Kestral credentials found. Run `/kestral:init` to authenticate first." |
-| 401 / invalid API key | "Your API key is invalid or expired. Run `/kestral:init` to re-authenticate." |
-| Project creation failed | "Could not create the project: `<error>`. Try again or check `/mcp`." |
-| Task creation all failed | "Project created at `<url>`, but task creation failed. Add tasks manually." |
-| Tag assignment failed | "Project and tasks created. Could not apply tag `<name>` — apply it manually in Kestral." |
+| Failure                  | Message                                                                                   |
+| ------------------------ | ----------------------------------------------------------------------------------------- |
+| Credentials missing      | "No Kestral credentials found. Run `/kestral:init` to authenticate first."                |
+| 401 / invalid API key    | "Your API key is invalid or expired. Run `/kestral:init` to re-authenticate."             |
+| Project creation failed  | "Could not create the project: `<error>`. Try again or check `/mcp`."                     |
+| Task creation all failed | "Project created at `<url>`, but task creation failed. Add tasks manually."               |
+| Tag assignment failed    | "Project and tasks created. Could not apply tag `<name>` — apply it manually in Kestral." |
