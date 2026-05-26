@@ -5,7 +5,7 @@
     {
       "name": "kestral",
       "version": "0.2.3",
-      "source": { "source": "local", "path": "./kestral" },
+      "source": { "source": "github", "repo": "Kestral-Team/kestral-plugins", "directory": "kestral" },
       "policy": { "installation": "AVAILABLE", "authentication": "ON_INSTALL" },
       "category": "Productivity"
     }
