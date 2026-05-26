@@ -1,7 +1,7 @@
 # Manifest Copy Spec
 
-Source of truth for the `init` skill's user-facing chat output. The `init/SKILL.md` skill MUST render manifests, edit
-grammar, and error messages exactly as specified here.
+Source of truth for user-facing chat output in the `init` and `plan` skills. Skills MUST render manifests, edit grammar,
+and error messages exactly as specified here.
 
 ## Manifest format
 
@@ -57,7 +57,7 @@ Approve, edit, or cancel?
 | --- | --- |
 | **Source labels** | Every item has a source label in brackets: `[local]` for local files, `[<mcp-namespace>]` for MCP-sourced docs/tasks. Never silently omit the label. |
 | **Sizes** | Byte sizes shown for local files only (in parentheses, e.g. `(4.2 KB)`). MCP-sourced docs show `(—)` since size is unknown at listing time. |
-| **Truncation** | If a category has > 50 items, show the first 50 then `… and N more`. |
+| **Truncation** | Documents: if > 50 items, show the first 50 then `… and N more`. Tasks: show up to 10 titles, then `… and N more` (task lists are noisier so the display limit is tighter). |
 | **Tasks grouping** | Group by source if multiple sources detected. Show priority label only when non-zero (e.g. `[linear, high]`). |
 | **Dropped** | List dropped noise files (e.g. `node_modules/`) under a **Dropped** section when relevant. |
 
@@ -84,6 +84,66 @@ scan. Other edits stack on the latest scan.
 immediately. If 15 files are already selected, warn the user to `remove` one first.
 
 Re-render the manifest after each edit. Loop until the user approves or cancels.
+
+## Plan manifest format
+
+Used by the `plan` skill (`/kestral:plan`). Simpler than the init manifest — no documents or file sizes, just a
+project title/description and a numbered task list with priorities.
+
+### New project
+
+```
+Project: Auth OIDC Migration
+Description: Migrate from legacy OAuth 1.0 to OpenID Connect for all auth flows.
+
+Tasks (8):
+  1. [high]    Audit current OAuth endpoints and token formats
+  2. [high]    Set up OIDC provider in staging
+  3. [medium]  Write token migration script
+  4. [medium]  Update login flow to use OIDC
+  5. [medium]  Update API auth middleware
+  6. [medium]  Write migration rollback script
+  7. [low]     Update developer documentation
+  8. [low]     QA full auth flow on staging
+
+Tags: auth, migration
+
+Approve, edit, or cancel?
+```
+
+### Adding tasks to an existing project
+
+```
+Adding tasks to: Auth Overhaul (active, 12 existing tasks)
+
+New tasks (5):
+  1. [medium]  Write token migration script
+  2. [medium]  Update login flow to use OIDC
+  3. [medium]  Update API auth middleware
+  4. [low]     Update developer documentation
+  5. [low]     QA full auth flow on staging
+
+Approve, edit, or cancel?
+```
+
+### Plan edit grammar
+
+Extends the shared grammar from the **Edit grammar** section above — `approve`, `cancel`, `title:`,
+`description:` all work in plan manifests too. Additional plan-specific phrases:
+
+| Phrase | Effect |
+| --- | --- |
+| `add <task title>` | Append a task (default priority: medium) |
+| `add <task title> [high]` | Append a task with explicit priority |
+| `remove <number>` or `remove <title>` | Remove a task by number or title match |
+| `reorder <number> to <position>` | Move a task to a different position |
+| `reprioritize <number> <priority>` | Change a task's priority |
+| `tag: <tag1>, <tag2>` | Set tags to apply to the project after creation |
+
+Re-render the manifest after each edit. Loop until the user approves or cancels.
+
+**Task count limit:** If the user `add`s beyond 15 tasks, warn: "That's a lot of tasks for one project.
+Consider splitting into multiple projects, or approve and I'll create them all."
 
 ## Error message conventions
 
