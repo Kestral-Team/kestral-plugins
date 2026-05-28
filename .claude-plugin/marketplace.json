@@ -4,8 +4,8 @@
   "plugins": [
     {
       "name": "kestral",
-      "version": "0.3.0",
-      "source": { "source": "github", "repo": "Kestral-Team/kestral-plugins", "directory": "kestral" },
+      "version": "0.3.1",
+      "source": { "source": "github", "repo": "Kestral-Team/kestral-plugins" },
       "policy": { "installation": "AVAILABLE", "authentication": "ON_INSTALL" },
       "category": "Productivity"
     }
