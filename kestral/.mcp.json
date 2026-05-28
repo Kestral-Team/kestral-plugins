@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "kestral": {
+      "type": "http",
+      "url": "https://app.kestral.ai/mcp"
+    }
+  }
+}

@@ -12,15 +12,13 @@ auth migration?" without you having to paste anything.
 ## Prerequisites
 
 - The Kestral MCP server must show as **connected** (`/mcp` → `kestral` connected).
-- `~/.kestral/credentials` must contain an `api_key` line (run `/kestral:init` first if not).
+- The `kestral` MCP server must be connected. Authentication is handled automatically via OAuth — the MCP client opens a browser for login on first use.
 
 ## Workflow
 
 ### 1. Authenticate
 
-Read `~/.kestral/credentials`. If it exists and contains an `api_key = ...` line, authentication is done.
-
-If not: tell the user to run `/kestral:init` first, then stop.
+Authentication is handled automatically via OAuth. If a tool call fails with 401, tell the user to reconnect the MCP server.
 
 ### 2. Get the query
 
@@ -146,7 +144,6 @@ messages.
 
 | Failure | Message |
 | --- | --- |
-| Credentials missing | "No Kestral credentials found. Run `/kestral:init` to authenticate first." |
-| 401 / invalid API key | "Your API key is invalid or expired. Run `/kestral:init` to re-authenticate." |
+| 401 / unauthorized | "Authentication expired. Please reconnect the MCP server to re-authenticate." |
 | Document not found | "Document `<id>` not found — it may have been deleted. Skipping." |
 | Search returned error | "Search failed: `<error>`. Try again or check that the MCP server is connected (`/mcp`)." |

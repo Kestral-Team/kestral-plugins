@@ -10,18 +10,15 @@ Search, view, and update tasks in your Kestral workspace without leaving the cha
 ## Prerequisites
 
 - The Kestral MCP server must show as **connected** (`/mcp` → `kestral` connected).
-- `~/.kestral/credentials` must contain an `api_key` line (run `/kestral:init` first if not).
+- The `kestral` MCP server must be connected. Authentication is handled automatically via OAuth — the MCP client opens a
+  browser for login on first use.
 
 ## Workflow
 
 ### 1. Authenticate
 
-Read `~/.kestral/credentials`. If it exists and contains an `api_key = ...` line, authentication is done.
-
-If not: tell the user to run `/kestral:init` first, then stop.
-
-If any MCP tool call later fails with 401 or "invalid API key", delete `~/.kestral/credentials` and tell the user to
-re-run `/kestral:init`.
+Authentication is handled automatically via OAuth. If a tool call fails with 401, tell the user to reconnect the MCP
+server.
 
 ### 2. Parse intent
 
@@ -39,35 +36,25 @@ If the intent is ambiguous, ask one clarifying question.
 
 #### 3a. Resolve "my tasks"
 
-If the user asks for "my" tasks (or any assignee-filtered query) and no `member_id` is cached:
+If the user asks for "my" tasks (or any assignee-filtered query):
 
-1. Call `list_workspace_members` (limit 50).
-2. Show the list and ask: "Which one is you?"
-3. When the user picks one, write `member_id` to `~/.kestral/credentials` via Bash. Remove any existing `member_id` line
-   first to keep the file idempotent:
-
-```bash
-grep -v '^member_id ' ~/.kestral/credentials > ~/.kestral/credentials.tmp
-echo "member_id = <id>" >> ~/.kestral/credentials.tmp
-mv ~/.kestral/credentials.tmp ~/.kestral/credentials
-chmod 600 ~/.kestral/credentials
-```
-
-On subsequent runs, read `member_id` from the credentials file and skip this step.
+1. Call `kestral_whoami` — it returns `workspaceId`, `workspaceName`, and `memberId`.
+2. Use the returned `memberId` for assignee filtering. No local config file or manual user selection needed — the OAuth
+   token identifies the user automatically.
 
 #### 3b. Build filters
 
 Map the user's prompt to `search_tasks` parameters:
 
-| User phrase                           | Parameter                                                                                                                                                                                                                                                                                                                                                                 |
-| ------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| "open", "todo", "in progress", "done" | `statuses` — call `list_task_statuses` first to discover the exact keys for the workspace                                                                                                                                                                                                                                                                                 |
-| "urgent", "high", "medium", "low"     | `priority`                                                                                                                                                                                                                                                                                                                                                                |
-| "in project X"                        | `projectId` — call `search_projects({ query: "X", limit: 5 })` to resolve the ID                                                                                                                                                                                                                                                                                          |
-| "my tasks"                            | `assigneeFilter: "assigned"` with the cached `member_id` as a post-filter (match on `assigneeId`). The API has no `assigneeId` parameter, so **paginate**: fetch pages of 50 (`limit: 50`), post-filter each page, accumulate matches until you have 20 user tasks or the page returns fewer than 50 results (end of data). Cap at 3 pages (150 rows) to bound API calls. |
-| "unassigned"                          | `assigneeFilter: "unassigned"`                                                                                                                                                                                                                                                                                                                                            |
-| "tagged bug"                          | `tagIds` — call `list_workspace_tags({ search: "bug" })` to resolve the ID                                                                                                                                                                                                                                                                                                |
-| "due this week" / "due before June 1" | `dueDateFrom` / `dueDateTo`                                                                                                                                                                                                                                                                                                                                               |
+| User phrase                           | Parameter                                                                                                                                                                                                                                                                                                                                                                               |
+| ------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| "open", "todo", "in progress", "done" | `statuses` — call `list_task_statuses` first to discover the exact keys for the workspace                                                                                                                                                                                                                                                                                               |
+| "urgent", "high", "medium", "low"     | `priority`                                                                                                                                                                                                                                                                                                                                                                              |
+| "in project X"                        | `projectId` — call `search_projects({ query: "X", limit: 5 })` to resolve the ID                                                                                                                                                                                                                                                                                                        |
+| "my tasks"                            | `assigneeFilter: "assigned"` with the `memberId` from `kestral_whoami` as a post-filter (match on `assigneeId`). The API has no `assigneeId` parameter, so **paginate**: fetch pages of 50 (`limit: 50`), post-filter each page, accumulate matches until you have 20 user tasks or the page returns fewer than 50 results (end of data). Cap at 3 pages (150 rows) to bound API calls. |
+| "unassigned"                          | `assigneeFilter: "unassigned"`                                                                                                                                                                                                                                                                                                                                                          |
+| "tagged bug"                          | `tagIds` — call `list_workspace_tags({ search: "bug" })` to resolve the ID                                                                                                                                                                                                                                                                                                              |
+| "due this week" / "due before June 1" | `dueDateFrom` / `dueDateTo`                                                                                                                                                                                                                                                                                                                                                             |
 
 Call `search_tasks` with the assembled filters. Default `limit: 20`. For "my tasks" (assignee post-filter), use
 `limit: 50` per page and paginate as described above.
@@ -178,14 +165,13 @@ After each write, confirm what changed:
 
 > Updated task AbC123: status → done. Added comment: "Shipped in PR #312".
 
-If the write fails, show the error and suggest retrying or running `/kestral:init` if it's an auth issue.
+If the write fails, show the error and suggest retrying or reconnecting the MCP server if it's an auth issue.
 
 ## Error handling
 
-| Failure                      | Message                                                                              |
-| ---------------------------- | ------------------------------------------------------------------------------------ |
-| Credentials missing          | "No Kestral credentials found. Run `/kestral:init` to authenticate first."           |
-| 401 / invalid API key        | "Your API key is invalid or expired. Run `/kestral:init` to re-authenticate."        |
-| Task not found               | "Task `<id>` not found in your workspace. Double-check the ID."                      |
-| Project not found for filter | "I couldn't find a project matching `<query>`. Try a different name."                |
-| Write failed                 | "Update failed: `<error>`. Try again, or run `/kestral:init` if it's an auth issue." |
+| Failure                      | Message                                                                                   |
+| ---------------------------- | ----------------------------------------------------------------------------------------- |
+| 401 / unauthorized           | "Authentication expired. Please reconnect the MCP server to re-authenticate."             |
+| Task not found               | "Task `<id>` not found in your workspace. Double-check the ID."                           |
+| Project not found for filter | "I couldn't find a project matching `<query>`. Try a different name."                     |
+| Write failed                 | "Update failed: `<error>`. Try again, or reconnect the MCP server if it's an auth issue." |

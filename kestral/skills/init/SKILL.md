@@ -11,77 +11,19 @@ and task import from connected task MCPs.
 ## Prerequisites
 
 - The Kestral MCP server must be configured in `.mcp.json` (already set up by the plugin).
-- The `kestral` MCP server must show as **connected** in Claude Code (`/mcp`). Auth ceremony tools
-  (`kestral_auth_start`, `kestral_auth_poll`) work **without** an API key.
+- The `kestral` MCP server must show as **connected** in Claude Code (`/mcp`).
 - If MCP is **disconnected**: check that the MCP server URL in `.mcp.json` is reachable (e.g.
-  `curl <url from .mcp.json>` should respond). If the server is down or unreachable, the plugin cannot
-  function. After fixing the connection, **fully quit and restart** Claude Code so it reconnects.
+  `curl <url from .mcp.json>` should respond). If the server is down or unreachable, the plugin cannot function. After
+  fixing the connection, **fully quit and restart** Claude Code so it reconnects.
 
 ## Workflow
 
 ### 1. Authenticate
 
-Read the file `~/.kestral/credentials`. If it exists and contains an `api_key = ...` line, authentication is already
-done — skip to step 2.
+Authentication uses OAuth and is handled automatically by the MCP client. On the first tool call, the client will open a
+browser window for the user to log in and authorize access. Tokens are managed and refreshed automatically.
 
-If the file does **not** exist, is empty, or has no `api_key` line → run the auth ceremony below.
-
-**Invalid key fallback:** If any MCP tool call later fails with an authentication error (401, "invalid API key", etc.),
-delete `~/.kestral/credentials` and re-run the auth ceremony from 1a.
-
-#### Auth ceremony
-
-**1a. Start auth session.** Call `kestral_auth_start`:
-
-```json
-{
-  "clientId": "<machine-hostname>",
-  "clientLabel": "<machine-hostname>"
-}
-```
-
-Returns `{ "sessionId": "...", "authUrl": "https://app.kestral.ai/cli-auth?session=..." }`.
-
-Tell the user:
-
-> To authenticate, open this URL in your browser:
->
-> **\<authUrl\>**
->
-> Waiting for authorization...
-
-**1b. Poll for completion.** Call `kestral_auth_poll` with `{ "sessionId": "<sessionId>" }`.
-
-- `status: "pending"` — call `sleep 3` (Bash), then poll again. Repeat up to 60 times (3 minutes).
-- `status: "complete"` — continue to 1c with the returned `apiKey`, `workspaceId`, `workspaceLabel`.
-- `status: "expired"` — tell the user the session expired and they should run `/kestral:init` again.
-
-**Do NOT** use a bash `for`/`while` loop wrapping the MCP tool call. Make individual sequential tool calls: one
-`kestral_auth_poll`, one `sleep 3`, one `kestral_auth_poll`, etc.
-
-**1c. Write credentials.** Use Bash (NOT the Write tool — it cannot expand `~`):
-
-```bash
-mkdir -p ~/.kestral
-cat > ~/.kestral/credentials << 'EOF'
-[default]
-api_key = <apiKey>
-workspace_id = <workspaceId>
-EOF
-chmod 600 ~/.kestral/credentials
-```
-
-Tell the user:
-
-> Authenticated as **\<workspaceLabel\>**. Credentials saved to `~/.kestral/credentials`.
-
-The MCP server reads the credentials file automatically — no restart needed.
-
-**Error handling:**
-
-- If `kestral_auth_start` fails: "I couldn't authenticate you with Kestral. Run `/kestral:init` to retry."
-- If polling times out after 60 attempts, tell the user the session timed out.
-- Never print the raw API key to the user.
+If a tool call fails with a 401, tell the user to reconnect the MCP server to re-authenticate.
 
 ### 2. Ask for source
 
@@ -373,7 +315,7 @@ MCP docs push the total past 50, split the upload as follows:
 
 Store `projectId` and `url` from the response.
 
-On 401 from any tool, delete `~/.kestral/credentials` and re-run the auth ceremony, then retry.
+On 401 from any tool, tell the user to reconnect the MCP server to re-authenticate, then retry.
 
 **Trigger brain generation** — call `kestral_trigger_project_brain_build` with `{ projectId }`. Capture the response (do
 not fail the overall flow on error). Three response cases:

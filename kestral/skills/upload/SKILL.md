@@ -10,8 +10,8 @@ by the caller).
 
 ## Prerequisites
 
-- `~/.kestral/credentials` exists with an `api_key` line (run `/kestral:init` first if not).
 - MCP server connected (`/mcp` shows `kestral` connected).
+- The `kestral` MCP server must be connected. Authentication is handled automatically via OAuth — the MCP client opens a browser for login on first use.
 
 ## Inputs
 
@@ -83,7 +83,7 @@ Every `filePath` must lie under `scanRoot`.
 
 The MCP server reads files from disk — do NOT pass file contents. Use absolute paths only.
 
-- On 401: delete `~/.kestral/credentials`, re-run auth, then retry.
+- On 401: tell the user to reconnect the MCP server to re-authenticate, then retry.
 
 ### 4. Trigger brain generation
 
@@ -128,4 +128,3 @@ manually, or delete it and try again."
 
 - If `kestral_create_project` fails, surface the error — no cleanup needed.
 - Brain trigger and task import failures are non-fatal — always present the project URL.
-- Never print the raw API key.

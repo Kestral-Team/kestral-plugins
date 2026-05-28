@@ -11,15 +11,13 @@ you review and edit it, then creates everything in Kestral with one approval.
 ## Prerequisites
 
 - The Kestral MCP server must show as **connected** (`/mcp` → `kestral` connected).
-- `~/.kestral/credentials` must contain an `api_key` line (run `/kestral:init` first if not).
+- The `kestral` MCP server must be connected. Authentication is handled automatically via OAuth — the MCP client opens a browser for login on first use.
 
 ## Workflow
 
 ### 1. Authenticate
 
-Read `~/.kestral/credentials`. If it exists and contains an `api_key = ...` line, authentication is done.
-
-If not: tell the user to run `/kestral:init` first, then stop.
+Authentication is handled automatically via OAuth. If a tool call fails with 401, tell the user to reconnect the MCP server.
 
 ### 2. Get the brief
 
@@ -196,8 +194,7 @@ On cancel: "Cancelled. No changes were made in Kestral."
 
 | Failure                  | Message                                                                                   |
 | ------------------------ | ----------------------------------------------------------------------------------------- |
-| Credentials missing      | "No Kestral credentials found. Run `/kestral:init` to authenticate first."                |
-| 401 / invalid API key    | "Your API key is invalid or expired. Run `/kestral:init` to re-authenticate."             |
+| 401 / unauthorized       | "Authentication expired. Please reconnect the MCP server to re-authenticate."             |
 | Project creation failed  | "Could not create the project: `<error>`. Try again or check `/mcp`."                     |
 | Task creation all failed | "Project created at `<url>`, but task creation failed. Add tasks manually."               |
 | Tag assignment failed    | "Project and tasks created. Could not apply tag `<name>` — apply it manually in Kestral." |
