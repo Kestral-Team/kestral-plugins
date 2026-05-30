@@ -83,7 +83,7 @@ These help the user `add` files without guessing paths.
 - `filename` — basename
 - `relativePath` — relative to scanned folder
 - `byteSize` — from scan step
-- `filePath` — absolute path on disk (used by `kestral_upload_documents`)
+- `filePath` — absolute path on disk (used by `upload_document`)
 
 Do **not** read full contents for every discovered file during scan — only the ~5 used for title/description, plus any
 file the user `add`s at the checkpoint.
@@ -98,10 +98,9 @@ orchestrator (`init`) owns MCP tool enumeration because it has visibility into t
 2. **Prompt the user.** For each detected source, ask: "Want me to include relevant documents from `<source>` too?"
 3. **List and filter.** If yes, call the listing tool with a sensible default filter (e.g. recently modified). Use
    judgment to limit to relevant docs — do not dump hundreds of items.
-4. **Record docs.** For each included doc, record `{ filename, relativePath, contentText, contentLength }`. Derive
-   `filename` from the doc title (e.g. `"Q4 Planning Notes"` → `"Q4 Planning Notes.md"`). Use `<source>/<filename>` as
-   `relativePath` (e.g. `"granola/Q4 Planning Notes.md"`). Set `contentLength` to the character count of `contentText`
-   (approximate byte size). These fields match the `kestral_create_project_with_documents` document schema.
+4. **Record docs.** For each included doc, record `{ title, contentText, contentLength, source }`. Use the doc title
+   directly (e.g. `"Q4 Planning Notes"`) as the `title` passed to `create_document`, and set `source` to the origin tag
+   (e.g. `"granola"`). Set `contentLength` to the character count of `contentText` (approximate byte size).
 5. **Add to manifest.** MCP-sourced docs appear in the manifest with source label `[<source>]` and approximate size
    derived from `contentLength` (e.g. `(~12.3 KB)`).
 
@@ -244,76 +243,24 @@ warn the user and proceed only if they confirm.
 `pandoc -t plain --wrap=none "<path>" -o "<path>.txt"` via Bash. If pandoc is missing: skip those files (warn) if other
 docs remain, or abort if only `.doc`/`.docx` files are present. Use the converted `.txt` path in the upload.
 
-**Choose upload path** based on whether MCP-sourced documents are in the manifest.
-
-#### Path A: Local documents only (no MCP docs)
-
 **Create the project** — call `kestral_create_project` with `{ title, description }`. Store `projectId` and `url`.
 
-**Upload documents** — call `kestral_upload_documents` with the project ID, the scanned folder root, and file paths:
+**Add documents** — add each manifest document to the project with the tool that matches its source. Documents and
+projects are orthogonal: every tool takes an optional `projectId`, and here you always pass the project you just created.
 
-```json
-{
-  "projectId": "<projectId>",
-  "scanRoot": "/absolute/path/to/scanned/folder",
-  "documents": [
-    { "filePath": "/absolute/path/to/scanned/folder/README.md", "relativePath": "README.md" },
-    { "filePath": "/absolute/path/to/scanned/folder/docs/arch.md", "relativePath": "docs/arch.md" }
-  ]
-}
-```
+- **Local files** — call `upload_document` once per file with `{ filePath, projectId }`. The bytes are read on your
+  machine and uploaded directly to storage (they never pass through the agent), so this works for any file type or size.
+  Use absolute paths only; the server rejects common credential locations (`.ssh`, `.aws`, `.kestral`, `.env`, etc.).
+  For `.doc`/`.docx`, extract to plain text first (pandoc, as above) and `upload_document` the `.txt` output.
+- **MCP-sourced documents** — call `create_document` once per doc with `{ title, content, projectId, source }`, where
+  `content` is the text you fetched from the source MCP and `source` is the origin tag (e.g. `"granola"`, `"notion"`).
+  The server stores it under `metadata.claudeCodePlugin.source`.
 
-Every `filePath` must lie under `scanRoot`. The MCP server rejects paths outside that root and common credential
-locations (`.ssh`, `.aws`, `.kestral`, `.env`, etc.).
+Each call returns a single document `{ documentId, title, url }`. Track successes and failures across all calls:
 
-The MCP server reads file contents from disk — do NOT pass file contents in the tool call. Use absolute paths only.
-
-The response includes per-file success/failure:
-
-- If some files failed, report which ones and why.
+- If some documents failed, report which ones and why.
 - If all failed: "Upload failed — no documents were saved. The project is at `<url>` — you can add files manually, or
   delete it and run `/kestral:init` again."
-
-#### Path B: Local + MCP documents (mixed sources)
-
-When MCP-sourced docs are present, use a single atomic call that creates the project and uploads all documents together.
-This avoids the need for a separate "add document to existing project" tool (which doesn't exist as an MCP tool).
-
-**Read local file contents** — for each local document in the manifest, read its content as plain text. For `.doc`/
-`.docx` files, extract via pandoc first (same as Path A). This is required because
-`kestral_create_project_with_documents` accepts content text, not file paths.
-
-**Create project with all documents** — call `kestral_create_project_with_documents` with the project title,
-description, and all documents (local + MCP-sourced) combined:
-
-```json
-{
-  "title": "<project title>",
-  "description": "<project description>",
-  "documents": [
-    { "filename": "README.md", "relativePath": "README.md", "contentText": "<file contents>" },
-    { "filename": "architecture.md", "relativePath": "docs/architecture.md", "contentText": "<file contents>" },
-    { "filename": "Q4 Planning Notes.md", "relativePath": "granola/Q4 Planning Notes.md", "contentText": "<doc text from MCP>", "source": "granola" }
-  ]
-}
-```
-
-**Source attribution:** For MCP-sourced documents, include the `source` field (e.g. `"granola"`, `"notion"`, `"gdrive"`)
-so the server stores the correct origin in `metadata.claudeCodePlugin.source`. Omit `source` for local files — the
-server defaults to `"local-folder"`.
-
-The tool accepts at most 50 documents per call. The 15-file selection cap means this limit is unlikely to be hit, but if
-MCP docs push the total past 50, split the upload as follows:
-
-1. **First batch** (`kestral_create_project_with_documents`, up to 50): include **all MCP-sourced documents first**
-   (they require `contentText` and have no disk path), then fill remaining slots with local documents.
-2. **Overflow local docs** (`kestral_upload_documents`): any local documents that didn't fit in the first batch. These
-   have on-disk `filePath`s so the file-path-based tool works.
-3. **Overflow MCP docs** (unlikely — requires 50+ MCP-sourced docs alone): write each overflow MCP document's
-   `contentText` to a temporary file (`mktemp`) and upload via `kestral_upload_documents` using that temp path. Clean up
-   temp files after upload completes.
-
-Store `projectId` and `url` from the response.
 
 On 401 from any tool, tell the user to reconnect the MCP server to re-authenticate, then retry.
 

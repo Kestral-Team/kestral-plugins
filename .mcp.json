@@ -1,8 +1,11 @@
 {
   "mcpServers": {
     "kestral": {
-      "type": "http",
-      "url": "https://app.kestral.ai/mcp"
+      "command": "npx",
+      "args": [
+        "-y",
+        "@kestral/kestral-mcp@latest"
+      ]
     }
   }
 }

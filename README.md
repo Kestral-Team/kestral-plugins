@@ -19,6 +19,10 @@ Run `/kestral:init` first to authenticate and create your first project.
 
 ## Install
 
+> **Requires [Node.js](https://nodejs.org) 20+.** The plugin launches a small local bridge via `npx`
+> (`@kestral/kestral-mcp`) so folder onboarding and document upload can read files from your machine. The bridge signs
+> in to Kestral via OAuth (a browser opens on first use) and uploads file bytes directly to storage.
+
 ### Claude Code
 
 ```bash
@@ -35,9 +39,9 @@ codex plugin add kestral@kestral-plugins
 
 ## Version
 
-Current release: **v0.3.1**
+Current release: **v0.4.0**
 
 ## Links
 
 - [Kestral app](https://app.kestral.ai)
-- [Full plugin documentation](./kestral/README.md)
+- [Full plugin documentation](./docs/README.md)

@@ -66,22 +66,19 @@ Store `projectId` and `url` from the response.
 
 ### 3. Upload all documents
 
-Call `kestral_upload_documents` with file paths:
+Call `upload_document` once per document, passing the project ID so each file is attached to the project:
 
 ```json
 {
-  "projectId": "<projectId>",
-  "scanRoot": "/absolute/path/to/scanned/folder",
-  "documents": [
-    { "filePath": "/absolute/path/to/scanned/folder/README.md", "relativePath": "README.md" },
-    { "filePath": "/absolute/path/to/scanned/folder/docs/arch.md", "relativePath": "docs/arch.md" }
-  ]
+  "filePath": "/absolute/path/to/scanned/folder/README.md",
+  "projectId": "<projectId>"
 }
 ```
 
-Every `filePath` must lie under `scanRoot`.
+The MCP server reads files from disk and uploads the bytes directly to storage — do NOT pass file contents. Use absolute
+paths only; the server rejects common credential locations (`.ssh`, `.aws`, `.kestral`, `.env`, etc.).
 
-The MCP server reads files from disk — do NOT pass file contents. Use absolute paths only.
+Each call returns a single document `{ documentId, title, url }`. Track per-file success/failure across the calls.
 
 - On 401: tell the user to reconnect the MCP server to re-authenticate, then retry.
 
