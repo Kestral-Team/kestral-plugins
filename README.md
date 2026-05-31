@@ -39,7 +39,7 @@ codex plugin add kestral@kestral-plugins
 
 ## Version
 
-Current release: **v0.3.0**
+Current release: **v0.4.1**
 
 ## Links
 
