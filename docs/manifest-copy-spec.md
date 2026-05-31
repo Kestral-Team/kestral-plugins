@@ -3,6 +3,35 @@
 Source of truth for user-facing chat output in the `init` and `plan` skills. Skills MUST render manifests, edit grammar,
 and error messages exactly as specified here.
 
+## Connected-source offer copy
+
+Used by `init` (step 2 opener and step 3a). The plugin can enrich a project with context from MCP connectors the user
+has already set up in this session (Slack, Notion, Google Drive, Linear, Jira, Granola, Confluence, and others). The
+offer is **reactive, not a per-source yes/no interrogation** — pick the lightest touch that fits the conversation.
+
+### Step 2 opener (frames value + plants the connector seed)
+
+```
+I'll turn a folder of docs into a Kestral project — with an AI Project Brain (a summary Kestral generates from your
+docs) and imported tasks. I can also pull in context from tools you've already connected here (Slack, Notion, Google
+Drive, Linear, Jira, and others) to make the project more complete. Which folder should I scan? (Or list specific file
+paths — and mention any connected source you'd like included.)
+```
+
+### Surfacing connected sources (step 3a)
+
+Choose one, in priority order:
+
+| Situation                                                     | What to say                                                                                                                   |
+| ------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------- |
+| User already named sources ("pull my Linear too")             | Act on exactly those — no offer copy, no re-asking.                                                                            |
+| Scanned content references a connected source                 | Lead with one specific line: "Your README references Linear — want me to pull the linked issues in too?"                       |
+| Sources connected but neither of the above                    | One soft mention, then move on: "You also have Notion, Google Drive, and Granola connected — say the word if you'd like any pulled in, otherwise I'll keep documents to local files." |
+| No relevant sources connected                                 | Say nothing about their absence.                                                                                              |
+
+**Rules:** Never loop a yes/no per source. Never block the flow waiting for an answer — the user can request sources now,
+at the manifest checkpoint, or not at all. Whatever they include feeds the same manifest checkpoint below.
+
 ## Manifest format
 
 ### Small folder (≤ 15 eligible files, all included)
@@ -166,7 +195,7 @@ Every error the `init` skill can encounter has a prescribed user-facing message.
 | ------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
 | Auth fails / token invalid                        | "I couldn't authenticate you with Kestral. Run `/kestral:init` to retry."                                                                      |
 | Folder doesn't exist                              | "I couldn't find `<path>`. Try another folder or file set."                                                                                    |
-| No documents at all (after local scan + MCP scan) | "I didn't find any documents to upload — no eligible local files in `<path>` and no MCP document sources available. Point me somewhere else?"  |
+| No documents at all (after local scan + connected sources) | "I didn't find any documents to upload — no eligible local files in `<path>` and no connected document sources available. Point me somewhere else?"  |
 | Task MCP listing error                            | "I couldn't read tasks from `<source>` — skipping. Other sources still imported."                                                              |
 | Per-task translation failure                      | "Skipped `<title>` from `<source>` — couldn't map to a Kestral task."                                                                          |
 | Per-task upload failure                           | "Skipped `<title>` on upload — see report below."                                                                                              |

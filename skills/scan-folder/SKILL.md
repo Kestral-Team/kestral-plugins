@@ -7,8 +7,8 @@ disable-model-invocation: true
 
 Walk a local folder (or explicit file list) and produce a curated document manifest for Kestral project onboarding.
 
-For folders with **more than 15** eligible files, prefer `/kestral:init` — it includes manifest approval and upload.
-This skill uses the same selection rules as `init/SKILL.md`.
+For folders with **more than 15** eligible files, prefer `/kestral:init` — it includes manifest approval, connected-
+source enrichment, and upload. This skill uses the same selection rules as `init/SKILL.md`.
 
 ## Inputs
 
@@ -49,7 +49,7 @@ From those contents, draft **title** and **description** (1–2 sentences).
 
 ### 6. Select documents
 
-When **more than 15** eligible files remain, apply the same selection heuristic as `setup/SKILL.md` (15 docs max, 500 KB
+When **more than 15** eligible files remain, apply the same selection heuristic as `init/SKILL.md` (15 docs max, 500 KB
 total `byteSize` budget). When **15 or fewer**, include all eligible files.
 
 > **Selection heuristic:** Imagine you are onboarding to this project. Pick the 15 files you would read first.
@@ -92,6 +92,7 @@ Return a JSON object with this shape:
 
 ## Constraints
 
-- **Do not** enumerate MCP doc sources (Granola, Notion, Google Drive) — that is Phase 4.
-- All documents use provenance source label `local-folder` (stored server-side in metadata).
-- Supported extensions this phase: `.md`, `.txt`, `.doc`, `.docx` only.
+- **This skill scans local files only.** Enumerating MCP document sources (Granola, Notion, Google Drive, etc.) is the
+  `init` skill's job (see `init/SKILL.md` step 3a) — it has visibility into the conversation's loaded MCP tools.
+- Local documents use provenance source label `local-folder` (stored server-side in metadata).
+- Supported extensions: `.md`, `.txt`, `.doc`, `.docx` only.

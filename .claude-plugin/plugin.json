@@ -1,6 +1,6 @@
 {
   "name": "kestral",
   "displayName": "Kestral",
-  "version": "0.4.0",
+  "version": "0.3.0",
   "description": "Onboard projects, search and update tasks, pull workspace context, and plan new projects — all from Claude Code."
 }

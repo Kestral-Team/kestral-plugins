@@ -41,15 +41,10 @@ files are included.
 This is a safety rail — scan should already cap at 15 docs / 500 KB, but the user may have `add`ed large files at the
 checkpoint.
 
-### 1. Extract `.doc`/`.docx` to plain text
+### 1. Upload documents
 
-For each document whose filename ends in `.doc` or `.docx`:
-
-1. Check `pandoc` is available: `command -v pandoc`
-2. If missing:
-   - If **other** non-doc documents remain, **skip** the `.doc`/`.docx` files and warn.
-   - If **only** `.doc`/`.docx` files remain, **abort** with install instructions.
-3. If available: `pandoc -t plain --wrap=none "<path>" -o "<path>.txt"` and update `filePath` to the `.txt` output.
+Call `upload_document` once per local file — the local MCP bridge streams the bytes directly to storage via a
+presigned URL (bytes never pass through the agent). Works for any file type and size.
 
 ### 2. Create empty project
 

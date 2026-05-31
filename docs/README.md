@@ -9,8 +9,11 @@ update tasks, pull workspace knowledge into a conversation, or scaffold a new pr
 
 ## Why use it
 
-- **Onboard a project in one command.** Point the plugin at a folder of docs. It scans, infers a title, imports tasks
-  from Linear/Jira/GitHub, and creates a Kestral project — all before you leave the chat.
+- **Onboard a holistic project in one command.** Point the plugin at a folder of docs. It scans, infers a title, and —
+  using the tools you've already connected (Slack, Notion, Google Drive, Linear, Jira, Granola, and more) — pulls in
+  related documents and tasks so the project reflects your whole picture, not just local files.
+- **Bring your connected tools' context with you.** The plugin sees the same MCP connectors loaded in your session and
+  offers to enrich the project with them. You stay in control of what's included — nothing is pulled without your say.
 - **Manage tasks without switching tools.** List your open tasks, change status, add comments, and assign work from the
   command line.
 - **Give the agent your workspace context.** Search Kestral for docs, projects, and tasks, then pull them into the
@@ -60,14 +63,18 @@ Run `/kestral:init` to start. The skill walks you through four steps:
 1. **Authenticate** — on first use, the MCP client opens a browser for OAuth login. Tokens are managed and refreshed
    automatically.
 
-2. **Pick a folder** — "Which folder should I scan?" Point it at your project root or a docs subfolder.
+2. **Pick a folder (and any connected sources)** — it asks which folder to scan and reminds you it can also pull context
+   from tools you've connected (Slack, Notion, Google Drive, Linear, Jira, …). Name any source you'd like included, or
+   just give it a folder. It won't interrogate you source-by-source — mention what you want and it reacts.
 
-3. **Review the manifest** — a summary of your project: documents it found, tasks from any connected tools (Linear,
-   Jira, GitHub Issues, etc.), and a title/description it inferred. You can add, remove, or edit anything before
-   proceeding.
+3. **Review the manifest** — a summary of your project: local documents, any documents and tasks pulled from connected
+   tools, and a title/description it inferred. Every item is labelled by source. You can add, remove, or edit anything
+   before proceeding.
 
 4. **Upload** — creates a Kestral project, uploads documents, triggers Project Brain generation (an AI-generated summary
-   Kestral builds from your docs), and imports tasks. You get a link to your new project.
+   Kestral builds from your docs), and imports tasks. You get a link to your new project, plus a nudge to open the brain
+   for blockers and a few next steps it can help with — adding more context, working the blocker tasks, or sharing with
+   your team.
 
 ```
 Project: My App
@@ -97,7 +104,7 @@ and `/kestral:plan` to create new projects.
 | Source               | File types                                | Notes                                                                                    |
 | -------------------- | ----------------------------------------- | ---------------------------------------------------------------------------------------- |
 | Local folder         | `.md`, `.txt`, `.doc`, `.docx`            | Scanned recursively. Hidden dirs, `node_modules/`, `dist/`, etc. are excluded.           |
-| MCP document sources | Granola, Notion, Google Drive, Confluence | Detected automatically when the MCP is loaded. You're asked before anything is included. |
+| MCP document sources | Granola, Notion, Google Drive, Confluence, Slack | Detected automatically when the MCP is loaded. Nothing is pulled in unless you ask for it. |
 
 ### Tasks
 
@@ -112,25 +119,10 @@ Protocol (the way Claude Code talks to external tools).
 | Auth expired or invalid   | Reconnect the `kestral` MCP server (`/mcp`) to re-authenticate via OAuth.                                                     |
 | Folder not found          | Double-check the path. Use an absolute path or `~` shorthand.                                                                  |
 | No eligible files found   | The folder must contain `.md`, `.txt`, `.doc`, or `.docx` files.                                                               |
-| `pandoc` not installed    | Install `pandoc` (see below). Without it, `.doc`/`.docx` files are skipped.                                                    |
 | Project Brain not enabled | "Project Brain isn't enabled for this workspace" — ask your workspace admin to enable it, then generate from the project page. |
 | MCP won't connect         | Verify the MCP server is running (`/mcp` should show kestral as connected). Restart Claude Code and retry.                                                      |
 | Network errors            | Check your connection. If the error persists, run `/kestral:init` again.                                                       |
 
-## If you have `.doc`/`.docx` files
-
-Word documents are converted to plain text via `pandoc` during upload. Tables, embedded images, and complex formatting
-are dropped. Install `pandoc` before running `/kestral:init`:
-
-```bash
-# macOS
-brew install pandoc
-
-# Ubuntu/Debian
-sudo apt-get install pandoc
-```
-
-If `pandoc` is not installed, `.doc`/`.docx` files are skipped with a warning.
 
 ## Re-running `/kestral:init`
 
