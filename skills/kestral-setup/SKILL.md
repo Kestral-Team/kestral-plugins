@@ -1,4 +1,5 @@
 ---
+name: kestral-setup
 description: Authenticate and onboard a folder into a new Kestral project with documents, brain, and tasks
 disable-model-invocation: true
 ---
@@ -18,75 +19,26 @@ and task import from connected task MCPs.
 
 ## Workflow
 
-### 1. Open with a welcome — no tool call, no approval needed
+### 1. Authenticate
 
-The moment `/kestral:init` runs, your **first output is the welcome message** — do not call any tool first. Everything
-the welcome needs (which sources are connected) is visible from the session's loaded MCP tools, so nothing has to be
-approved before you can greet the user.
+Authentication uses OAuth and is handled automatically by the MCP client. On the first tool call, the client will open a
+browser window for the user to log in and authorize access. Tokens are managed and refreshed automatically.
 
-Authentication is automatic and lazy: the first real tool call later in the flow (listing a connector, creating the
-project) triggers the MCP client's OAuth browser login if needed, and tokens refresh silently afterward. **Do not call
-`kestral_whoami` — or any tool — just to check auth.** It only adds an approval prompt without changing anything. If any
-later tool call returns a 401, tell the user to reconnect the MCP server.
+If a tool call fails with a 401, tell the user to reconnect the MCP server to re-authenticate.
 
-**Detect connected sources** by inspecting the available MCP tools (no call required):
+### 2. Frame the run and ask for a source
 
-- **Document sources** — tools whose name or description mentions `document`, `note`, `page`, `file`, or known sources
-  (Granola, Notion, Google Drive, Confluence, Slack).
-- **Task sources** — tools matching the patterns in `scan-tasks/SKILL.md` (Linear, Jira, GitHub Issues, Asana, etc.).
+Lead with a short, concrete framing so the user knows what's about to happen and what they get — then ask for the folder
+in the same message. Keep it to ~2 sentences. For example:
 
-Build two lists: `detectedDocSources` and `detectedTaskSources` — referenced in the welcome message below.
+> Welcome to Kestral! We're here to help you work better and faster.
+> I'll turn a collection of docs into a Kestral project — with an AI **Project Brain** (a summary Kestral generates from
+> your docs) and imported tasks. I can also pull in context from tools you've already connected here (Slack, Notion,
+> Google Drive, Linear, Jira, and others) to make the project more complete. Which folder or files should I scan? (Or list
+> specific file paths — and mention any connected source you'd like included.)
 
-**Write the welcome message.** Tailor it to what you found — be specific, not generic. Use this structure:
-
----
-
-> **Welcome to Kestral** — let's get your project set up.
->
-> A Kestral project gives you a single place to see what's going on: an AI **Project Brain** that surfaces your
-> blockers and next steps, and project artifacts (docs and tasks) that **stay in sync automatically** as work moves.
->
-> Here's what we'll do:
-> - **Pull in your docs** — from a local folder and any connected tools, picking the most relevant.
-> - **Build a Project Brain** — an AI read of the project's status, blockers, and next steps (~1–2 min after upload).
-> - **Bring in your tasks** — import open and recently-closed tasks, and I can create new ones in Kestral too.
->
-> **If sources are connected** — one brief inline line (not a bullet per source), e.g.:
-> **Connected and ready to pull from:** Linear (tasks), Notion & Google Drive (docs), Granola (notes).
->
-> **If no doc or task sources are connected** — omit that line entirely and use this standalone sentence instead:
-> No external tools connected yet — I'll use local files. You can connect more to Claude Code any time.
->
-> **What should I pull from?**
-> - **If sources are connected:** Any mix of a local folder/files (e.g. `./docs`), the connected sources above
->   (e.g. "include my Notion and Linear"), or both. Just tell me and I'll build the project from it.
-> - **If no sources are connected:** Point me at a local folder or file list (e.g. `./docs`) and I'll build the
->   project from it.
-
----
-
-**Rules for the welcome message:**
-
-- Only name sources actually detected this session — never list ones that aren't connected.
-- Group connected sources by kind where it reads naturally (e.g. "Notion & Google Drive (docs)"). Name each source as
-  the tool identifies itself.
-- **Never** show the "Connected and ready to pull from" heading when `detectedDocSources` and `detectedTaskSources`
-  are both empty — use the standalone no-tools sentence from the template instead.
-- If only task sources are detected, note docs will come from local files and tasks can come from [source].
-
-
-### 2. Receive the source selection
-
-Accept any combination of:
-
-- A local folder path or comma/newline-separated list of file paths
-- Named connected sources ("include my Linear", "pull Notion too", "Granola meeting notes")
-- Or just connected sources with no local folder (that's fine — docs from connectors alone are enough)
-
-Carry all expressed intent into steps 3 / 3a / 3b and act on exactly what was asked — do not re-ask about sources
-already named. If the user gives no sources at all (just presses enter or says something vague), prompt once:
-
-> "No problem — just point me at a folder, a list of files, or name a connected source and I'll get started." 
+Accept either a directory path or a comma/newline-separated list of files. If the user names connected sources, carry
+that intent into steps 3a/3b and act on exactly those.
 
 ### 3. Scan the folder
 
@@ -146,7 +98,7 @@ file the user `add`s at the checkpoint.
 ### 3a. Detect and offer connected sources
 
 A project is more useful with context beyond local files. The opener (step 2) already told the user this is possible —
-now act on it **reactively and flexibly**. The orchestrator (`init`) owns MCP tool enumeration because it has visibility
+now act on it **reactively and flexibly**. The orchestrator (`kestral-setup`) owns MCP tool enumeration because it has visibility
 into the conversation's loaded tools.
 
 1. **Detect.** Inspect available MCP tools and note what document sources are connected: tool names or descriptions
@@ -163,9 +115,11 @@ into the conversation's loaded tools.
    Do **not** block on an answer. The user can request sources now, at the manifest checkpoint, or not at all.
 3. **Pull what the user asked for.** For each requested document source, call its listing tool with a sensible default
    filter (e.g. recently modified). Use judgment to keep it relevant — do not dump hundreds of items.
-4. **Record docs.** For each included doc, record `{ title, contentText, contentLength, source }`. Use the doc title
-   directly (e.g. `"Q4 Planning Notes"`) as the `title` passed to `create_document` at upload, and set `source` to the
-   origin tag (e.g. `"granola"`). Set `contentLength` to the character count of `contentText` (approximate byte size).
+4. **Record docs.** For each included doc, record `{ filename, relativePath, contentText, contentLength }`. Derive
+   `filename` from the doc title (e.g. `"Q4 Planning Notes"` → `"Q4 Planning Notes.md"`). Use `<source>/<filename>` as
+   `relativePath` (e.g. `"granola/Q4 Planning Notes.md"`). Set `contentLength` to the character count of `contentText`
+   (approximate byte size). MCP docs are uploaded later via `create_document` using `title` + `content` (from
+   `contentText`) and optional `source` for provenance.
 5. **Add to manifest.** MCP-sourced docs appear in the manifest with source label `[<source>]` and approximate size
    derived from `contentLength` (e.g. `(~12.3 KB)`).
 
@@ -269,18 +223,6 @@ Approve, edit, or cancel?
 
 List dropped noise files (e.g. `node_modules/`) under **Dropped** when relevant.
 
-**Suggest sources to connect (light, optional, once).** Kestral can also pull from sources that aren't connected this
-session. When you render the manifest, if any supported source is missing from `detectedDocSources` /
-`detectedTaskSources`, append a **single soft line** under the manifest — not a question, not a new step, and never
-something that blocks approval:
-
-> 💡 Want richer projects next time? You could also connect <up to 3 unconnected sources> to Claude Code — e.g. Jira
-> issues or Confluence pages flow straight in.
-
-Draw from the sources Kestral supports — tasks: Linear, Jira, GitHub, Asana; documents: Notion, Google Drive, Confluence,
-Granola, Slack — excluding anything already detected. Show it at most once (with the first manifest render), skip it
-entirely if everything relevant is already connected, and never let it delay the `Approve, edit, or cancel?` prompt.
-
 ### 5. Manifest checkpoint
 
 Wait for user input. Supported commands:
@@ -319,25 +261,46 @@ On approve:
 **Content budget check.** Sum `byteSize` (local docs) and `contentLength` (MCP docs) from the manifest. If **> 500 KB**,
 warn the user and proceed only if they confirm.
 
+**Extract `.doc`/`.docx`** — for each document ending in `.doc`/`.docx`, run
+`pandoc -t plain --wrap=none "<path>" -o "<path>.txt"` via Bash. If pandoc is missing: skip those files (warn) if other
+docs remain, or abort if only `.doc`/`.docx` files are present. Use the converted `.txt` path in the upload.
 
 **Create the project** — call `kestral_create_project` with `{ title, description }`. Store `projectId` and `url`.
 
-**Add documents** — add each manifest document to the project with the tool that matches its source. Documents and
-projects are orthogonal: every tool takes an optional `projectId`, and here you always pass the project you just created.
+**Upload local documents** — for each manifest document that has a `filePath`, call `upload_document` once with the
+project ID. The local MCP bridge reads the file from disk and streams bytes to storage (do NOT read file contents into
+the agent or pass them in the tool call). Use absolute paths only; the server rejects common credential locations
+(`.ssh`, `.aws`, `.kestral`, `.env`, etc.).
 
-- **Local files** — call `upload_document` once per file with `{ filePath, projectId }`. The local MCP bridge reads
-  the file and streams the bytes directly to storage via a presigned URL — they never pass through the agent —
-  so it works for any file type and any size. Use absolute paths only; the bridge rejects sensitive locations
-  (`.ssh`, `.aws`, `.kestral`, `.env`, etc.).
-- **MCP-sourced documents** — call `create_document` once per doc with `{ title, content, projectId, source }`, where
-  `content` is the text you fetched from the source MCP and `source` is the origin tag (e.g. `"granola"`, `"notion"`).
-  The server stores it under `metadata.claudeCodePlugin.source`.
+```json
+{
+  "filePath": "/absolute/path/to/scanned/folder/README.md",
+  "projectId": "<projectId>"
+}
+```
 
-Each call returns a single document `{ documentId, title, url }`. Track successes and failures across all calls:
+Each call returns `{ documentId, title, url }`. Track per-file success/failure across the calls.
+
+**Upload MCP-sourced documents** — for each manifest document that has `contentText` (no `filePath`), call
+`create_document` once:
+
+```json
+{
+  "title": "Q4 Planning Notes",
+  "content": "<contentText from manifest>",
+  "projectId": "<projectId>",
+  "source": "granola"
+}
+```
+
+Use the doc title for `title`. Set `source` to the MCP namespace (e.g. `"granola"`, `"notion"`, `"gdrive"`) so the
+server stores provenance in `metadata.claudeCodePlugin.source`.
+
+**Document upload outcomes:**
 
 - If some documents failed, report which ones and why.
 - If all failed: "Upload failed — no documents were saved. The project is at `<url>` — you can add files manually, or
-  delete it and run `/kestral:init` again."
+  delete it and run `/kestral:kestral-setup` again."
 
 On 401 from any tool, tell the user to reconnect the MCP server to re-authenticate, then retry.
 
@@ -401,13 +364,9 @@ When the user picks one, map it to the right tools:
 
 | User picks        | Do this                                                                                                                                                                                                                                  |
 | ----------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Add more context  | Treat the new files/sources like steps 3 / 3a (scan locally or pull from a connector), then add them to the **existing** `projectId` (`upload_document` for local files, `create_document` for MCP-sourced docs), and re-run `kestral_trigger_project_brain_build` to refresh the brain. |
+| Add more context  | Treat the new files/sources like steps 3 / 3a (scan locally or pull from a connector). For each **local** file, call `upload_document` with `{ filePath, projectId }`. For each **MCP-sourced** doc (has `contentText`, no disk path), call `create_document` with `{ title, content, projectId, source }`. Then re-run `kestral_trigger_project_brain_build` to refresh the brain. |
 | Help clear blockers | Hand off to `tasks/SKILL.md`. Use `search_tasks({ projectId })` to list this project's open tasks and let the user pick which to work on next.                                                                                          |
-| Loop in team      | Sharing the URL alone won't grant access — teammates must be members of the workspace. Tell the user to invite them in Kestral under **Workspace Settings → Members**; there's no MCP tool to invite from the plugin.                       |
-
-> **Note:** The plugin can only *link* to the brain today — no MCP tool returns the brain's blocker/next-step content, so
-> the skill can't read individual blockers inline or say who one is assigned to. Rely on the user opening the link and
-> telling you what they want to tackle.
+| Loop in team      | Sharing the URL alone won't grant access — teammates must be members of the workspace. Tell the user to invite them in Kestral under **Workspace Settings → Members**                     |
 
 ## Cancel behavior
 

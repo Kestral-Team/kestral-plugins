@@ -1,4 +1,5 @@
 ---
+name: kestral-tasks
 description: Search, view, and update Kestral tasks from the chat
 disable-model-invocation: true
 ---

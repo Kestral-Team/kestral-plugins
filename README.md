@@ -10,12 +10,13 @@ tasks without leaving the terminal.
 
 | Command | What it does |
 | --- | --- |
-| `/kestral:init` | Onboard a project from a folder of docs. Scans files, imports tasks from Linear/Jira/GitHub, and creates a Kestral project. |
+| `/kestral:kestral-setup` | Onboard a project from a folder of docs. Scans files, imports tasks from Linear/Jira/GitHub, and creates a Kestral project. |
 | `/kestral:tasks` | Search, view, and update tasks. Filter by status, priority, project, or assignee. |
 | `/kestral:context` | Pull documents, projects, and tasks into the conversation so the agent can answer questions with real workspace data. |
 | `/kestral:plan` | Describe a goal, review a draft project with tasks, and create it in Kestral with one approval. |
 
-Run `/kestral:init` first to authenticate and create your first project.
+In Claude Code, run `/kestral:kestral-setup` first to authenticate and create your first project.
+In Codex, type `@kestral` to target the plugin, or invoke the bundled skill directly with `$kestral-setup`.
 
 ## Install
 
@@ -39,7 +40,7 @@ codex plugin add kestral@kestral-plugins
 
 ## Version
 
-Current release: **v0.4.2**
+Current release: **v0.4.4**
 
 ## Links
 

@@ -1,4 +1,5 @@
 ---
+name: kestral-upload
 description: Create a Kestral project, upload documents, trigger brain, and import tasks
 disable-model-invocation: true
 ---

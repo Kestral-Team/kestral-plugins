@@ -1,11 +1,11 @@
 # Manifest Copy Spec
 
-Source of truth for user-facing chat output in the `init` and `plan` skills. Skills MUST render manifests, edit grammar,
+Source of truth for user-facing chat output in the `kestral-setup` and `plan` skills. Skills MUST render manifests, edit grammar,
 and error messages exactly as specified here.
 
 ## Connected-source offer copy
 
-Used by `init` (step 2 opener and step 3a). The plugin can enrich a project with context from MCP connectors the user
+Used by `kestral-setup` (step 2 opener and step 3a). The plugin can enrich a project with context from MCP connectors the user
 has already set up in this session (Slack, Notion, Google Drive, Linear, Jira, Granola, Confluence, and others). The
 offer is **reactive, not a per-source yes/no interrogation** — pick the lightest touch that fits the conversation.
 
@@ -104,7 +104,7 @@ Approve, edit, or cancel?
 
 ## Edit grammar
 
-Phrases the `init` skill must recognize at the manifest checkpoint:
+Phrases the `kestral-setup` skill must recognize at the manifest checkpoint:
 
 | Phrase                                               | Effect                                                                             |
 | ---------------------------------------------------- | ---------------------------------------------------------------------------------- |
@@ -128,7 +128,7 @@ Re-render the manifest after each edit. Loop until the user approves or cancels.
 
 ## Plan manifest format
 
-Used by the `plan` skill (`/kestral:plan`). Simpler than the init manifest — no documents or file sizes, just a project
+Used by the `plan` skill (`/kestral:plan`). Simpler than the kestral-setup manifest — no documents or file sizes, just a project
 title/description and a numbered task list with priorities.
 
 ### New project
@@ -189,23 +189,23 @@ splitting into multiple projects, or approve and I'll create them all."
 
 ## Error message conventions
 
-Every error the `init` skill can encounter has a prescribed user-facing message. Use these exact wordings.
+Every error the `kestral-setup` skill can encounter has a prescribed user-facing message. Use these exact wordings.
 
 | Failure                                           | Plugin says                                                                                                                                    |
 | ------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
-| Auth fails / token invalid                        | "I couldn't authenticate you with Kestral. Run `/kestral:init` to retry."                                                                      |
+| Auth fails / token invalid                        | "I couldn't authenticate you with Kestral. Run `/kestral:kestral-setup` to retry."                                                                      |
 | Folder doesn't exist                              | "I couldn't find `<path>`. Try another folder or file set."                                                                                    |
 | No documents at all (after local scan + connected sources) | "I didn't find any documents to upload — no eligible local files in `<path>` and no connected document sources available. Point me somewhere else?"  |
 | Task MCP listing error                            | "I couldn't read tasks from `<source>` — skipping. Other sources still imported."                                                              |
 | Per-task translation failure                      | "Skipped `<title>` from `<source>` — couldn't map to a Kestral task."                                                                          |
 | Per-task upload failure                           | "Skipped `<title>` on upload — see report below."                                                                                              |
-| Doc upload fails (atomic create)                  | "Upload failed. No project or documents were saved — run `/kestral:init` again."                                                               |
-| Doc upload fails (project already created)        | "Upload failed — no documents were saved. The project is at `<url>` — you can add files manually, or delete it and run `/kestral:init` again." |
+| Doc upload fails (atomic create)                  | "Upload failed. No project or documents were saved — run `/kestral:kestral-setup` again."                                                               |
+| Doc upload fails (project already created)        | "Upload failed — no documents were saved. The project is at `<url>` — you can add files manually, or delete it and run `/kestral:kestral-setup` again." |
 | Brain trigger: `feature-flag-disabled`            | "Project created. Project Brain isn't enabled for this workspace — ask your admin to turn it on, then open `<url>` and click 'Generate'."      |
 | Brain trigger: `system-error`                     | "Project created. Brain generation couldn't start (ref `<supportRef>`). Open `<url>` and click 'Generate' to retry."                           |
 | Task upload total fail                            | "Project + docs uploaded. Task import failed — you can retry from the project page."                                                           |
 | Doc MCP listing error                             | "I couldn't list documents from `<source>` — skipping. Other sources still included."                                                          |
-| Other mid-flow                                    | "Something went wrong. Run `/kestral:init` again."                                                                                             |
+| Other mid-flow                                    | "Something went wrong. Run `/kestral:kestral-setup` again."                                                                                             |
 
 ### Partial-success rule
 

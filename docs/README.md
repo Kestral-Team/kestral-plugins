@@ -41,7 +41,7 @@ codex plugin add kestral@kestral-plugins
 
 | Command            | What it does                                                              | Example                                                                                    |
 | ------------------ | ------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------ |
-| `/kestral:init`    | Onboard a project from a folder of docs, with tasks from connected tools. | `/kestral:init` → authenticates, scans `./docs`, shows a manifest, uploads to Kestral.     |
+| `/kestral:kestral-setup`    | Onboard a project from a folder of docs, with tasks from connected tools. | `/kestral:kestral-setup` → authenticates, scans `./docs`, shows a manifest, uploads to Kestral.     |
 | `/kestral:tasks`   | Search, view, and update tasks in your workspace.                         | `/kestral:tasks show my open tasks in the auth project` → returns a filtered task list.    |
 | `/kestral:context` | Pull docs, projects, and tasks into the chat as context.                  | `/kestral:context auth migration` → finds matching docs and tasks, asks which to load.     |
 | `/kestral:plan`    | Scaffold a new project with seed tasks from a brief.                      | `/kestral:plan migrate OAuth to OIDC` → drafts a project with 8 tasks, waits for approval. |
@@ -52,13 +52,15 @@ There are also lower-level skills you can call directly:
 | ---------------------- | ------------------------------------------------------------------ |
 | `/kestral:scan-folder` | Preview a folder scan without uploading anything.                  |
 | `/kestral:scan-tasks`  | Detect task tools (Linear, Jira, etc.) and list importable tasks.  |
-| `/kestral:upload`      | Upload documents and create a project (used by `init` internally). |
+| `/kestral:upload`      | Upload documents and create a project (used by `kestral-setup` internally). |
 
-Type `/kestral:` and use autocomplete to see all available commands.
+In Claude Code, type `/kestral:` and use autocomplete to see all available commands.
+In Codex, type `@kestral` to target the plugin, or invoke a bundled skill directly with `$kestral-setup`,
+`$kestral-tasks`, `$kestral-context`, or `$kestral-plan`.
 
 ## Getting started
 
-Run `/kestral:init` to start. The skill walks you through four steps:
+Run `/kestral:kestral-setup` to start. The skill walks you through four steps:
 
 1. **Authenticate** — on first use, the MCP client opens a browser for OAuth login. Tokens are managed and refreshed
    automatically.
@@ -121,10 +123,10 @@ Protocol (the way Claude Code talks to external tools).
 | No eligible files found   | The folder must contain `.md`, `.txt`, `.doc`, or `.docx` files.                                                               |
 | Project Brain not enabled | "Project Brain isn't enabled for this workspace" — ask your workspace admin to enable it, then generate from the project page. |
 | MCP won't connect         | Verify the MCP server is running (`/mcp` should show kestral as connected). Restart Claude Code and retry.                                                      |
-| Network errors            | Check your connection. If the error persists, run `/kestral:init` again.                                                       |
+| Network errors            | Check your connection. If the error persists, run `/kestral:kestral-setup` again.                                                       |
 
 
-## Re-running `/kestral:init`
+## Re-running `/kestral:kestral-setup`
 
 Each run creates a **fresh project**. There is no update-in-place yet.
 ## Links

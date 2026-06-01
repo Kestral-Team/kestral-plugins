@@ -1,4 +1,5 @@
 ---
+name: kestral-plan
 description: Scaffold a new Kestral project with tasks from a goal or brief
 disable-model-invocation: true
 ---

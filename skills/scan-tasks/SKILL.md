@@ -1,4 +1,5 @@
 ---
+name: kestral-scan-tasks
 description: Detect task MCPs, list tasks, and translate to Kestral schema
 disable-model-invocation: true
 ---
@@ -6,7 +7,7 @@ disable-model-invocation: true
 # Scan Tasks
 
 Detect available task-shaped MCP tools, list open + recently completed tasks, and translate them to the
-Kestral import schema. Returns a result the caller (`init/SKILL.md`) uses to populate the manifest.
+Kestral import schema. Returns a result the caller (`kestral-setup/SKILL.md`) uses to populate the manifest.
 
 ## Known patterns
 

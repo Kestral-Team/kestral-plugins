@@ -7,5 +7,14 @@
         "@kestral/kestral-mcp@latest"
       ]
     }
+  },
+  "mcp_servers": {
+    "kestral": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@kestral/kestral-mcp@latest"
+      ]
+    }
   }
 }
