@@ -34,12 +34,11 @@ update tasks, pull workspace knowledge into a conversation, or scaffold a new pr
 
 ```
 codex plugin marketplace add Kestral-Team/kestral-plugins
-codex plugin add kestral@kestral-plugins
 ```
 
 After install:
 
-1. Run `/plugins` — confirm **kestral** is listed under the **kestral-plugins** marketplace and **enabled** (press Space to toggle).
+1. Run `/plugins` — confirm **kestral** is listed and **enabled** (press Space to toggle if needed).
 2. **Fully quit and restart** Codex (CLI or app) so it reloads the plugin cache.
 3. Run `codex plugin marketplace upgrade` if you previously installed an older build.
 4. In a new thread, type `$` and look for `kestral-setup`, `kestral-tasks`, `kestral-context`, or `kestral-plan`. Or type `@kestral` to target the plugin.
