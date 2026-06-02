@@ -39,7 +39,7 @@ codex plugin marketplace add Kestral-Team/kestral-plugins
 
 ## Version
 
-Current release: **v0.4.6**
+Current release: **v0.4.7**
 
 ## Links
 
