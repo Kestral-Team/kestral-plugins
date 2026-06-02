@@ -9,16 +9,13 @@ Search, view, and update tasks in your Kestral workspace without leaving the cha
 
 ## Prerequisites
 
-- The Kestral MCP server must show as **connected** (`/mcp` → `kestral` connected).
-- The `kestral` MCP server must be connected. Authentication is handled automatically via OAuth — the MCP client opens a
-  browser for login on first use.
+The `kestral` MCP server must show as **connected** (`/mcp`). Auth is automatic via OAuth (browser opens on first use).
 
 ## Workflow
 
 ### 1. Authenticate
 
-Authentication is handled automatically via OAuth. If a tool call fails with 401, tell the user to reconnect the MCP
-server.
+OAuth is automatic. On a 401, reconnect the MCP server (see Error handling).
 
 ### 2. Parse intent
 

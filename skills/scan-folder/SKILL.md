@@ -92,7 +92,7 @@ Return a JSON object with this shape:
 
 ## Constraints
 
-- **This skill scans local files only.** Enumerating MCP document sources (Granola, Notion, Google Drive, etc.) is the
-  `kestral-setup` skill's job (see `kestral-setup/SKILL.md` step 3a) — it has visibility into the conversation's loaded MCP tools.
+- **This skill scans local files only.** Enumerating MCP document sources (Notion, Google Drive, Slack, Confluence) is
+  the `kestral-setup` skill's job (see `kestral-setup/SKILL.md` step 3a) — it has visibility into the conversation's loaded MCP tools.
 - Local documents use provenance source label `local-folder` (stored server-side in metadata).
 - Supported extensions: `.md`, `.txt`, `.doc`, `.docx` only.

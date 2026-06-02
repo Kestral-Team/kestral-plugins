@@ -3,32 +3,25 @@ name: kestral-setup
 description: Authenticate and onboard a folder into a new Kestral project with documents, brain, and tasks. Use only when the user explicitly runs setup or asks to onboard a project.
 ---
 
-# Init
+# Setup
 
 Authenticate with Kestral (if needed) and onboard a local folder into a new project with documents, brain generation,
 and task import from connected task MCPs.
 
 ## Prerequisites
 
-- The Kestral MCP server must be configured in `.mcp.json` (already set up by the plugin).
-- The `kestral` MCP server must show as **connected** in Claude Code (`/mcp`).
-- If MCP is **disconnected**: run `/mcp` and check the `kestral` server status. If it shows an error, the server may be
-  down or the URL in `.mcp.json` may be wrong for this environment. After fixing it, **fully quit and restart** Claude
-  Code so it reconnects. All Kestral actions go through MCP tools — the plugin never shells out to `curl`.
+The `kestral` MCP server must show as **connected** (`/mcp`). If it's disconnected or erroring, fix the URL in
+`.mcp.json` and fully restart Claude Code. All Kestral actions go through MCP tools — never shell out to `curl`.
 
 ## Workflow
 
 ### 1. Authenticate
 
-Authentication uses OAuth and is handled automatically by the MCP client. On the first tool call, the client will open a
-browser window for the user to log in and authorize access. Tokens are managed and refreshed automatically.
-
-If a tool call fails with a 401, tell the user to reconnect the MCP server to re-authenticate.
+OAuth is automatic (browser opens on first tool call). On a 401, tell the user to reconnect the MCP server.
 
 ### 2. Frame the run and ask for a source
 
-Lead with a short, concrete framing so the user knows what's about to happen and what they get — then ask for the folder
-in the same message. Keep it to ~2 sentences. For example:
+Open with ~2 sentences framing what happens and what they get, then ask for the folder in the same message. For example:
 
 > Welcome to Kestral! We're here to help you work better and faster.
 > I'll turn a collection of docs into a Kestral project — with an AI **Project Brain** (a summary Kestral generates from
@@ -101,26 +94,33 @@ now act on it **reactively and flexibly**. The orchestrator (`kestral-setup`) ow
 into the conversation's loaded tools.
 
 1. **Detect.** Inspect available MCP tools and note what document sources are connected: tool names or descriptions
-   mentioning `document`, `note`, `page`, `file`, or known sources (Granola, Notion, Google Drive, Confluence, Slack).
-   Task sources (Linear, Jira, GitHub Issues, etc.) are handled in step 3b.
+   mentioning `document`, `note`, `page`, `file`, or known **linkable** sources (Notion, Google Drive, Slack,
+   Confluence). Only these can be linked into Kestral — skip docs from other connectors (e.g. Granola); their URLs
+   aren't recognized by `link_external_document`. Slack and Confluence additionally require their Kestral integration
+   to already be connected (no offline snapshot fallback). Task sources (Linear, Jira, GitHub Issues, etc.) are handled
+   in step 3b.
 2. **Surface lightly — never a per-source yes/no loop.** Pick the lightest touch that fits the conversation:
    - If the user **already named sources** ("pull my Linear and Notion too"), act on exactly those — don't ask again.
    - Else if the **scanned content references a connected source** (the README mentions Linear, links to a Google Doc,
      says "see Notion", etc.), lead with that one specific offer in a single line.
    - Else, mention once what's reachable and move on — for example:
-     > You also have Notion, Google Drive, and Granola connected — say the word if you'd like any pulled in, otherwise
+     > You also have Notion and Google Drive connected — say the word if you'd like any pulled in, otherwise
      > I'll keep documents to local files.
 
    Do **not** block on an answer. The user can request sources now, at the manifest checkpoint, or not at all.
 3. **Pull what the user asked for.** For each requested document source, call its listing tool with a sensible default
    filter (e.g. recently modified). Use judgment to keep it relevant — do not dump hundreds of items.
-4. **Record docs.** For each included doc, record `{ filename, relativePath, contentText, contentLength }`. Derive
-   `filename` from the doc title (e.g. `"Q4 Planning Notes"` → `"Q4 Planning Notes.md"`). Use `<source>/<filename>` as
-   `relativePath` (e.g. `"granola/Q4 Planning Notes.md"`). Set `contentLength` to the character count of `contentText`
-   (approximate byte size). MCP docs are uploaded later via `create_document` using `title` + `content` (from
-   `contentText`) and optional `source` for provenance.
-5. **Add to manifest.** MCP-sourced docs appear in the manifest with source label `[<source>]` and approximate size
-   derived from `contentLength` (e.g. `(~12.3 KB)`).
+4. **Record docs.** For each included doc, record `{ filename, relativePath, sourceUrl, contentText }`. `sourceUrl` is
+   the doc's **canonical URL in its source system** (the Google Drive `/edit` link, Notion page URL, etc.) — capture it
+   from the listing tool's response; it is required. Derive `filename` from the doc title (e.g. `"Q4 Planning Notes"` →
+   `"Q4 Planning Notes.md"`). Use `<source>/<filename>` as `relativePath` (e.g. `"notion/Q4 Planning Notes.md"`).
+   These docs are **linked**, not copied: at upload they go through `link_external_document` using `sourceUrl` so
+   Kestral preserves source provenance and autosyncs the doc once the matching integration is connected. `contentText`
+   is kept only as a fallback snapshot passed to `link_external_document` for the case where no matching integration is
+   connected yet. **Never reproduce external content through `create_document`** — that loses provenance and breaks
+   autosync.
+5. **Add to manifest.** MCP-sourced docs appear in the manifest with source label `[<source>]` and a `(linked)` marker
+   instead of a size — their bytes live in the source system, not in the upload, so they don't count toward the budget.
 
 If no document sources are connected: skip silently — do not tell the user about the absence.
 
@@ -151,7 +151,7 @@ Description: <first ~120 chars of description>
 Documents (N total, ~<total KB> KB):
   • README.md                       (4.2 KB)   [local]
   • docs/architecture.md            (8.1 KB)   [local]
-  • Q4 planning notes               (~12.3 KB) [granola]
+  • Q4 planning notes               (linked)   [notion]
 
 Tasks (X total):
   • Fix login redirect loop                    [linear, high]
@@ -164,8 +164,8 @@ Approve, edit, or cancel?
 ```
 
 **Source labels:** Every item has a bracket label — `[local]` for local files, `[<source>]` for MCP-sourced docs/tasks.
-Never silently omit the label. Local file sizes shown in parentheses; MCP-sourced docs show approximate size from
-`contentLength` prefixed with `~` (e.g. `(~12.3 KB)`).
+Never silently omit the label. Local file sizes shown in parentheses; MCP-sourced (linked) docs show `(linked)` instead
+of a size, since their bytes are not uploaded.
 
 **Tasks section rules:**
 
@@ -231,7 +231,7 @@ Wait for user input. Supported commands:
 | **approve** / **yes** / **go**                     | Proceed to upload                                                                                   |
 | **cancel** / **no**                                | Exit cleanly — no Kestral API calls                                                                 |
 | **remove** `<path>`                                | Remove a file from the document list                                                                |
-| **remove** `<source>` **documents**                | Bulk-remove all documents from a specific source (e.g. `remove granola documents`)                  |
+| **remove** `<source>` **documents**                | Bulk-remove all documents from a specific source (e.g. `remove notion documents`)                   |
 | **add** `<path>`                                   | Validate path, `stat` for `byteSize`, append metadata only (do not read file contents until upload) |
 | **skip tasks**                                     | Remove the Tasks section — no tasks will be imported                                                |
 | **change title** / **title:** `<new title>`        | Override project title                                                                              |
@@ -242,8 +242,8 @@ Wait for user input. Supported commands:
 **Budget feedback on `add`:** Before appending, `stat` the file and check whether total selected `byteSize` would exceed
 **500 KB**. If so, warn immediately:
 
-> Adding `big-spec.md` (120 KB) would bring the total to 580 KB, which risks exceeding Claude's context window during
-> upload. Consider removing a large file first, or approve and I'll upload what fits.
+> Adding `big-spec.md` (120 KB) would bring the total to 580 KB, over the ~500 KB we keep for a focused initial project.
+> Consider removing a large file first, or approve and I'll include it anyway.
 
 If the user already has **15** selected files, warn that they should `remove` one before adding unless they explicitly
 want to exceed the doc cap.
@@ -256,9 +256,6 @@ Re-render the manifest after each edit. Loop until the user approves or cancels.
 ### 6. Upload
 
 On approve:
-
-**Content budget check.** Sum `byteSize` (local docs) and `contentLength` (MCP docs) from the manifest. If **> 500 KB**,
-warn the user and proceed only if they confirm.
 
 **Extract `.doc`/`.docx`** — for each document ending in `.doc`/`.docx`, run
 `pandoc -t plain --wrap=none "<path>" -o "<path>.txt"` via Bash. If pandoc is missing: skip those files (warn) if other
@@ -280,20 +277,29 @@ the agent or pass them in the tool call). Use absolute paths only; the server re
 
 Each call returns `{ documentId, title, url }`. Track per-file success/failure across the calls.
 
-**Upload MCP-sourced documents** — for each manifest document that has `contentText` (no `filePath`), call
-`create_document` once:
+**Link external (MCP-sourced) documents** — for each manifest document that has a `sourceUrl` (no `filePath`), call
+`link_external_document` once. Do **not** call `create_document` for these — that copies the content inline, loses
+source provenance, and breaks autosync.
 
 ```json
 {
-  "title": "Q4 Planning Notes",
-  "content": "<contentText from manifest>",
+  "url": "<sourceUrl from manifest>",
+  "title": "<doc title>",
   "projectId": "<projectId>",
-  "source": "granola"
+  "content": "<contentText from manifest>"
 }
 ```
 
-Use the doc title for `title`. Set `source` to the MCP namespace (e.g. `"granola"`, `"notion"`, `"gdrive"`) so the
-server stores provenance in `metadata.claudeCodePlugin.source`.
+`url` is the canonical source URL (required). `title` and `content` are fallbacks the server uses only when no matching
+Kestral integration is connected yet — once it is, the server-side fetch is authoritative. Each call returns
+`{ documentId, title, url, resolutionStatus, linkedToProject }`. Note `resolutionStatus`. `linkedToProject` is `true`
+only when this call newly attached the doc; a `false` with no error means the doc was already linked (re-run/dedup), not
+a failure. Track per-doc success/failure across the calls.
+
+- `"ready"` — the link resolved and Kestral synced the authoritative content now. Done.
+- `"pending"` — **partial success**: Kestral stored your `content` snapshot and linked it, but the matching integration
+  isn't connected, so it can't keep the doc in sync. Collect the distinct sources of all pending docs and nudge the user
+  once at the end (see "Present results") to connect them in Kestral so the docs autosync to their authoritative version.
 
 **Document upload outcomes:**
 
@@ -331,6 +337,14 @@ work lives.
 > \<brain message from table above\>
 >
 > \<task summary — only if tasks were attempted\>
+>
+> \<pending-links nudge — only if any linked doc returned `resolutionStatus: "pending"`\>
+
+**Pending-links nudge:** If one or more linked docs came back `pending`, add a single line naming the distinct sources
+and pointing the user to connect them — the snapshot is in place, connecting just upgrades it to a live, autosynced copy:
+
+> I linked your Notion and Google Drive docs from a saved snapshot. Connect those integrations in Kestral
+> (**Workspace Settings → Integrations**) and they'll autosync to the latest version.
 
 Task summary format:
 
@@ -340,21 +354,18 @@ Task summary format:
 
 ### 7. Encourage next steps
 
-Don't stop at the link. Close with a short nudge toward the Project Brain and a small menu of follow-ups — invite, don't
-lecture. Skip this section if the project wasn't created.
+Skip if no project was created. Close with a short, inviting nudge — don't lecture.
 
-**Point them at the brain (for blockers).** The Project Brain finishes generating ~1–2 minutes after upload and surfaces
-the project's status, **blockers**, and suggested next steps. Encourage the user to open it (only when the brain was
-enqueued — i.e. `enqueued: true`):
+**Point them at the brain** (only when `enqueued: true`):
 
 > Once the brain finishes (~1–2 min), open **\<url\>** to see your project's status, blockers, and suggested next steps —
 > it's the fastest way to spot what's in your way.
 
-**Offer follow-up actions.** Present these as options the user can choose — do not auto-run any:
+**Offer follow-up actions** — present as options, don't auto-run any:
 
 > Want me to keep going? I can:
-> • **Add more context** — point me at meeting notes, a Notion/Granola/Drive doc, or recent work and I'll add it to this
->   project and refresh the brain.
+> • **Add more context** — point me at more local files, a Notion or Google Drive doc, or recent work and I'll add it to
+>   this project and refresh the brain.
 > • **Help clear blockers** — once the brain flags blockers, tell me and I'll pull those tasks up so we can work them.
 > • **Loop in your team** — teammates need to be in your Kestral workspace to see this. Invite them in Kestral under
 >   **Workspace Settings → Members**, then they'll have access — especially worth it if a blocker depends on someone else.
@@ -363,7 +374,7 @@ When the user picks one, map it to the right tools:
 
 | User picks        | Do this                                                                                                                                                                                                                                  |
 | ----------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Add more context  | Treat the new files/sources like steps 3 / 3a (scan locally or pull from a connector). For each **local** file, call `upload_document` with `{ filePath, projectId }`. For each **MCP-sourced** doc (has `contentText`, no disk path), call `create_document` with `{ title, content, projectId, source }`. Then re-run `kestral_trigger_project_brain_build` to refresh the brain. |
+| Add more context  | Treat the new files/sources like steps 3 / 3a (scan locally or pull from a connector). For each **local** file, call `upload_document` with `{ filePath, projectId }`. For each **external (MCP-sourced)** doc (has `sourceUrl`, no disk path), call `link_external_document` with `{ url: sourceUrl, title, projectId, content }` — never `create_document`, which copies content inline and breaks autosync. Then re-run `kestral_trigger_project_brain_build` to refresh the brain. |
 | Help clear blockers | Hand off to `tasks/SKILL.md`. Use `search_tasks({ projectId })` to list this project's open tasks and let the user pick which to work on next.                                                                                          |
 | Loop in team      | Sharing the URL alone won't grant access — teammates must be members of the workspace. Tell the user to invite them in Kestral under **Workspace Settings → Members**                     |
 

@@ -6,8 +6,9 @@ and error messages exactly as specified here.
 ## Connected-source offer copy
 
 Used by `kestral-setup` (step 2 opener and step 3a). The plugin can enrich a project with context from MCP connectors the user
-has already set up in this session (Slack, Notion, Google Drive, Linear, Jira, Granola, Confluence, and others). The
-offer is **reactive, not a per-source yes/no interrogation** — pick the lightest touch that fits the conversation.
+has already set up in this session. Tasks come from Linear, Jira, and others; **linkable document sources are Notion,
+Google Drive, Slack, and Confluence** (other connectors' URLs aren't recognized by `link_external_document`). The offer
+is **reactive, not a per-source yes/no interrogation** — pick the lightest touch that fits the conversation.
 
 ### Step 2 opener (frames value + plants the connector seed)
 
@@ -26,7 +27,7 @@ Choose one, in priority order:
 | ------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------- |
 | User already named sources ("pull my Linear too")             | Act on exactly those — no offer copy, no re-asking.                                                                            |
 | Scanned content references a connected source                 | Lead with one specific line: "Your README references Linear — want me to pull the linked issues in too?"                       |
-| Sources connected but neither of the above                    | One soft mention, then move on: "You also have Notion, Google Drive, and Granola connected — say the word if you'd like any pulled in, otherwise I'll keep documents to local files." |
+| Sources connected but neither of the above                    | One soft mention, then move on: "You also have Notion and Google Drive connected — say the word if you'd like any pulled in, otherwise I'll keep documents to local files." |
 | No relevant sources connected                                 | Say nothing about their absence.                                                                                              |
 
 **Rules:** Never loop a yes/no per source. Never block the flow waiting for an answer — the user can request sources now,
@@ -43,7 +44,7 @@ Description: <first ~120 chars of description>
 Documents (N total, ~<total KB> KB):
   • README.md                       (4.2 KB)   [local]
   • docs/architecture.md            (8.1 KB)   [local]
-  • Q4 planning notes               (~12.3 KB) [granola]
+  • Q4 planning notes               (linked)   [notion]
 
 Tasks (M total):
   • Ship onboarding plugin                     [linear]
@@ -97,7 +98,7 @@ Approve, edit, or cancel?
 | Rule               | Detail                                                                                                                                                                                                             |
 | ------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | **Source labels**  | Every item has a source label in brackets: `[local]` for local files, `[<mcp-namespace>]` for MCP-sourced docs/tasks. Never silently omit the label.                                                               |
-| **Sizes**          | Byte sizes shown for local files in parentheses (e.g. `(4.2 KB)`). MCP-sourced docs show approximate size from `contentLength` prefixed with `~` (e.g. `(~12.3 KB)`). Both count toward the 500 KB content budget. |
+| **Sizes**          | Byte sizes shown for local files in parentheses (e.g. `(4.2 KB)`). MCP-sourced docs are linked, not uploaded, so they show `(linked)` instead of a size and do **not** count toward the 500 KB budget — only local files do. |
 | **Truncation**     | Documents: if > 50 items, show the first 50 then `… and N more`. Tasks: show up to 10 titles, then `… and N more` (task lists are noisier so the display limit is tighter).                                        |
 | **Tasks grouping** | Group by source if multiple sources detected. Show priority label only when non-zero (e.g. `[linear, high]`).                                                                                                      |
 | **Dropped**        | List dropped noise files (e.g. `node_modules/`) under a **Dropped** section when relevant.                                                                                                                         |
@@ -110,7 +111,7 @@ Phrases the `kestral-setup` skill must recognize at the manifest checkpoint:
 | ---------------------------------------------------- | ---------------------------------------------------------------------------------- |
 | `remove <file>`                                      | Remove a specific file from the document list                                      |
 | `add <path>`                                         | Validate path, `stat` for byte size, append to document list                       |
-| `remove <source> documents`                          | Bulk-remove all documents from a specific source (e.g. `remove granola documents`) |
+| `remove <source> documents`                          | Bulk-remove all documents from a specific source (e.g. `remove notion documents`) |
 | `skip tasks`                                         | Remove the entire Tasks section — no tasks will be imported                        |
 | `title: <new>` or `change title <new>`               | Override project title                                                             |
 | `description: <new>` or `change description <new>`   | Override project description                                                       |
@@ -217,3 +218,15 @@ Example:
 > Your project is ready: **\<url\>**
 >
 > Project + docs uploaded. Task import failed — you can retry from the project page.
+
+### Pending external links
+
+A linked external doc (`link_external_document`) returns `resolutionStatus: "pending"` when Kestral stored the agent's
+`content` snapshot but the matching integration isn't connected, so it can't keep the doc in sync. This is a **partial
+success** — the doc is linked, just not live. Nudge the user once, naming the distinct pending sources:
+
+> I linked your Notion and Google Drive docs from a saved snapshot. Connect those integrations in Kestral
+> (**Workspace Settings → Integrations**) and they'll autosync to the latest version.
+
+Only Notion and Google Drive support this pending path. Slack and Confluence links require their integration to already
+be connected (they error rather than storing a snapshot).

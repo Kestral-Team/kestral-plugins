@@ -10,8 +10,7 @@ by the caller).
 
 ## Prerequisites
 
-- MCP server connected (`/mcp` shows `kestral` connected).
-- The `kestral` MCP server must be connected. Authentication is handled automatically via OAuth — the MCP client opens a browser for login on first use.
+The `kestral` MCP server must show as **connected** (`/mcp`). Auth is automatic via OAuth (browser opens on first use).
 
 ## Inputs
 
@@ -19,49 +18,20 @@ From the scan step or user edits at the manifest checkpoint:
 
 - `title` — project title
 - `description` — project description (optional)
-- `documents` — array of `{ filename, relativePath, byteSize, filePath }`
+- `documents` — array of `{ filename, relativePath, byteSize, filePath }`. **Local files only** — every doc must have a
+  `filePath`. Linked external docs (Notion/Drive/Slack, no `filePath`) are handled by `kestral-setup`'s own upload step
+  via `link_external_document`, not here.
 - `tasks` — (optional) array of `{ title, description?, source, priority?, dueDate? }` from `scan-tasks`
 
 ## Workflow
 
-### 0. Content budget check
+### 1. Create project
 
-Before creating the project or uploading, sum `byteSize` for all documents in the manifest (sizes captured during scan).
+Call `kestral_create_project` with `{ title, description }`. Store `projectId` and `url` from the response.
 
-`byteSize` is on-disk size. For `.doc`/`.docx`, extracted text size may differ — the budget is approximate when those
-files are included.
+### 2. Upload documents
 
-- If total **≤ 500 KB** — continue.
-- If total **> 500 KB** — warn before proceeding:
-
-  > Total content is ~580 KB, which may exceed Claude's context window during upload (each file is read and sent in a
-  > separate tool call). Consider `remove`ing large files at the manifest checkpoint, or approve and I'll upload until
-  > the session risks failing.
-
-This is a safety rail — scan should already cap at 15 docs / 500 KB, but the user may have `add`ed large files at the
-checkpoint.
-
-### 1. Upload documents
-
-Call `upload_document` once per local file — the local MCP bridge streams the bytes directly to storage via a
-presigned URL (bytes never pass through the agent). Works for any file type and size.
-
-### 2. Create empty project
-
-Call `kestral_create_project`:
-
-```json
-{
-  "title": "<title>",
-  "description": "<description>"
-}
-```
-
-Store `projectId` and `url` from the response.
-
-### 3. Upload all documents
-
-Call `upload_document` once per document, passing the project ID so each file is attached to the project:
+Call `upload_document` once per document, passing the project ID so each file is attached:
 
 ```json
 {
@@ -70,14 +40,16 @@ Call `upload_document` once per document, passing the project ID so each file is
 }
 ```
 
-The MCP server reads files from disk and uploads the bytes directly to storage — do NOT pass file contents. Use absolute
-paths only; the server rejects common credential locations (`.ssh`, `.aws`, `.kestral`, `.env`, etc.).
+The local MCP bridge streams bytes from disk straight to storage via a presigned URL — do NOT pass file contents (bytes
+never pass through the agent), so upload size never affects Claude's context, no matter how many files or how large. The
+server enforces an allowed file-type list and a per-file size limit (tens of MB for text/PDF/DOCX, larger for
+audio/video); an oversized or unsupported file fails on its own (reported in step 5) without blocking the rest. Use
+absolute paths only; the server rejects common credential locations (`.ssh`, `.aws`, `.kestral`, `.env`, etc.).
 
-Each call returns a single document `{ documentId, title, url }`. Track per-file success/failure across the calls.
+Each call returns `{ documentId, title, url }`. Track per-file success/failure. On 401, tell the user to reconnect the
+MCP server, then retry.
 
-- On 401: tell the user to reconnect the MCP server to re-authenticate, then retry.
-
-### 4. Trigger brain generation
+### 3. Trigger brain generation
 
 Call `kestral_trigger_project_brain_build` with `{ projectId }`. Capture the response — do not fail the overall flow on
 error. Three response cases:
@@ -88,14 +60,12 @@ error. Three response cases:
 | `enqueued: false, reason: 'feature-flag-disabled'` | "Project Brain isn't enabled for this workspace — ask your admin to turn it on, or generate it from the project page later." |
 | `enqueued: false, reason: 'system-error'`          | "Brain couldn't start (`<supportRef>`) — open the project and click 'Generate'."                                             |
 
-### 5. Import tasks
+### 4. Import tasks
 
 If `tasks` input is non-empty, call `kestral_create_project_tasks` with `{ projectId, tasks }`. Capture `created` and
-`failed` from the response. Do not fail the overall flow if some tasks fail.
+`failed`. Do not fail the overall flow if some tasks fail. Skip entirely if `tasks` is empty or not provided.
 
-Skip this step entirely if `tasks` is empty or not provided.
-
-### 6. Present results
+### 5. Present results
 
 Print the project URL and summarize all outcomes:
 
@@ -103,7 +73,7 @@ Print the project URL and summarize all outcomes:
 >
 > **Documents:** N/M uploaded successfully. \<list failures if any\>
 >
-> **Brain:** \<message from step 4 table\>
+> **Brain:** \<message from step 3 table\>
 >
 > **Tasks:** \<task summary — only if tasks were attempted\>
 

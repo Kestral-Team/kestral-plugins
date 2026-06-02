@@ -10,7 +10,7 @@ update tasks, pull workspace knowledge into a conversation, or scaffold a new pr
 ## Why use it
 
 - **Onboard a holistic project in one command.** Point the plugin at a folder of docs. It scans, infers a title, and —
-  using the tools you've already connected (Slack, Notion, Google Drive, Linear, Jira, Granola, and more) — pulls in
+  using the tools you've already connected (Slack, Notion, Google Drive, Linear, Jira, and more) — pulls in
   related documents and tasks so the project reflects your whole picture, not just local files.
 - **Bring your connected tools' context with you.** The plugin sees the same MCP connectors loaded in your session and
   offers to enrich the project with them. You stay in control of what's included — nothing is pulled without your say.
@@ -114,7 +114,7 @@ and `/kestral:plan` to create new projects.
 | Source               | File types                                | Notes                                                                                    |
 | -------------------- | ----------------------------------------- | ---------------------------------------------------------------------------------------- |
 | Local folder         | `.md`, `.txt`, `.doc`, `.docx`            | Scanned recursively. Hidden dirs, `node_modules/`, `dist/`, etc. are excluded.           |
-| MCP document sources | Granola, Notion, Google Drive, Confluence, Slack | Detected automatically when the MCP is loaded. Nothing is pulled in unless you ask for it. |
+| MCP document sources | Notion, Google Drive, Slack, Confluence   | Linked into Kestral with source provenance (not copied). Detected automatically when the MCP is loaded. Nothing is pulled in unless you ask for it. |
 
 ### Tasks
 
