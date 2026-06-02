@@ -1,7 +1,6 @@
 ---
 name: kestral-scan-folder
-description: Scan a local folder and build a document manifest for Kestral onboarding
-disable-model-invocation: true
+description: Scan a local folder and build a document manifest for Kestral onboarding. Use when the user or kestral-setup asks for a folder scan preview.
 ---
 
 # Scan Folder

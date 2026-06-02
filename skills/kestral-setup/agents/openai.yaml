@@ -1,0 +1,5 @@
+interface:
+  display_name: "Kestral Setup"
+
+policy:
+  allow_implicit_invocation: false

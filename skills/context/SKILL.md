@@ -1,7 +1,6 @@
 ---
 name: kestral-context
-description: Pull Kestral docs, projects, and tasks into the chat as context for the agent
-disable-model-invocation: true
+description: Pull Kestral docs, projects, and tasks into the chat as context for the agent. Use only when the user explicitly asks for workspace context.
 ---
 
 # Context

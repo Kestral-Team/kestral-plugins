@@ -1,0 +1,5 @@
+interface:
+  display_name: "Kestral Context"
+
+policy:
+  allow_implicit_invocation: false

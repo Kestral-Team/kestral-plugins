@@ -37,6 +37,15 @@ codex plugin marketplace add Kestral-Team/kestral-plugins
 codex plugin add kestral@kestral-plugins
 ```
 
+After install:
+
+1. Run `/plugins` — confirm **kestral** is listed under the **kestral-plugins** marketplace and **enabled** (press Space to toggle).
+2. **Fully quit and restart** Codex (CLI or app) so it reloads the plugin cache.
+3. Run `codex plugin marketplace upgrade` if you previously installed an older build.
+4. In a new thread, type `$` and look for `kestral-setup`, `kestral-tasks`, `kestral-context`, or `kestral-plan`. Or type `@kestral` to target the plugin.
+
+Codex does **not** use Claude-style `/kestral:…` slash commands — use `$skill-name` or `@kestral` instead.
+
 ## What you can do
 
 | Command            | What it does                                                              | Example                                                                                    |
@@ -124,6 +133,8 @@ Protocol (the way Claude Code talks to external tools).
 | Project Brain not enabled | "Project Brain isn't enabled for this workspace" — ask your workspace admin to enable it, then generate from the project page. |
 | MCP won't connect         | Verify the MCP server is running (`/mcp` should show kestral as connected). Restart Claude Code and retry.                                                      |
 | Network errors            | Check your connection. If the error persists, run `/kestral:kestral-setup` again.                                                       |
+| Codex: plugin added but no skills | Upgrade to **v0.4.5+** (`codex plugin marketplace upgrade`), restart Codex, enable the plugin in `/plugins`. Older builds used `disable-model-invocation`, which hides skills from Codex entirely. |
+| Codex: plugin not in `/plugins` | Re-run `codex plugin add kestral@kestral-plugins`, then restart. Check `~/.codex/config.toml` for `[plugins."kestral@kestral-plugins"]` with `enabled = true`. |
 
 
 ## Re-running `/kestral:kestral-setup`

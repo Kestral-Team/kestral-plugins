@@ -1,7 +1,6 @@
 ---
 name: kestral-upload
-description: Create a Kestral project, upload documents, trigger brain, and import tasks
-disable-model-invocation: true
+description: Create a Kestral project, upload documents, trigger brain, and import tasks. Use when the user or kestral-setup asks to upload an approved manifest.
 ---
 
 # Upload

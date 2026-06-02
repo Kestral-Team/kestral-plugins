@@ -1,7 +1,6 @@
 ---
 name: kestral-scan-tasks
-description: Detect task MCPs, list tasks, and translate to Kestral schema
-disable-model-invocation: true
+description: Detect task MCPs, list tasks, and translate to Kestral schema. Use when the user or kestral-setup asks to scan importable tasks.
 ---
 
 # Scan Tasks

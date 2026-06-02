@@ -1,7 +1,6 @@
 ---
 name: kestral-tasks
-description: Search, view, and update Kestral tasks from the chat
-disable-model-invocation: true
+description: Search, view, and update Kestral tasks from the chat. Use only when the user explicitly asks to list, inspect, or update tasks.
 ---
 
 # Tasks

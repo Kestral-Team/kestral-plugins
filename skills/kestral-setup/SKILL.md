@@ -1,7 +1,6 @@
 ---
 name: kestral-setup
-description: Authenticate and onboard a folder into a new Kestral project with documents, brain, and tasks
-disable-model-invocation: true
+description: Authenticate and onboard a folder into a new Kestral project with documents, brain, and tasks. Use only when the user explicitly runs setup or asks to onboard a project.
 ---
 
 # Init

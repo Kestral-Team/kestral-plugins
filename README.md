@@ -16,7 +16,7 @@ tasks without leaving the terminal.
 | `/kestral:plan` | Describe a goal, review a draft project with tasks, and create it in Kestral with one approval. |
 
 In Claude Code, run `/kestral:kestral-setup` first to authenticate and create your first project.
-In Codex, type `@kestral` to target the plugin, or invoke the bundled skill directly with `$kestral-setup`.
+In Codex, type `@kestral` to target the plugin, or invoke the bundled skill directly with `$kestral-setup` (not `/kestral:…` slash commands). After install, enable the plugin in `/plugins` and restart Codex.
 
 ## Install
 
@@ -40,7 +40,7 @@ codex plugin add kestral@kestral-plugins
 
 ## Version
 
-Current release: **v0.4.4**
+Current release: **v0.4.5**
 
 ## Links
 
