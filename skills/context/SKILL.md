@@ -11,7 +11,7 @@ auth migration?" without you having to paste anything.
 
 ## Prerequisites
 
-The `kestral` MCP server must show as **connected** (`/mcp`). Auth is automatic via OAuth (browser opens on first use).
+The `Kestral` MCP server must show as **connected** (`/mcp`). Auth is automatic via OAuth (browser opens on first use).
 
 ## Workflow
 
@@ -33,9 +33,9 @@ If the prompt is empty, ask: "What topic should I search for in your Kestral wor
 
 Run three searches in parallel using the user's query:
 
-1. `search_documents({ query: "<topic>", limit: 5 })`
+1. `search_documents({ query: "<topic>" })`
 2. `search_projects({ query: "<topic>", limit: 5 })`
-3. `search_tasks({ query: "<topic>", limit: 5 })`
+3. `search_tasks({ query: "<topic>" })`
 
 ### 4. Present the context manifest
 
@@ -95,7 +95,7 @@ For each selected document, call `get_document_content({ workContextId: "<id>" }
 
 #### Projects
 
-For each selected project, call `get_project({ projectId: "<id>" })`.
+For each selected project, call `entity_lookup({ id: "<projectId>", type: "project" })`.
 
 Present project details:
 
@@ -112,7 +112,7 @@ Present project details:
 
 #### Tasks
 
-For each selected task, call `get_task({ taskId: "<id>", includeComments: true })`.
+For each selected task, call `entity_lookup({ id: "<taskId>", type: "task" })`.
 
 Present task details in the same format as the `/kestral:tasks` drill-down view (see
 `tasks/SKILL.md` step 4).

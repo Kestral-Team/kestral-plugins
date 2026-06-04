@@ -10,14 +10,18 @@ and task import from connected task MCPs.
 
 ## Prerequisites
 
-The `kestral` MCP server must show as **connected** (`/mcp`). If it's disconnected or erroring, fix the URL in
-`.mcp.json` and fully restart Claude Code. All Kestral actions go through MCP tools — never shell out to `curl`.
+The **Kestral** MCP server must show as **connected**. If it's disconnected or erroring, fix `.mcp.json` and fully
+restart the client. All Kestral actions go through MCP tools — never shell out to `curl`.
+
+Local file uploads use `upload_document` on **Kestral** — including Claude Cowork. If `upload_document` is not in the
+tool list, reconnect **Kestral** in the client and retry — do not send the user to another app for uploads.
 
 ## Workflow
 
 ### 1. Authenticate
 
-OAuth is automatic (browser opens on first tool call). On a 401, tell the user to reconnect the MCP server.
+Call `whoami` to confirm the Kestral MCP connection is active (OAuth opens the browser automatically on first use if
+needed). If it fails, tell the user to reconnect the MCP server in client settings and retry.
 
 ### 2. Frame the run and ask for a source
 
@@ -261,12 +265,12 @@ On approve:
 `pandoc -t plain --wrap=none "<path>" -o "<path>.txt"` via Bash. If pandoc is missing: skip those files (warn) if other
 docs remain, or abort if only `.doc`/`.docx` files are present. Use the converted `.txt` path in the upload.
 
-**Create the project** — call `kestral_create_project` with `{ title, description }`. Store `projectId` and `url`.
+**Create the project** — call `create_project` with `{ title, description }`. Store `projectId` and `url`.
 
 **Upload local documents** — for each manifest document that has a `filePath`, call `upload_document` once with the
-project ID. The local MCP bridge reads the file from disk and streams bytes to storage (do NOT read file contents into
-the agent or pass them in the tool call). Use absolute paths only; the server rejects common credential locations
-(`.ssh`, `.aws`, `.kestral`, `.env`, etc.).
+project ID. The tool reads the file from disk and streams bytes to storage (do NOT read file contents into the agent or
+pass them in the tool call). Use absolute paths only; the server rejects common credential locations (`.ssh`, `.aws`,
+`.kestral`, `.env`, etc.). If `upload_document` isn't available, reconnect **Kestral** — see Prerequisites.
 
 ```json
 {
@@ -309,7 +313,7 @@ a failure. Track per-doc success/failure across the calls.
 
 On 401 from any tool, tell the user to reconnect the MCP server to re-authenticate, then retry.
 
-**Trigger brain generation** — call `kestral_trigger_project_brain_build` with `{ projectId }`. Capture the response (do
+**Trigger brain generation** — call `trigger_brain_build` with `{ projectId }`. Capture the response (do
 not fail the overall flow on error). Three response cases:
 
 | Response                                           | User-facing message                                                                                                                       |
@@ -319,7 +323,7 @@ not fail the overall flow on error). Three response cases:
 | `enqueued: false, reason: 'system-error'`          | "Project created. Brain generation couldn't start (ref `<supportRef>`). Open `<url>` and click 'Generate' to retry."                      |
 
 **Import tasks** — if the manifest includes tasks (non-empty `tasks` array from `scan-tasks`), call
-`kestral_create_project_tasks` with `{ projectId, tasks }`. Capture `created` and `failed` from the response. Do not
+`create_tasks` with `{ projectId, tasks }`. Capture `created` and `failed` from the response. Do not
 fail the overall flow if some tasks fail.
 
 - Per-task translation failure: "Skipped `<title>` from `<source>` — couldn't map to a Kestral task."
@@ -374,7 +378,7 @@ When the user picks one, map it to the right tools:
 
 | User picks        | Do this                                                                                                                                                                                                                                  |
 | ----------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Add more context  | Treat the new files/sources like steps 3 / 3a (scan locally or pull from a connector). For each **local** file, call `upload_document` with `{ filePath, projectId }`. For each **external (MCP-sourced)** doc (has `sourceUrl`, no disk path), call `link_external_document` with `{ url: sourceUrl, title, projectId, content }` — never `create_document`, which copies content inline and breaks autosync. Then re-run `kestral_trigger_project_brain_build` to refresh the brain. |
+| Add more context  | Treat the new files/sources like steps 3 / 3a (scan locally or pull from a connector). For each **local** file, call `upload_document` with `{ filePath, projectId }`. For each **external (MCP-sourced)** doc (has `sourceUrl`, no disk path), call `link_external_document` with `{ url: sourceUrl, title, projectId, content }` — never `create_document`, which copies content inline and breaks autosync. Then re-run `trigger_brain_build` to refresh the brain. |
 | Help clear blockers | Hand off to `tasks/SKILL.md`. Use `search_tasks({ projectId })` to list this project's open tasks and let the user pick which to work on next.                                                                                          |
 | Loop in team      | Sharing the URL alone won't grant access — teammates must be members of the workspace. Tell the user to invite them in Kestral under **Workspace Settings → Members**                     |
 

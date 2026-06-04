@@ -10,7 +10,10 @@ by the caller).
 
 ## Prerequisites
 
-The `kestral` MCP server must show as **connected** (`/mcp`). Auth is automatic via OAuth (browser opens on first use).
+A **Kestral** MCP server must show as **connected** (`/mcp`). Auth is automatic via OAuth (browser opens on first use).
+
+Local file uploads use `upload_document` on **Kestral** — including Claude Cowork. If `upload_document` is not in the
+tool list, reconnect **Kestral** in the client and retry — do not send the user to another app for uploads.
 
 ## Inputs
 
@@ -27,7 +30,7 @@ From the scan step or user edits at the manifest checkpoint:
 
 ### 1. Create project
 
-Call `kestral_create_project` with `{ title, description }`. Store `projectId` and `url` from the response.
+Call `create_project` with `{ title, description }`. Store `projectId` and `url` from the response.
 
 ### 2. Upload documents
 
@@ -40,7 +43,7 @@ Call `upload_document` once per document, passing the project ID so each file is
 }
 ```
 
-The local MCP bridge streams bytes from disk straight to storage via a presigned URL — do NOT pass file contents (bytes
+`upload_document` streams bytes from disk straight to storage via a presigned URL — do NOT pass file contents (bytes
 never pass through the agent), so upload size never affects Claude's context, no matter how many files or how large. The
 server enforces an allowed file-type list and a per-file size limit (tens of MB for text/PDF/DOCX, larger for
 audio/video); an oversized or unsupported file fails on its own (reported in step 5) without blocking the rest. Use
@@ -51,7 +54,7 @@ MCP server, then retry.
 
 ### 3. Trigger brain generation
 
-Call `kestral_trigger_project_brain_build` with `{ projectId }`. Capture the response — do not fail the overall flow on
+Call `trigger_brain_build` with `{ projectId }`. Capture the response — do not fail the overall flow on
 error. Three response cases:
 
 | Response                                           | User-facing message                                                                                                          |
@@ -62,7 +65,7 @@ error. Three response cases:
 
 ### 4. Import tasks
 
-If `tasks` input is non-empty, call `kestral_create_project_tasks` with `{ projectId, tasks }`. Capture `created` and
+If `tasks` input is non-empty, call `create_tasks` with `{ projectId, tasks }`. Capture `created` and
 `failed`. Do not fail the overall flow if some tasks fail. Skip entirely if `tasks` is empty or not provided.
 
 ### 5. Present results
@@ -88,5 +91,5 @@ manually, or delete it and try again."
 
 ## Error handling
 
-- If `kestral_create_project` fails, surface the error — no cleanup needed.
+- If `create_project` fails, surface the error — no cleanup needed.
 - Brain trigger and task import failures are non-fatal — always present the project URL.

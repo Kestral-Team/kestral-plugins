@@ -1,6 +1,6 @@
 # Kestral Plugin
 
-Connect Claude Code (or Codex CLI) to [Kestral](https://app.kestral.ai) — an AI-powered project management tool for
+Connect Claude Code, Claude Cowork, or Codex to [Kestral](https://app.kestral.ai) — an AI-powered project management tool for
 teams. Kestral stores your projects, tasks, documents, and customer feedback, and gives an AI agent context about all of
 it.
 
@@ -23,27 +23,59 @@ update tasks, pull workspace knowledge into a conversation, or scaffold a new pr
 
 ## Install
 
+Pick your app and follow the steps. On first connect, Kestral opens a browser window for OAuth sign-in — no API key to
+copy.
+
 ### Claude Code
 
-```
-/plugin marketplace add Kestral-Team/kestral-plugins
-/plugin install kestral@kestral-plugins
-```
+1. From your terminal or within Claude Code, add the Kestral plugin marketplace:
 
-### Codex CLI
+   ```
+   claude plugin marketplace add Kestral-Team/kestral-plugins
+   ```
 
-```
-codex plugin marketplace add Kestral-Team/kestral-plugins
-```
+2. Install the Kestral plugin:
 
-After install:
+   ```
+   claude plugin install kestral@kestral-plugins
+   ```
 
-1. Run `/plugins` — confirm **kestral** is listed and **enabled** (press Space to toggle if needed).
-2. **Fully quit and restart** Codex (CLI or app) so it reloads the plugin cache.
-3. Run `codex plugin marketplace upgrade` if you previously installed an older build.
-4. In a new thread, type `$` and look for `kestral-setup`, `kestral-tasks`, `kestral-context`, or `kestral-plan`. Or type `@kestral` to target the plugin.
+3. In chat, run the setup skill:
 
-Codex does **not** use Claude-style `/kestral:…` slash commands — use `$skill-name` or `@kestral` instead.
+   ```
+   /kestral:kestral-setup
+   ```
+
+   You can also use slash commands in chat instead of the CLI: `/plugin marketplace add Kestral-Team/kestral-plugins`
+   then `/plugin install kestral@kestral-plugins`.
+
+### Claude Cowork
+
+1. Open the **Customize** menu and go to the **Plugins** tab.
+2. In **Personal plugins**, click **+**, then select **Add marketplace**.
+3. Choose **Add from a repository** (sync a marketplace from a GitHub repository or git URL).
+4. In the URL field, enter `Kestral-Team/kestral-plugins`, then click **Sync**.
+5. Click **+** on the **Kestral** card to install the plugin.
+6. If the **This plugin includes local MCP servers** dialog appears, click **Continue** to install the MCP server.
+7. The **Kestral** MCP connector registers with the plugin. Check **Customize → Connectors**; if it is missing, fully quit and restart Cowork.
+8. The first Kestral tool call opens a browser window for OAuth sign-in.
+9. In Cowork, run `/kestral:kestral-setup` to connect your workspace and start onboarding.
+
+Folder onboarding and `upload_document` (local file uploads from disk) work the same as in Claude Code once **Kestral** is connected.
+
+### Codex App
+
+1. Open **Plugins**, click **More**, then select **Add more**.
+2. In the repository field, enter `Kestral-Team/kestral-plugins` and leave the bottom two fields blank.
+3. Click **More** again, then find **Kestral Plugins**.
+4. Click **+** in the **Productivity** section for the plugin called **Kestral**.
+5. Run `/kestral-setup` in Codex to connect your workspace.
+
+   Codex does **not** use Claude-style `/kestral:…` slash commands for other skills — use `$kestral-setup`,
+   `$kestral-tasks`, `$kestral-context`, or `$kestral-plan`, or type `@kestral` to target the plugin.
+
+After installing in Codex, fully quit and restart the app so it reloads the plugin cache. In a new thread, type `$` and
+look for `kestral-setup`, `kestral-tasks`, `kestral-context`, or `kestral-plan`.
 
 ## What you can do
 
@@ -126,21 +158,21 @@ Protocol (the way Claude Code talks to external tools).
 
 | Problem                   | Fix                                                                                                                            |
 | ------------------------- | ------------------------------------------------------------------------------------------------------------------------------ |
-| Auth expired or invalid   | Reconnect the `kestral` MCP server (`/mcp`) to re-authenticate via OAuth.                                                     |
+| Auth expired or invalid   | Reconnect the `Kestral` MCP server (`/mcp`) to re-authenticate via OAuth.                                                     |
 | Folder not found          | Double-check the path. Use an absolute path or `~` shorthand.                                                                  |
 | No eligible files found   | The folder must contain `.md`, `.txt`, `.doc`, or `.docx` files.                                                               |
 | Project Brain not enabled | "Project Brain isn't enabled for this workspace" — ask your workspace admin to enable it, then generate from the project page. |
-| MCP won't connect         | Verify the MCP server is running (`/mcp` should show kestral as connected). Restart Claude Code and retry.                                                      |
+| MCP won't connect         | Run `/mcp` and confirm **Kestral** shows connected. Sign in again from [Integrations](https://app.kestral.ai) or re-run `/kestral:kestral-setup`. |
 | Network errors            | Check your connection. If the error persists, run `/kestral:kestral-setup` again.                                                       |
-| Codex: plugin added but no skills | Upgrade to **v0.4.5+** (`codex plugin marketplace upgrade`), restart Codex, enable the plugin in `/plugins`. Older builds used `disable-model-invocation`, which hides skills from Codex entirely. |
-| Codex: plugin not in `/plugins` | Re-run `codex plugin add kestral@kestral-plugins`, then restart. Check `~/.codex/config.toml` for `[plugins."kestral@kestral-plugins"]` with `enabled = true`. |
+| Codex: plugin added but no skills | Restart Codex after install. Enable the plugin under **Plugins** if it is disabled. Upgrade to the latest build from **Kestral Plugins** if you installed an older version. |
+| Codex: plugin not listed          | Repeat the install steps above (Plugins → More → Add more). After restart, confirm **Kestral** appears under **Kestral Plugins**. |
 
 
 ## Re-running `/kestral:kestral-setup`
 
 Each run creates a **fresh project**. There is no update-in-place yet.
+
 ## Links
 
 - [Kestral app](https://app.kestral.ai)
 - [Public plugin repo](https://github.com/Kestral-Team/kestral-plugins)
-

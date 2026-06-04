@@ -10,7 +10,7 @@ you review and edit it, then creates everything in Kestral with one approval.
 
 ## Prerequisites
 
-The `kestral` MCP server must show as **connected** (`/mcp`). Auth is automatic via OAuth (browser opens on first use).
+The `Kestral` MCP server must show as **connected** (`/mcp`). Auth is automatic via OAuth (browser opens on first use).
 
 ## Workflow
 
@@ -109,7 +109,7 @@ splitting into multiple projects, or approve and I'll create them all."
 
 On approve:
 
-**6a. Create project.** Call `kestral_create_project`:
+**6a. Create project.** Call `create_project`:
 
 ```json
 {
@@ -120,7 +120,7 @@ On approve:
 
 Store `projectId` and `url` from the response.
 
-**6b. Create tasks.** Call `kestral_create_project_tasks`:
+**6b. Create tasks.** Call `create_tasks`:
 
 ```json
 {
@@ -183,7 +183,7 @@ New tasks (5):
 Approve, edit, or cancel?
 ```
 
-- On approve, call `kestral_create_project_tasks` with the existing project ID.
+- On approve, call `create_tasks` with the existing project ID.
 
 ## Cancel behavior
 

@@ -9,7 +9,7 @@ Search, view, and update tasks in your Kestral workspace without leaving the cha
 
 ## Prerequisites
 
-The `kestral` MCP server must show as **connected** (`/mcp`). Auth is automatic via OAuth (browser opens on first use).
+The `Kestral` MCP server must show as **connected** (`/mcp`). Auth is automatic via OAuth (browser opens on first use).
 
 ## Workflow
 
@@ -33,28 +33,25 @@ If the intent is ambiguous, ask one clarifying question.
 
 #### 3a. Resolve "my tasks"
 
-If the user asks for "my" tasks (or any assignee-filtered query):
-
-1. Call `kestral_whoami` — it returns `workspaceId`, `workspaceName`, and `memberId`.
-2. Use the returned `memberId` for assignee filtering. No local config file or manual user selection needed — the OAuth
-   token identifies the user automatically.
+If the user asks for "my" tasks, use `assigneeFilter: "me"` in the `search_tasks` call. The OAuth token identifies the
+user automatically — no `whoami` call or manual member ID lookup is needed.
 
 #### 3b. Build filters
 
-Map the user's prompt to `search_tasks` parameters:
+`search_tasks` uses natural language — include the user's intent directly in the `query` parameter. The tool handles
+status, priority, tag, date, and project filtering via semantic search and AI parameter extraction internally.
 
-| User phrase                           | Parameter                                                                                                                                                                                                                                                                                                                                                                               |
-| ------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| "open", "todo", "in progress", "done" | `statuses` — call `list_task_statuses` first to discover the exact keys for the workspace                                                                                                                                                                                                                                                                                               |
-| "urgent", "high", "medium", "low"     | `priority`                                                                                                                                                                                                                                                                                                                                                                              |
-| "in project X"                        | `projectId` — call `search_projects({ query: "X", limit: 5 })` to resolve the ID                                                                                                                                                                                                                                                                                                        |
-| "my tasks"                            | `assigneeFilter: "assigned"` with the `memberId` from `kestral_whoami` as a post-filter (match on `assigneeId`). The API has no `assigneeId` parameter, so **paginate**: fetch pages of 50 (`limit: 50`), post-filter each page, accumulate matches until you have 20 user tasks or the page returns fewer than 50 results (end of data). Cap at 3 pages (150 rows) to bound API calls. |
-| "unassigned"                          | `assigneeFilter: "unassigned"`                                                                                                                                                                                                                                                                                                                                                          |
-| "tagged bug"                          | `tagIds` — call `list_workspace_tags({ search: "bug" })` to resolve the ID                                                                                                                                                                                                                                                                                                              |
-| "due this week" / "due before June 1" | `dueDateFrom` / `dueDateTo`                                                                                                                                                                                                                                                                                                                                                             |
+| User phrase                           | Parameter                                                                                       |
+| ------------------------------------- | ----------------------------------------------------------------------------------------------- |
+| "my tasks"                            | `query: "my tasks"`, `assigneeFilter: "me"`                                                    |
+| "unassigned"                          | `query: "unassigned tasks"`, `assigneeFilter: "unassigned"`                                    |
+| "in project X"                        | `query: "tasks in project X"`                                                                   |
+| "tagged bug"                          | `query: "tasks tagged bug"` (tag resolution is automatic)                                      |
+| "due this week"                       | `query: "tasks due this week"`                                                                  |
+| "urgent", "high priority"             | `query: "urgent tasks"` or `query: "high priority tasks"`                                      |
+| "open", "in progress", "done"         | `query: "open tasks"` or `query: "in progress tasks"`                                          |
 
-Call `search_tasks` with the assembled filters. Default `limit: 20`. For "my tasks" (assignee post-filter), use
-`limit: 50` per page and paginate as described above.
+Call `search_tasks` with the assembled query.
 
 #### 3c. Render results
 
@@ -76,7 +73,7 @@ If zero results: "No tasks matched those filters. Try broadening the search."
 
 ### 4. Drill-down
 
-Call `get_task({ taskId, includeComments: true, includeSubtasks: true })`.
+Call `entity_lookup({ id: taskId, type: "task" })`.
 
 Render:
 
@@ -113,9 +110,9 @@ All updates require confirmation before calling the write tool.
 
 Before writing, resolve any human-readable references to IDs:
 
-- **Status:** call `list_task_statuses` to map "done" → the workspace's status ID/key.
-- **Assignee:** call `list_workspace_members` to map "Sarah" → member ID.
-- **Tag:** call `list_workspace_tags({ search: "<name>" })` to verify the tag exists (or note it will be auto-created).
+- **Status:** call `list_statuses` to map "done" → the workspace's status ID/key.
+- **Assignee:** call `list_members` to map "Sarah" → member ID.
+- **Tag:** call `list_tags({ search: "<name>" })` to verify the tag exists (or note it will be auto-created).
 - **Project:** call `search_projects({ query: "<name>" })` to resolve project ID.
 
 #### 5b. Confirm
@@ -149,7 +146,7 @@ Depending on the update type, call one or more tools:
 | Move to project     | `update_task`      | `taskId`, `projectId`                                       |
 | Remove from project | `update_task`      | `taskId`, `projectId: null`                                 |
 | Archive             | `update_task`      | `taskId`, `archive: true`                                   |
-| Add comment         | `add_task_comment` | `taskId`, `content` (markdown)                              |
+| Add comment         | `comment_task`     | `taskId`, `content` (markdown)                              |
 | Add tag             | `assign_tag`       | `workObjectId: taskId`, `workObjectType: "Task"`, `tagName` |
 | Remove tag          | `unassign_tag`     | `workObjectId: taskId`, `workObjectType: "Task"`, `tagId`   |
 

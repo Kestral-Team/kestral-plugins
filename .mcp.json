@@ -1,6 +1,6 @@
 {
   "mcpServers": {
-    "kestral": {
+    "Kestral": {
       "command": "npx",
       "args": [
         "-y",
@@ -9,7 +9,7 @@
     }
   },
   "mcp_servers": {
-    "kestral": {
+    "Kestral": {
       "command": "npx",
       "args": [
         "-y",
