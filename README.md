@@ -14,9 +14,11 @@ tasks without leaving the terminal.
 | `/kestral:tasks` | Search, view, and update tasks. Filter by status, priority, project, or assignee. |
 | `/kestral:context` | Pull documents, projects, and tasks into the conversation so the agent can answer questions with real workspace data. |
 | `/kestral:plan` | Describe a goal, review a draft project with tasks, and create it in Kestral with one approval. |
+| `/kestral:plan-day` | Turn your Kestral daily brief and calendar into a ranked plan for today. |
+| `/kestral:end-day-review` | Summarize today, reconcile project updates, and prioritize tomorrow. |
 
 In Claude Code, run `/kestral:kestral-setup` first to authenticate and create your first project.
-In Codex, type `@kestral` to target the plugin, or invoke the bundled skill directly with `$kestral-setup` (not `/kestral:…` slash commands). The Codex marketplace installs Kestral by default; use `/plugins` to confirm it is enabled.
+In Codex, type `@kestral` to target the plugin, or invoke a bundled skill directly with `$kestral-setup`, `$kestral-plan-day`, or `$kestral-end-day-review` (not `/kestral:…` slash commands). The Codex marketplace installs Kestral by default; use `/plugins` to confirm it is enabled.
 
 ## Install
 
@@ -39,7 +41,7 @@ codex plugin marketplace add Kestral-Team/kestral-plugins
 
 ## Version
 
-Current release: **v0.4.10**
+Current release: **v0.4.12**
 
 ## Links
 
