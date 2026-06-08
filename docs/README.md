@@ -21,6 +21,28 @@ update tasks, pull workspace knowledge into a conversation, or scaffold a new pr
 - **Plan and review workdays quickly.** Describe a goal to create a project, turn your Kestral daily brief and calendar
   into a realistic plan for today, or close out the day with an evidence-backed review and tomorrow priorities.
 
+## Requirements
+
+Kestral's MCP bridge is a **local process** (`npx @kestral/kestral-mcp`) — not a remote HTTP connector like Slack or
+Linear. **Claude Code, Claude Cowork, and Codex** all spawn it on your Mac, so you need **Node.js 20+** on your
+**login PATH** (the environment GUI apps see — not just an interactive Terminal session).
+
+**Quick check** (open Terminal):
+
+```bash
+node --version   # must print v20 or higher
+which npx        # must print a path
+```
+
+| Symptom | Likely cause | Fast fix |
+| --- | --- | --- |
+| `command not found` for `node` / `npx` | Node not installed | Install LTS from [nodejs.org](https://nodejs.org), or `brew install node` (Mac) |
+| `v16.x` or lower | Node too old | `npm install -g n && n lts` (Mac), `winget install OpenJS.NodeJS.LTS` (Windows), or reinstall from nodejs.org |
+| Node works in Terminal but Kestral MCP still fails | Not on login PATH | Restart Mac after install, or ensure `/usr/local/bin` / `/opt/homebrew/bin` is in PATH for GUI apps |
+| Cowork: other connectors work, Kestral doesn't | Kestral is the only plugin that needs local Node | Install Node 20+, fully quit Cowork, start a new task |
+
+After installing or upgrading Node, **fully quit and reopen** your Claude app before retrying setup.
+
 ## Install
 
 Pick your app and follow the steps. On first connect, Kestral opens a browser window for OAuth sign-in — no API key to
@@ -167,7 +189,8 @@ Protocol (the way Claude Code talks to external tools).
 | Folder not found          | Double-check the path. Use an absolute path or `~` shorthand.                                                                  |
 | No eligible files found   | The folder must contain `.md`, `.txt`, `.doc`, or `.docx` files.                                                               |
 | Project Brain not enabled | "Project Brain isn't enabled for this workspace" — ask your workspace admin to enable it, then generate from the project page. |
-| MCP won't connect         | Run `/mcp` and confirm **Kestral** shows connected. Sign in again from [Integrations](https://app.kestral.ai) or re-run `/kestral:kestral-setup`. |
+| MCP won't connect         | First run `node --version` and `which npx` (see **Requirements**). If Node is fine, run `/mcp` and confirm **Kestral** shows connected with tools. Re-run `/kestral:kestral-setup` or sign in from [Integrations](https://app.kestral.ai). |
+| Node missing or too old   | Kestral needs **Node 20+** on your Mac (all hosts). Run the quick check above. Setup shows full upgrade steps — fastest: `npm install -g n && n lts` (Mac), `winget install OpenJS.NodeJS.LTS` (Windows), or [nodejs.org](https://nodejs.org). Fully quit and reopen the app after. |
 | Network errors            | Check your connection. If the error persists, run `/kestral:kestral-setup` again.                                                       |
 | Codex: plugin added but no skills | Restart Codex after install. Enable the plugin under **Plugins** if it is disabled. Upgrade to the latest build from **Kestral Plugins** if you installed an older version. |
 | Codex: plugin not listed          | Repeat the install steps above (Plugins → More → Add more). After restart, confirm **Kestral** appears under **Kestral Plugins**. |

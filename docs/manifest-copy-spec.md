@@ -194,6 +194,8 @@ Every error the `kestral-setup` skill can encounter has a prescribed user-facing
 
 | Failure                                           | Plugin says                                                                                                                                    |
 | ------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
+| Node missing or version < 20 (preflight)          | See **Node too old / missing** block below.                                                                                                    |
+| Kestral MCP tools not in session (preflight)      | See **MCP not connected** block below.                                                                                                         |
 | Auth fails / token invalid                        | "I couldn't authenticate you with Kestral. Run `/kestral:kestral-setup` to retry."                                                                      |
 | Folder doesn't exist                              | "I couldn't find `<path>`. Try another folder or file set."                                                                                    |
 | No documents at all (after local scan + connected sources) | "I didn't find any documents to upload — no eligible local files in `<path>` and no connected document sources available. Point me somewhere else?"  |
@@ -230,3 +232,94 @@ success** — the doc is linked, just not live. Nudge the user once, naming the 
 
 Only Notion and Google Drive support this pending path. Slack and Confluence links require their integration to already
 be connected (they error rather than storing a snapshot).
+
+### Node too old / missing
+
+Use when preflight step 0A finds `node`/`npx` missing or major version **< 20** (Claude Code, Claude Cowork, and
+Codex — Cowork spawns the stdio bridge on the host Mac, not in the agent VM). Substitute `<version>` from
+`node --version` when available, or **not installed** when the command fails. Show this message **in full** — do not
+shorten it.
+
+> I can't start Kestral setup yet. **Kestral needs Node 20 or higher** — a small free program the plugin uses in the
+> background. Your computer currently has **`<version>`**.
+>
+> Nothing has been uploaded. Upgrade Node using either option below, then run setup again in a **new chat**.
+>
+> ---
+>
+> ### Option A — Quick upgrade (Terminal, one command)
+>
+> Open **Terminal** (Mac) or **PowerShell** (Windows), paste **one** line for your computer, and press Enter:
+>
+> **Mac** (works if you already have any version of Node, including an old one):
+>
+> ```
+> npm install -g n && n lts
+> ```
+>
+> **Mac** (if you use Homebrew instead):
+>
+> ```
+> brew install node
+> ```
+>
+> **Windows:**
+>
+> ```
+> winget install OpenJS.NodeJS.LTS
+> ```
+>
+> Enter your password if prompted. When it finishes, run:
+>
+> ```
+> node --version
+> ```
+>
+> You should see **v20** or higher (e.g. `v22.x.x`). Then **fully quit** Claude Code, Claude Cowork, or Codex, reopen
+> it, and run setup again.
+>
+> ---
+>
+> ### Option B — Download from the website
+>
+> 1. Go to **https://nodejs.org**
+> 2. Click **Download Node.js (LTS)** and run the installer (Mac: `.pkg`, Windows: `.msi` — keep the default options)
+> 3. **Fully quit** Claude Code, Claude Cowork, or Codex, reopen it, and run setup again in a **new chat**
+>
+> ---
+>
+> ### Still stuck?
+>
+> If `node --version` still shows a number below 20, **restart your computer** and check again. You do not need to
+> reinstall the Kestral plugin. In Codex, check **Settings → MCP Servers** for **Kestral** (not `node_repl`). In Claude
+> Code or Cowork, run `/mcp` and confirm **kestral** is connected.
+
+### MCP not connected
+
+Use when Kestral MCP tools are absent but Node preflight passed (≥ 20, `npx` on PATH). Pick host-specific bullets;
+omit the rest.
+
+> I can't see any Kestral MCP tools in this session yet, so I can't start setup.
+>
+> **All hosts:** Run `/mcp` (or your app's MCP settings) and confirm a **Kestral** / **kestral** server is connected
+> with tools like `upload_document` and `kestral_whoami`. The setup skill alone is not enough — the MCP bridge must be
+> running in this thread.
+>
+> **Claude Cowork:**
+> - Confirm Node first: `node --version` and `which npx` in Terminal (Cowork needs local Node even though other HTTP
+>   connectors do not).
+> - Open **Customize → Connectors** and confirm **Kestral** is listed and enabled.
+> - If you saw **This plugin includes local MCP servers**, click **Continue** to register the connector.
+> - Fully quit and restart Cowork, then start a **new task** and run `/kestral:kestral-setup` again.
+>
+> **Codex:**
+> - Fully quit and restart Codex after installing the plugin.
+> - In **Settings → MCP Servers**, look for **Kestral** / **kestral** — **not** `node_repl` (that is Codex's JS sandbox).
+> - If only `node_repl` appears, add a manual entry in `~/.codex/config.toml` (see Node message above for the `npx`
+>   path), restart, and open a new thread.
+>
+> **Claude Code:**
+> - Run `/mcp` and reconnect the **kestral** server if it shows disconnected.
+> - Fully restart Claude Code if the plugin was just installed.
+>
+> Once Kestral tools appear, run setup again — a browser window will open for OAuth on the first tool call.
