@@ -185,6 +185,7 @@ Protocol (the way Claude Code talks to external tools).
 
 | Problem                   | Fix                                                                                                                            |
 | ------------------------- | ------------------------------------------------------------------------------------------------------------------------------ |
+| `Host key verification failed` on `plugin install` | Claude Code clones plugin sources over SSH and cannot prompt for GitHub's host key. Run `ssh-keyscan -t ed25519 github.com >> ~/.ssh/known_hosts`, then retry `claude plugin install kestral@kestral-plugins`. Or force HTTPS: `git config --global url."https://github.com/".insteadOf git@github.com:` |
 | Auth expired or invalid   | Reconnect the `Kestral` MCP server (`/mcp`) to re-authenticate via OAuth.                                                     |
 | Folder not found          | Double-check the path. Use an absolute path or `~` shorthand.                                                                  |
 | No eligible files found   | The folder must contain `.md`, `.txt`, `.doc`, or `.docx` files.                                                               |

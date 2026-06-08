@@ -41,7 +41,7 @@ codex plugin marketplace add Kestral-Team/kestral-plugins
 
 ## Version
 
-Current release: **v0.4.13**
+Current release: **v0.4.14**
 
 ## Links
 
