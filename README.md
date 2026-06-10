@@ -26,7 +26,27 @@ In Codex, type `@kestral` to target the plugin, or invoke a bundled skill direct
 > (`@kestral/kestral-mcp`) so folder onboarding and document upload can read files from your machine. The bridge signs
 > in to Kestral via OAuth (a browser opens on first use) and uploads file bytes directly to storage.
 
-### Claude Code
+### Quick install (macOS)
+
+One command installs Kestral to **Claude Code and Claude Desktop** (when both are detected):
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/Kestral-Team/kestral-plugins/main/setup.sh | bash
+```
+
+Non-interactive examples:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/Kestral-Team/kestral-plugins/main/setup.sh | bash -s -- --app claude-code
+curl -fsSL https://raw.githubusercontent.com/Kestral-Team/kestral-plugins/main/setup.sh | bash -s -- --app claude-desktop
+```
+
+**Note:** The script installs prerequisites (git, Node 20+), adds the Kestral marketplace via the
+`claude` CLI, and for Claude Desktop writes directly to Cowork's plugin files under
+`~/Library/Application Support/Claude/`. [View the script source](https://github.com/Kestral-Team/kestral-plugins/blob/main/setup.sh)
+before running.
+
+### Claude Code (manual)
 
 ```bash
 /plugin marketplace add Kestral-Team/kestral-plugins
@@ -39,9 +59,31 @@ In Codex, type `@kestral` to target the plugin, or invoke a bundled skill direct
 codex plugin marketplace add Kestral-Team/kestral-plugins
 ```
 
+## Uninstall
+
+### Claude Code
+
+```bash
+claude plugin uninstall kestral@kestral-plugins
+# optional: claude plugin marketplace remove kestral-plugins
+```
+
+### Claude Desktop
+
+Use **Customize → Plugins** to uninstall the Kestral plugin.
+
+If the GUI cannot see or delete the entry, remove manually:
+
+1. Delete `cowork_plugins/marketplaces/kestral-plugins/` under your Desktop session root
+   (`~/Library/Application Support/Claude/local-agent-mode-sessions/<accountId>/<orgId>/`).
+2. Remove the `kestral@kestral-plugins` entry from `cowork_plugins/installed_plugins.json`.
+3. Remove `kestral@kestral-plugins` from `cowork_settings.json` → `enabledPlugins`.
+4. Remove the `kestral-plugins` key from `cowork_plugins/known_marketplaces.json` and from
+   `cowork_settings.json` → `extraKnownMarketplaces` if present.
+
 ## Version
 
-Current release: **v0.4.15**
+Current release: **v0.4.16**
 
 ## Links
 

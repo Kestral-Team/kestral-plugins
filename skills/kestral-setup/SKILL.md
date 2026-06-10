@@ -14,9 +14,6 @@ organized by inspecting available sources and proposing a focused starting struc
 
 ## Prerequisites
 
-Kestral MCP runs locally via `npx @kestral/kestral-mcp` on the user's Mac — **Node 20+** on login PATH for **Claude
-Code, Cowork, and Codex**. All Kestral actions use MCP tools only (no shell HTTP).
-
 **Kestral** must show as **connected** with `upload_document` in the tool list — including Cowork. If missing, reconnect
 in the client; do not send users to another app for local uploads.
 
@@ -24,14 +21,10 @@ in the client; do not send users to another app for local uploads.
 
 ### 0. Preflight
 
-Run before any Kestral MCP call. Stop on first failure; exact messages in `docs/manifest-copy-spec.md`.
+Run before any Kestral MCP call. Stop on failure; exact messages in `docs/manifest-copy-spec.md`.
 
-**A. Node (all hosts)** — Bash: `node --version` and `which npx`. Missing, unresolvable, or major **< 20** → show full
-**Node too old / missing** message (`<version>` from output, or "not installed"). Do not blame MCP disconnect when Node
-is the cause. Old-Node signature: `fs/promises ... 'constants'` from `npx -y @kestral/kestral-mcp`.
-
-**B. Kestral tools (all hosts)** — Confirm `upload_document` / `kestral_*` in this thread (`/mcp`). No tools + Node OK →
-**MCP not connected** (host-specific bullets). Codex: **Kestral** server required — `node_repl` is not the bridge.
+**Kestral tools (all hosts)** — Confirm `upload_document` / `kestral_*` in this thread (`/mcp`). If absent → **MCP not
+connected** (host-specific bullets). Codex: **Kestral** server required — `node_repl` is not the bridge.
 
 ### 1. Authenticate
 

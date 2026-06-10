@@ -46,8 +46,17 @@ After installing or upgrading Node, **fully quit and reopen** your Claude app be
 
 ## Install
 
-Pick your app and follow the steps. On first connect, Kestral opens a browser window for OAuth sign-in — no API key to
-copy.
+**Recommended (macOS):** one command installs to Claude Code and Claude Desktop:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/Kestral-Team/kestral-plugins/main/setup.sh | bash
+```
+
+The script handles prerequisites (git, Node 20+), marketplace registration, and — for Claude Desktop — the Cowork
+plugin file install. [View source](https://github.com/Kestral-Team/kestral-plugins/blob/main/setup.sh) or download
+first: `curl -fsSL https://raw.githubusercontent.com/Kestral-Team/kestral-plugins/main/setup.sh -o kestral-setup.sh && less kestral-setup.sh` then `bash kestral-setup.sh`.
+
+Pick your app below for manual steps (the same steps the script automates).
 
 ### Claude Code
 
@@ -196,6 +205,24 @@ these tools automatically via the Model Context Protocol (the way Claude Code ta
 | Network errors            | Check your connection. If the error persists, run `/kestral:kestral-setup` again.                                                       |
 | Codex: plugin added but no skills | Restart Codex after install. Enable the plugin under **Plugins** if it is disabled. Upgrade to the latest build from **Kestral Plugins** if you installed an older version. |
 | Codex: plugin not listed          | Repeat the install steps above (Plugins → More → Add more). After restart, confirm **Kestral** appears under **Kestral Plugins**. |
+| Desktop: script install not visible after restart | Fully quit Claude Desktop, start a **new task**, check Customize → Plugins. If missing, use the GUI install steps above or manual removal (delete `cowork_plugins/marketplaces/kestral-plugins/`, remove `kestral@kestral-plugins` from `installed_plugins.json` and `cowork_settings.json#enabledPlugins`, remove `kestral-plugins` from `known_marketplaces.json` and `extraKnownMarketplaces`). |
+
+## Uninstall
+
+### Claude Code
+
+```bash
+claude plugin uninstall kestral@kestral-plugins
+# optional: claude plugin marketplace remove kestral-plugins
+```
+
+### Claude Desktop
+
+Use **Customize → Plugins** to uninstall. For manual removal if the GUI can't delete the entry, see the troubleshooting row above.
+
+## Re-running `/kestral:kestral-setup`
+
+Each run creates a **fresh project**. There is no update-in-place yet.
 
 ## Links
 
