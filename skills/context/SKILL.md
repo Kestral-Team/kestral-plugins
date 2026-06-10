@@ -33,9 +33,9 @@ If the prompt is empty, ask: "What topic should I search for in your Kestral wor
 
 Run three searches in parallel using the user's query:
 
-1. `search_documents({ query: "<topic>" })`
-2. `search_projects({ query: "<topic>", limit: 5 })`
-3. `search_tasks({ query: "<topic>" })`
+1. `search_content({ type: "documents", query: "<topic>" })`
+2. `query_entities({ type: "projects", query: "<topic>" })`
+3. `query_entities({ type: "tasks", query: "<topic>" })`
 
 ### 4. Present the context manifest
 

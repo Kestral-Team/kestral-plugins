@@ -1,22 +1,25 @@
 # Manifest Copy Spec
 
-Source of truth for user-facing chat output in the `kestral-setup` and `plan` skills. Skills MUST render manifests, edit grammar,
-and error messages exactly as specified here.
+Source of truth for user-facing chat output in the `kestral-setup` and `plan` skills. Skills should follow these
+patterns closely while preserving source-specific details and user-provided names.
 
 ## Connected-source offer copy
 
-Used by `kestral-setup` (step 2 opener and step 3a). The plugin can enrich a project with context from MCP connectors the user
-has already set up in this session. Tasks come from Linear, Jira, and others; **linkable document sources are Notion,
-Google Drive, Slack, and Confluence** (other connectors' URLs aren't recognized by `link_external_document`). The offer
-is **reactive, not a per-source yes/no interrogation** — pick the lightest touch that fits the conversation.
+Used by `kestral-setup` (step 2 opener and source discovery). The plugin can organize local files and connected tool
+context into one or more Kestral projects. Tasks come from Linear, Jira, GitHub, and others; **linkable document sources
+are Notion, Google Drive, Slack, and Confluence** (other connectors' URLs aren't recognized by
+`link_external_document`). The offer is **reactive, not a per-source yes/no interrogation** — pick the lightest touch
+that fits the conversation.
 
 ### Step 2 opener (frames value + plants the connector seed)
 
 ```
-I'll turn a folder of docs into a Kestral project — with an AI Project Brain (a summary Kestral generates from your
-docs) and imported tasks. I can also pull in context from tools you've already connected here (Slack, Notion, Google
-Drive, Linear, Jira, and others) to make the project more complete. Which folder should I scan? (Or list specific file
-paths — and mention any connected source you'd like included.)
+Welcome to Kestral. I can help turn scattered files, tasks, and connected tool data into organized Kestral projects so
+you and your team can stay on track automatically.
+
+I can work from local files, GitHub, Linear, Jira, Notion, Google Drive, Slack, and any other connected tool available
+in this chat. Give me whatever you have: a folder, a repo, a task system, a few links, or just "I'm not organized yet,"
+and I'll propose a starting structure with projects, documents, tasks, and Project Brains.
 ```
 
 ### Surfacing connected sources (step 3a)
@@ -33,62 +36,63 @@ Choose one, in priority order:
 **Rules:** Never loop a yes/no per source. Never block the flow waiting for an answer — the user can request sources now,
 at the manifest checkpoint, or not at all. Whatever they include feeds the same manifest checkpoint below.
 
-## Manifest format
+## Setup manifest format
 
-### Small folder (≤ 15 eligible files, all included)
-
-```
-Project: <title>
-Description: <first ~120 chars of description>
-
-Documents (N total, ~<total KB> KB):
-  • README.md                       (4.2 KB)   [local]
-  • docs/architecture.md            (8.1 KB)   [local]
-  • Q4 planning notes               (linked)   [notion]
-
-Tasks (M total):
-  • Ship onboarding plugin                     [linear]
-  • Fix typo in README                          [github]
-
-Approve, edit, or cancel?
-```
-
-### Large folder (> 15 eligible files, selection applied)
+### Recommended setup
 
 ```
-Project: <title>
-Description: <first ~120 chars of description>
+Recommended setup:
 
-Documents (15 of 342 found, ~480 KB):
-  • README.md                         (12.1 KB)  [local]
-  • docs/architecture.md              (24.3 KB)  [local]
-  • docs/api-reference.md             (18.7 KB)  [local]
-  • docs/getting-started.md           (8.4 KB)   [local]
-  • docs/deployment.md                (15.2 KB)  [local]
-  • docs/design/system-overview.md    (11.0 KB)  [local]
-  • docs/guides/contributing.md       (9.1 KB)   [local]
-  • docs/guides/testing.md            (7.3 KB)   [local]
-  • docs/security/threat-model.md     (14.8 KB)  [local]
-  • docs/ops/runbook.md               (6.5 KB)   [local]
-  • docs/product/roadmap.md           (5.2 KB)   [local]
-  • docs/product/personas.md          (4.9 KB)   [local]
-  • docs/api/endpoints.md             (16.4 KB)  [local]
-  • docs/api/webhooks.md              (10.2 KB)  [local]
-  • docs/faq.md                       (3.7 KB)   [local]
+I found 6 possible workstreams. I recommend starting with these 3 because they have the clearest active work and
+supporting context.
 
-Dropped:
-  • CHANGELOG.md                      (45.0 KB)  [local]
-  • docs/internal/team-processes.md   (6.2 KB)   [local]
-  • docs/legacy/v1-migration.md       (3.8 KB)   [local]
+1. Project Brain Onboarding
+   Why: Linear project "Project Brain", recent GitHub PRs, and matching setup docs.
+   Tasks: 12 selected [linear], 43 more matching.
+   Documents: 8 selected [local, google_drive], 96 more candidates.
+   Confidence: high.
 
-Tasks (42 total):
-  • Fix login redirect loop                      [linear]
-  • Add dark mode toggle                         [linear]
-  • Upgrade auth library                         [linear]
-  • … and 39 more
+2. MCP Plugin Reliability
+   Why: GitHub issues and Linear tasks repeatedly reference MCP install failures.
+   Tasks: 7 selected [github, linear], 19 more matching.
+   Documents: 4 selected [local], 12 more candidates.
+   Confidence: high.
 
-327 more files not included.
-Use 'add <path>' to include specific files, 'remove <path>' to drop.
+3. Marketing Launch
+   Why: Recent docs and tasks mention launch copy, Hacker News, and blog posts.
+   Tasks: 5 selected [linear].
+   Documents: 6 selected [notion, google_drive].
+   Confidence: medium.
+
+Additional candidates: 3.
+
+Say "create these", "only create Project Brain Onboarding", "rename Marketing Launch to Launch Plan", "use these
+buckets: ...", or "import all matching tasks into Project Brain Onboarding".
+```
+
+### Expanded project detail
+
+Use this when the user needs to inspect selected items before approval:
+
+```
+Proposed projects
+
+1. Billing Automation
+   Description: Consolidates active billing workflow work and supporting implementation docs.
+   Rationale: Linear project, recent GitHub issues, and matching Drive design docs.
+   Selected tasks:
+     - Fix invoice retry state [linear, high]
+     - Add webhook replay tests [github, medium]
+   Selected documents:
+     - billing-architecture.md [local]
+     - Billing rollout notes [google_drive, linked]
+   Coverage: 2 tasks selected, 43 more matching; 2 docs selected, 96 more candidates.
+   Confidence: High. Ambiguity: one Slack thread may belong to Support Ops.
+
+Extra candidates to revisit later
+- Legacy billing cleanup: stale tasks and low recent activity.
+
+This is a curated first pass. I'll import the most relevant context now and leave the rest available to add later.
 
 Approve, edit, or cancel?
 ```
@@ -98,8 +102,9 @@ Approve, edit, or cancel?
 | Rule               | Detail                                                                                                                                                                                                             |
 | ------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | **Source labels**  | Every item has a source label in brackets: `[local]` for local files, `[<mcp-namespace>]` for MCP-sourced docs/tasks. Never silently omit the label.                                                               |
-| **Sizes**          | Byte sizes shown for local files in parentheses (e.g. `(4.2 KB)`). MCP-sourced docs are linked, not uploaded, so they show `(linked)` instead of a size and do **not** count toward the 500 KB budget — only local files do. |
-| **Truncation**     | Documents: if > 50 items, show the first 50 then `… and N more`. Tasks: show up to 10 titles, then `… and N more` (task lists are noisier so the display limit is tighter).                                        |
+| **Sizes**          | Byte sizes may be shown for local files in detailed item lists (e.g. `(4.2 KB)`). MCP-sourced docs are linked, not uploaded, so they show `(linked)` instead of a size.                                             |
+| **Curated default** | The manifest is a recommended first pass, not a hard import cap. If the user asks for more or all matching context, expand the approved project's import in batches.                                              |
+| **Truncation**     | Documents: if a detailed list is long, show the first 50 then `... and N more`. Tasks: show up to 10 titles, then `... and N more` (task lists are noisier so the display limit is tighter).                       |
 | **Tasks grouping** | Group by source if multiple sources detected. Show priority label only when non-zero (e.g. `[linear, high]`).                                                                                                      |
 | **Dropped**        | List dropped noise files (e.g. `node_modules/`) under a **Dropped** section when relevant.                                                                                                                         |
 
@@ -115,15 +120,26 @@ Phrases the `kestral-setup` skill must recognize at the manifest checkpoint:
 | `skip tasks`                                         | Remove the entire Tasks section — no tasks will be imported                        |
 | `title: <new>` or `change title <new>`               | Override project title                                                             |
 | `description: <new>` or `change description <new>`   | Override project description                                                       |
-| `look at <folder> instead` or `change folder <path>` | Re-scan a new folder — resets title, description, document list, and tasks         |
+| `only create <project>`                              | Deselect other proposed projects                                                   |
+| `skip <project>`                                     | Remove a proposed project from this run                                            |
+| `rename <project> to <new title>`                    | Update a proposed project title                                                    |
+| `split <project>`                                    | Ask one focused follow-up and split into clearer workstreams                       |
+| `merge <project A> and <project B>`                  | Combine proposed projects and their selected context                               |
+| `move <item> to <project>`                           | Move a selected task or document between proposed projects                         |
+| `use these buckets: <list>`                          | Switch to user-led taxonomy and remap sources                                      |
+| `import more <source> into <project>`                 | Expand import scope for that project/source                                        |
+| `import all matching <tasks/documents>`              | Switch that project/source to bulk import mode                                     |
+| `look at <folder> instead` or `change folder <path>` | Re-scan a new folder and remap the proposed taxonomy                               |
 | `approve` / `yes` / `go`                             | Proceed to upload                                                                  |
 | `cancel` / `no`                                      | Exit cleanly — no Kestral API calls                                                |
 
-**Precedence:** `change folder` / `look at <folder> instead` wipes prior edits and re-derives everything from the new
-scan. Other edits stack on the latest scan.
+**Precedence:** user-provided buckets and explicit rename/split/merge commands override inferred taxonomy. `change
+folder` / `look at <folder> instead` refreshes local-file evidence and remaps the proposed projects. Other edits stack
+on the latest manifest.
 
-**Budget feedback on `add`:** Before appending, check whether total `byteSize` would exceed 500 KB. If so, warn
-immediately. If 15 files are already selected, warn the user to `remove` one first.
+**Bulk import confirmation:** Ask for explicit confirmation when the user requests a large bulk import or more than 5
+projects, using one concise scope summary such as: "This will import 437 tasks and 82 documents into 3 projects.
+Proceed?"
 
 Re-render the manifest after each edit. Loop until the user approves or cancels.
 
@@ -190,36 +206,48 @@ splitting into multiple projects, or approve and I'll create them all."
 
 ## Error message conventions
 
-Every error the `kestral-setup` skill can encounter has a prescribed user-facing message. Use these exact wordings.
+Every error the `kestral-setup` skill can encounter should follow the same user-facing principles. Use these principles
+and adapt project counts, source names, item counts, and URLs to the actual run.
 
-| Failure                                           | Plugin says                                                                                                                                    |
-| ------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
-| Node missing or version < 20 (preflight)          | See **Node too old / missing** block below.                                                                                                    |
-| Kestral MCP tools not in session (preflight)      | See **MCP not connected** block below.                                                                                                         |
-| Auth fails / token invalid                        | "I couldn't authenticate you with Kestral. Run `/kestral:kestral-setup` to retry."                                                                      |
-| Folder doesn't exist                              | "I couldn't find `<path>`. Try another folder or file set."                                                                                    |
-| No documents at all (after local scan + connected sources) | "I didn't find any documents to upload — no eligible local files in `<path>` and no connected document sources available. Point me somewhere else?"  |
-| Task MCP listing error                            | "I couldn't read tasks from `<source>` — skipping. Other sources still imported."                                                              |
-| Per-task translation failure                      | "Skipped `<title>` from `<source>` — couldn't map to a Kestral task."                                                                          |
-| Per-task upload failure                           | "Skipped `<title>` on upload — see report below."                                                                                              |
-| Doc upload fails (atomic create)                  | "Upload failed. No project or documents were saved — run `/kestral:kestral-setup` again."                                                               |
-| Doc upload fails (project already created)        | "Upload failed — no documents were saved. The project is at `<url>` — you can add files manually, or delete it and run `/kestral:kestral-setup` again." |
-| Brain trigger: `feature-flag-disabled`            | "Project created. Project Brain isn't enabled for this workspace — ask your admin to turn it on, then open `<url>` and click 'Generate'."      |
-| Brain trigger: `system-error`                     | "Project created. Brain generation couldn't start (ref `<supportRef>`). Open `<url>` and click 'Generate' to retry."                           |
-| Task upload total fail                            | "Project + docs uploaded. Task import failed — you can retry from the project page."                                                           |
-| Doc MCP listing error                             | "I couldn't list documents from `<source>` — skipping. Other sources still included."                                                          |
-| Other mid-flow                                    | "Something went wrong. Run `/kestral:kestral-setup` again."                                                                                             |
+| Situation | Message principle |
+| --- | --- |
+| Node missing or version < 20 (preflight) | See **Node too old / missing** block below. |
+| Kestral MCP tools not in session (preflight) | See **MCP not connected** block below. |
+| Auth fails / token invalid | Stop before any writes. Tell the user Kestral authentication failed and to reconnect the Kestral MCP server before retrying setup. |
+| Required MCP tool is disconnected or missing | Stop before writes. Name the missing Kestral capability and ask the user to reconnect or restart the MCP server before retrying. |
+| Local folder or explicit file path doesn't exist | Do not write anything. Say you could not find `<path>` and ask for another folder, file set, repo, task system, or connected source. |
+| No usable local files or connected sources remain | Do not write anything. Explain that no importable documents or task signals were found from the selected sources and ask for another source or user-provided buckets. |
+| Task source listing error | Skip `<source>` and continue when other sources remain. Include `<source>` in the skipped-source summary. If no usable sources remain, ask for another source. |
+| Document source listing error | Skip `<source>` and continue when other sources remain. Include `<source>` in the skipped-source summary. If no usable sources remain, ask for another source. |
+| Per-task translation failure | Skip the affected task, name its source when available, and summarize skipped tasks per project/source in the final report. |
+| Per-document upload/link failure | Continue with other selected documents when safe. Summarize failed documents per affected project/source in the final report. |
+| Project creation fails before imports for that project | Report that no documents or tasks were imported for the affected project. Continue with other approved projects when safe. |
+| Brain trigger: `feature-flag-disabled` | Treat as non-fatal. Report the affected project link(s), explain Project Brain is disabled for the workspace, and tell the user to ask an admin to enable it or generate later from each affected project page. |
+| Brain trigger: `system-error` | Treat as non-fatal. Report the affected project link(s), include the support reference when available, and point the user to retry Generate from each affected project page. |
+| Task import batch failure | Keep already-created projects and documents. Summarize failed task batches per affected project/source and say task import can be retried or completed from the project page. |
+| Cancel before writes | Exit cleanly and say no Kestral projects, documents, or tasks were created. |
+| Cancel after writes started | Stop future writes, then summarize already-created project links and completed/skipped imports. |
+| Other mid-flow failure | Preserve and report any successful project links. Summarize what completed, what failed, and what source or project should be retried. |
 
 ### Partial-success rule
 
-If the upload phase partially succeeded (project + docs landed, but tasks failed or brain couldn't start), **ALWAYS**
-return the project URL alongside the error message. Users need to know where the partial work lives.
+If any project creation, document upload/link, task import, or brain trigger partially succeeded, **always** return the
+successful project links alongside the failure summary. Users need to know where the created work lives.
 
 Example:
 
-> Your project is ready: **\<url\>**
+> Created projects:
+> - Project Brain Onboarding: **\<url\>**
+> - MCP Plugin Reliability: **\<url\>**
 >
-> Project + docs uploaded. Task import failed — you can retry from the project page.
+> Documents: Project Brain Onboarding linked 8/8 documents. MCP Plugin Reliability uploaded 3/4 local files; skipped
+> `docs/legacy-notes.md` because upload failed.
+>
+> Tasks: Imported 12 Linear tasks into Project Brain Onboarding. GitHub task import failed for MCP Plugin Reliability;
+> retry from the project page or rerun setup for that source.
+>
+> Brain: Generation started for Project Brain Onboarding. Brain generation could not start for MCP Plugin Reliability
+> (ref `<supportRef>`); open the project and click Generate to retry.
 
 ### Pending external links
 

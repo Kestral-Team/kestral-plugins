@@ -30,7 +30,7 @@ Accept free text. The brief can be a single sentence or multiple paragraphs.
 
 ### 3. Check for duplicates
 
-Call `search_projects({ query: "<inferred title from brief>", limit: 5 })`.
+Call `query_entities({ type: "projects", query: "<inferred title from brief>" })`.
 
 If any results look like a match, show them:
 
@@ -138,17 +138,13 @@ Store `projectId` and `url` from the response.
 
 The `source` field is always `"plugin"` for tasks created by this skill.
 
-**6c. Apply tags** (optional). If the user specified tags at the checkpoint, call `assign_tag` for each tag:
+**6c. Apply tags** (optional). If the user specified tags at the checkpoint, call `project_management` to apply them:
 
 ```json
 {
-  "workObjectId": "<projectId>",
-  "workObjectType": "Project",
-  "tagName": "<tag>"
+  "request": "Assign the following tags to project <projectId>: <tag1>, <tag2>. Auto-create any tags that don't exist yet."
 }
 ```
-
-Tags that don't exist yet are auto-created by the MCP server.
 
 ### 7. Present results
 

@@ -33,25 +33,25 @@ If the intent is ambiguous, ask one clarifying question.
 
 #### 3a. Resolve "my tasks"
 
-If the user asks for "my" tasks, use `assigneeFilter: "me"` in the `search_tasks` call. The OAuth token identifies the
+If the user asks for "my" tasks, use `assigneeFilter: "me"` in the `query_entities` call. The OAuth token identifies the
 user automatically — no `whoami` call or manual member ID lookup is needed.
 
 #### 3b. Build filters
 
-`search_tasks` uses natural language — include the user's intent directly in the `query` parameter. The tool handles
+`query_entities` with `type: "tasks"` uses natural language — include the user's intent directly in the `query` parameter. The tool handles
 status, priority, tag, date, and project filtering via semantic search and AI parameter extraction internally.
 
-| User phrase                           | Parameter                                                                                       |
-| ------------------------------------- | ----------------------------------------------------------------------------------------------- |
-| "my tasks"                            | `query: "my tasks"`, `assigneeFilter: "me"`                                                    |
-| "unassigned"                          | `query: "unassigned tasks"`, `assigneeFilter: "unassigned"`                                    |
-| "in project X"                        | `query: "tasks in project X"`                                                                   |
-| "tagged bug"                          | `query: "tasks tagged bug"` (tag resolution is automatic)                                      |
-| "due this week"                       | `query: "tasks due this week"`                                                                  |
-| "urgent", "high priority"             | `query: "urgent tasks"` or `query: "high priority tasks"`                                      |
-| "open", "in progress", "done"         | `query: "open tasks"` or `query: "in progress tasks"`                                          |
+| User phrase                   | Parameter                                                   |
+| ----------------------------- | ----------------------------------------------------------- |
+| "my tasks"                    | `query: "my tasks"`, `assigneeFilter: "me"`                 |
+| "unassigned"                  | `query: "unassigned tasks"`, `assigneeFilter: "unassigned"` |
+| "in project X"                | `query: "tasks in project X"`                               |
+| "tagged bug"                  | `query: "tasks tagged bug"` (tag resolution is automatic)   |
+| "due this week"               | `query: "tasks due this week"`                              |
+| "urgent", "high priority"     | `query: "urgent tasks"` or `query: "high priority tasks"`   |
+| "open", "in progress", "done" | `query: "open tasks"` or `query: "in progress tasks"`       |
 
-Call `search_tasks` with the assembled query.
+Call `query_entities` with `type: "tasks"` and the assembled query.
 
 #### 3c. Render results
 
@@ -113,7 +113,7 @@ Before writing, resolve any human-readable references to IDs:
 - **Status:** call `list_statuses` to map "done" → the workspace's status ID/key.
 - **Assignee:** call `list_members` to map "Sarah" → member ID.
 - **Tag:** call `list_tags({ search: "<name>" })` to verify the tag exists (or note it will be auto-created).
-- **Project:** call `search_projects({ query: "<name>" })` to resolve project ID.
+- **Project:** call `query_entities({ type: "projects", query: "<name>" })` to resolve project ID.
 
 #### 5b. Confirm
 
@@ -133,25 +133,25 @@ Wait for explicit confirmation. On "no", cancel and return to the drill-down or 
 
 Depending on the update type, call one or more tools:
 
-| Action              | Tool               | Key params                                                  |
-| ------------------- | ------------------ | ----------------------------------------------------------- |
-| Change status       | `update_task`      | `taskId`, `statusKey` or `statusId`                         |
-| Change priority     | `update_task`      | `taskId`, `priority`                                        |
-| Change assignee     | `update_task`      | `taskId`, `assigneeId`                                      |
-| Unassign            | `update_task`      | `taskId`, `unassign: true`                                  |
-| Change title        | `update_task`      | `taskId`, `title`                                           |
-| Change description  | `update_task`      | `taskId`, `description`                                     |
-| Set due date        | `update_task`      | `taskId`, `dueDate` (YYYY-MM-DD)                            |
-| Clear due date      | `update_task`      | `taskId`, `dueDate: null`                                   |
-| Move to project     | `update_task`      | `taskId`, `projectId`                                       |
-| Remove from project | `update_task`      | `taskId`, `projectId: null`                                 |
-| Archive             | `update_task`      | `taskId`, `archive: true`                                   |
-| Add comment         | `comment_task`     | `taskId`, `content` (markdown)                              |
-| Add tag             | `assign_tag`       | `workObjectId: taskId`, `workObjectType: "Task"`, `tagName` |
-| Remove tag          | `unassign_tag`     | `workObjectId: taskId`, `workObjectType: "Task"`, `tagId`   |
+| Action              | Tool                 | Key params                                           |
+| ------------------- | -------------------- | ---------------------------------------------------- |
+| Change status       | `update_task`        | `taskId`, `statusKey` or `statusId`                  |
+| Change priority     | `update_task`        | `taskId`, `priority`                                 |
+| Change assignee     | `update_task`        | `taskId`, `assigneeId`                               |
+| Unassign            | `update_task`        | `taskId`, `unassign: true`                           |
+| Change title        | `update_task`        | `taskId`, `title`                                    |
+| Change description  | `update_task`        | `taskId`, `description`                              |
+| Set due date        | `update_task`        | `taskId`, `dueDate` (YYYY-MM-DD)                     |
+| Clear due date      | `update_task`        | `taskId`, `dueDate: null`                            |
+| Move to project     | `update_task`        | `taskId`, `projectId`                                |
+| Remove from project | `update_task`        | `taskId`, `projectId: null`                          |
+| Archive             | `update_task`        | `taskId`, `archive: true`                            |
+| Add comment         | `comment_task`       | `taskId`, `content` (markdown)                       |
+| Add tag             | `project_management` | `request`: "Assign tag '<tagName>' to task <taskId>" |
+| Remove tag          | `project_management` | `request`: "Remove tag '<tagId>' from task <taskId>" |
 
-Multiple updates to the same task can be batched into one `update_task` call (e.g. status + assignee). Comments and tags
-are separate calls.
+Multiple updates to the same task can be batched into one `update_task` call (e.g. status + assignee). Comments are
+separate calls. Tag operations use the `project_management` agent.
 
 #### 5d. Report
 

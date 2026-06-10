@@ -4,14 +4,15 @@ Connect Claude Code, Claude Cowork, or Codex to [Kestral](https://app.kestral.ai
 teams. Kestral stores your projects, tasks, documents, and customer feedback, and gives an AI agent context about all of
 it.
 
-This plugin lets you work with Kestral directly from the chat: onboard a project from a folder of docs, search and
-update tasks, pull workspace knowledge into a conversation, or scaffold a new project with tasks.
+This plugin lets you work with Kestral directly from the chat: organize scattered work into projects, search and update
+tasks, pull workspace knowledge into a conversation, or scaffold a new project with tasks.
 
 ## Why use it
 
-- **Onboard a holistic project in one command.** Point the plugin at a folder of docs. It scans, infers a title, and —
-  using the tools you've already connected (Slack, Notion, Google Drive, Linear, Jira, and more) — pulls in
-  related documents and tasks so the project reflects your whole picture, not just local files.
+- **Organize scattered work into Kestral projects.** Give setup local files, a repo, GitHub, Linear, Jira, Notion,
+  Google Drive, Slack, any other connected tool, or just "I'm not organized yet." It proposes a small active-workstream
+  taxonomy, creates the selected Kestral projects, imports relevant tasks and documents, and starts Project Brain for
+  each project.
 - **Bring your connected tools' context with you.** The plugin sees the same MCP connectors loaded in your session and
   offers to enrich the project with them. You stay in control of what's included — nothing is pulled without your say.
 - **Manage tasks without switching tools.** List your open tasks, change status, add comments, and assign work from the
@@ -83,7 +84,7 @@ copy.
 8. The first Kestral tool call opens a browser window for OAuth sign-in.
 9. In Cowork, run `/kestral:kestral-setup` to connect your workspace and start onboarding.
 
-Folder onboarding and `upload_document` (local file uploads from disk) work the same as in Claude Code once **Kestral** is connected.
+Setup and `upload_document` (local file uploads from disk) work the same as in Claude Code once **Kestral** is connected.
 
 ### Codex App
 
@@ -105,7 +106,7 @@ look for `kestral-setup`, `kestral-tasks`, `kestral-context`, `kestral-plan`, `k
 
 | Command            | What it does                                                              | Example                                                                                    |
 | ------------------ | ------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------ |
-| `/kestral:kestral-setup`    | Onboard a project from a folder of docs, with tasks from connected tools. | `/kestral:kestral-setup` → authenticates, scans `./docs`, shows a manifest, uploads to Kestral.     |
+| `/kestral:kestral-setup`    | Organize local files and connected-tool context into one or more Kestral projects. | `/kestral:kestral-setup` → scans files and connected tools, proposes 1-3 projects, imports selected context, and starts Project Brain. |
 | `/kestral:tasks`   | Search, view, and update tasks in your workspace.                         | `/kestral:tasks show my open tasks in the auth project` → returns a filtered task list.    |
 | `/kestral:context` | Pull docs, projects, and tasks into the chat as context.                  | `/kestral:context auth migration` → finds matching docs and tasks, asks which to load.     |
 | `/kestral:plan`    | Scaffold a new project with seed tasks from a brief.                      | `/kestral:plan migrate OAuth to OIDC` → drafts a project with 8 tasks, waits for approval. |
@@ -128,38 +129,34 @@ In Codex, type `@kestral` to target the plugin, or invoke a bundled skill direct
 
 Run `/kestral:kestral-setup` to start. The skill walks you through four steps:
 
-1. **Authenticate** — on first use, the MCP client opens a browser for OAuth login. Tokens are managed and refreshed
-   automatically.
-
-2. **Pick a folder (and any connected sources)** — it asks which folder to scan and reminds you it can also pull context
-   from tools you've connected (Slack, Notion, Google Drive, Linear, Jira, …). Name any source you'd like included, or
-   just give it a folder. It won't interrogate you source-by-source — mention what you want and it reacts.
-
-3. **Review the manifest** — a summary of your project: local documents, any documents and tasks pulled from connected
-   tools, and a title/description it inferred. Every item is labelled by source. You can add, remove, or edit anything
-   before proceeding.
-
-4. **Upload** — creates a Kestral project, uploads documents, triggers Project Brain generation (an AI-generated summary
-   Kestral builds from your docs), and imports tasks. You get a link to your new project, plus a nudge to open the brain
-   for blockers and a few next steps it can help with — adding more context, working the blocker tasks, or sharing with
-   your team.
+1. **Authenticate** — on first use, the MCP client opens a browser for OAuth login.
+2. **Share any source** — provide local files, GitHub, Linear, Jira, Notion, Google Drive, Slack, any other connected
+   tool, or say you are not organized yet.
+3. **Review the proposed projects** — setup recommends a focused set of active workstream projects, usually 1-3 and at
+   most 5 by default. You can rename, split, merge, remove, use your own buckets, or ask to import more context.
+4. **Create and import** — setup creates the selected projects, imports curated tasks and documents by default, honors
+   larger import requests, and triggers Project Brain for each project.
 
 ```
-Project: My App
-Description: React app with Express backend for task management
+Recommended setup:
 
-Documents (8 total, ~42 KB):
-  • README.md                    (12.1 KB)  [local]
-  • docs/architecture.md         (8.3 KB)   [local]
-  • docs/api.md                  (6.7 KB)   [local]
-  …
+I found 4 possible workstreams. I recommend starting with these 2 because they have the clearest active work and
+supporting context.
 
-Tasks (12 total):
-  • Fix auth redirect loop                  [linear, high]
-  • Add dark mode toggle                     [linear, medium]
-  • … and 10 more
+1. Auth Reliability
+   Why: Linear project, GitHub issues, and matching local architecture docs.
+   Tasks: 12 selected [linear, github], 43 more matching.
+   Documents: 8 selected [local, google_drive], 96 more candidates.
+   Confidence: high.
 
-Approve, edit, or cancel?
+2. Launch Operations
+   Why: Recent Notion plans, Drive docs, and Slack threads point to active launch work.
+   Tasks: 5 selected [jira].
+   Documents: 6 selected [notion, google_drive, slack].
+   Confidence: medium.
+
+Say "create these", "only create Auth Reliability", "rename Launch Operations to GTM Launch", "use these buckets: ...",
+or "import all matching tasks into Auth Reliability".
 ```
 
 After onboarding, use `/kestral:tasks` to work with your tasks, `/kestral:context` to pull knowledge into conversations,
@@ -170,16 +167,20 @@ After onboarding, use `/kestral:tasks` to work with your tasks, `/kestral:contex
 
 ### Documents
 
-| Source               | File types                                | Notes                                                                                    |
-| -------------------- | ----------------------------------------- | ---------------------------------------------------------------------------------------- |
-| Local folder         | `.md`, `.txt`, `.doc`, `.docx`            | Scanned recursively. Hidden dirs, `node_modules/`, `dist/`, etc. are excluded.           |
-| MCP document sources | Notion, Google Drive, Slack, Confluence   | Linked into Kestral with source provenance (not copied). Detected automatically when the MCP is loaded. Nothing is pulled in unless you ask for it. |
+| Source                 | File types or systems                     | Notes                                                                                    |
+| ---------------------- | ----------------------------------------- | ---------------------------------------------------------------------------------------- |
+| Local files            | Local upload file types                 | Folders are scanned recursively. Hidden dirs, `node_modules/`, `dist/`, etc. are excluded. Convert `.doc` files to `.docx` before import. |
+| Connected document tools | Notion, Google Drive, Slack, Confluence, and other connected tools | Linked into Kestral with source provenance when available. Detected automatically when the connector is loaded. |
+
+Supported local upload extensions: `.pdf`, `.docx`, `.txt`, `.md`, `.markdown`, `.csv`, `.jpg`, `.jpeg`, `.png`,
+`.webp`, `.heic`, `.heif`, `.mp3`, `.m4a`, `.mp4`.
 
 ### Tasks
 
-Any task tool loaded in the session — Linear, Jira, GitHub Issues, Asana, ClickUp, Shortcut, and others. Open tasks plus
-tasks completed in the **last 30 days** are imported. The plugin detects these tools automatically via the Model Context
-Protocol (the way Claude Code talks to external tools).
+Any task tool loaded in the session — Linear, Jira, GitHub Issues, Asana, ClickUp, Shortcut, and other connected tools.
+Setup uses open, in-progress, recently updated, high-priority, or recently completed work as signals for active
+workstreams, imports curated tasks by default, and imports more or all matching tasks when requested. The plugin detects
+these tools automatically via the Model Context Protocol (the way Claude Code talks to external tools).
 
 ## Troubleshooting
 
@@ -187,19 +188,14 @@ Protocol (the way Claude Code talks to external tools).
 | ------------------------- | ------------------------------------------------------------------------------------------------------------------------------ |
 | `Host key verification failed` on `plugin install` | Claude Code clones plugin sources over SSH and cannot prompt for GitHub's host key. Run `ssh-keyscan -t ed25519 github.com >> ~/.ssh/known_hosts`, then retry `claude plugin install kestral@kestral-plugins`. Or force HTTPS: `git config --global url."https://github.com/".insteadOf git@github.com:` |
 | Auth expired or invalid   | Reconnect the `Kestral` MCP server (`/mcp`) to re-authenticate via OAuth.                                                     |
-| Folder not found          | Double-check the path. Use an absolute path or `~` shorthand.                                                                  |
-| No eligible files found   | The folder must contain `.md`, `.txt`, `.doc`, or `.docx` files.                                                               |
+| Source not found          | Double-check the path, URL, connector, or tool name. Use an absolute path or `~` shorthand for local paths.                    |
+| No eligible files found   | Share another local path, repo, task system, document tool, or workstream bucket to give setup a usable signal.                |
 | Project Brain not enabled | "Project Brain isn't enabled for this workspace" — ask your workspace admin to enable it, then generate from the project page. |
 | MCP won't connect         | First run `node --version` and `which npx` (see **Requirements**). If Node is fine, run `/mcp` and confirm **Kestral** shows connected with tools. Re-run `/kestral:kestral-setup` or sign in from [Integrations](https://app.kestral.ai). |
 | Node missing or too old   | Kestral needs **Node 20+** on your Mac (all hosts). Run the quick check above. Setup shows full upgrade steps — fastest: `npm install -g n && n lts` (Mac), `winget install OpenJS.NodeJS.LTS` (Windows), or [nodejs.org](https://nodejs.org). Fully quit and reopen the app after. |
 | Network errors            | Check your connection. If the error persists, run `/kestral:kestral-setup` again.                                                       |
 | Codex: plugin added but no skills | Restart Codex after install. Enable the plugin under **Plugins** if it is disabled. Upgrade to the latest build from **Kestral Plugins** if you installed an older version. |
 | Codex: plugin not listed          | Repeat the install steps above (Plugins → More → Add more). After restart, confirm **Kestral** appears under **Kestral Plugins**. |
-
-
-## Re-running `/kestral:kestral-setup`
-
-Each run creates a **fresh project**. There is no update-in-place yet.
 
 ## Links
 

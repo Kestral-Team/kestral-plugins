@@ -1,12 +1,12 @@
 ---
 name: kestral-upload
-description: Create a Kestral project, upload documents, trigger brain, and import tasks. Use when the user or kestral-setup asks to upload an approved manifest.
+description: Create a Kestral project, upload documents, import tasks, and trigger brain. Use when the user or kestral-setup asks to upload an approved manifest.
 ---
 
 # Upload
 
-Create a Kestral project with documents from the scan manifest, trigger brain generation, and import tasks (if provided
-by the caller).
+Create one or more Kestral projects from approved setup manifests, upload or link selected documents, import tasks when
+provided by the caller, and trigger Project Brain generation after project context is attached.
 
 ## Prerequisites
 
@@ -19,14 +19,19 @@ tool list, reconnect **Kestral** in the client and retry — do not send the use
 
 From the scan step or user edits at the manifest checkpoint:
 
-- `title` — project title
-- `description` — project description (optional)
-- `documents` — array of `{ filename, relativePath, byteSize, filePath }`. **Local files only** — every doc must have a
-  `filePath`. Linked external docs (Notion/Drive/Slack, no `filePath`) are handled by `kestral-setup`'s own upload step
-  via `link_external_document`, not here.
-- `tasks` — (optional) array of `{ title, description?, source, priority?, dueDate? }` from `scan-tasks`
+- `projects` — array of approved manifests:
+  - `title` — project title
+  - `description` — project description (optional)
+  - `documents` — array of selected documents. Local docs include `{ filename, relativePath, byteSize, filePath }`;
+    external docs include canonical `url`, `title`, `source`, and optional fallback `content`.
+  - `tasks` — array of `{ title, description?, source, priority?, dueDate? }` from `scan-tasks` or user edits
+  - `bulkImportRequested` — optional flags by source or item type when the user approved importing more/all matching
+    context into this project
 
 ## Workflow
+
+Apply each approved project. Preserve successful project URLs even when later uploads, task creation, or Project Brain
+generation fail for one project.
 
 ### 1. Create project
 
@@ -34,7 +39,12 @@ Call `create_project` with `{ title, description }`. Store `projectId` and `url`
 
 ### 2. Upload documents
 
-Call `upload_document` once per document, passing the project ID so each file is attached:
+For selected local documents, pass the project ID so each file is attached. When multiple local files are selected for a
+project, prefer `upload_document({ filePaths, projectId, explanation })` if the local tool schema supports `filePaths`.
+Fall back to one `upload_document({ filePath, projectId, explanation })` call per file when only the legacy schema is
+available.
+
+Single-file legacy call shape:
 
 ```json
 {
@@ -49,13 +59,23 @@ server enforces an allowed file-type list and a per-file size limit (tens of MB 
 audio/video); an oversized or unsupported file fails on its own (reported in step 5) without blocking the rest. Use
 absolute paths only; the server rejects common credential locations (`.ssh`, `.aws`, `.kestral`, `.env`, etc.).
 
-Each call returns `{ documentId, title, url }`. Track per-file success/failure. On 401, tell the user to reconnect the
-MCP server, then retry.
+Single-file calls return `{ documentId, title, url }`; batch calls may return `{ documents, failed }`. Track per-file
+success/failure in either shape. On 401, tell the user to reconnect the MCP server, then retry.
 
-### 3. Trigger brain generation
+For selected external documents, call `link_external_document` with `{ url, title, projectId, content? }`. Never use
+`create_document` for external docs; it loses source identity and autosync behavior. Track `resolutionStatus` so pending
+links can be reported as partial success.
 
-Call `trigger_brain_build` with `{ projectId }`. Capture the response — do not fail the overall flow on
-error. Three response cases:
+### 3. Import tasks
+
+If a project's `tasks` input is non-empty, call `create_tasks` with `{ projectId, tasks }`. Capture `created` and
+`failed`. Do not fail the overall flow if some tasks fail. Skip entirely if `tasks` is empty or not provided. For
+approved bulk imports, batch by project and source and continue reporting partial success.
+
+### 4. Trigger brain generation
+
+Call `trigger_brain_build` with `{ projectId }` after selected documents and tasks have been attached. Capture the
+response — do not fail the overall flow on error. Three response cases:
 
 | Response                                           | User-facing message                                                                                                          |
 | -------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------- |
@@ -63,20 +83,15 @@ error. Three response cases:
 | `enqueued: false, reason: 'feature-flag-disabled'` | "Project Brain isn't enabled for this workspace — ask your admin to turn it on, or generate it from the project page later." |
 | `enqueued: false, reason: 'system-error'`          | "Brain couldn't start (`<supportRef>`) — open the project and click 'Generate'."                                             |
 
-### 4. Import tasks
-
-If `tasks` input is non-empty, call `create_tasks` with `{ projectId, tasks }`. Capture `created` and
-`failed`. Do not fail the overall flow if some tasks fail. Skip entirely if `tasks` is empty or not provided.
-
 ### 5. Present results
 
-Print the project URL and summarize all outcomes:
+Print each project URL and summarize all outcomes:
 
 > Your project is ready: **\<url\>**
 >
-> **Documents:** N/M uploaded successfully. \<list failures if any\>
+> **Documents:** N/M uploaded or linked successfully. \<list failures or pending links if any\>
 >
-> **Brain:** \<message from step 3 table\>
+> **Brain:** \<message from the Brain response table above\>
 >
 > **Tasks:** \<task summary — only if tasks were attempted\>
 
@@ -89,7 +104,12 @@ Task summary format:
 If all documents failed: "Upload failed — no documents were saved. The project is at `<url>` — you can add files
 manually, or delete it and try again."
 
+When multiple projects were approved, repeat the same compact summary per project and include every successful project
+URL. One project's failure does not hide successful results from other projects.
+
 ## Error handling
 
-- If `create_project` fails, surface the error — no cleanup needed.
-- Brain trigger and task import failures are non-fatal — always present the project URL.
+- If `create_project` fails for one project, surface that project's error and continue with other approved projects when
+  safe.
+- Document upload/link failures, brain trigger failures, and task import failures are non-fatal after a project exists —
+  always present the project URL.
