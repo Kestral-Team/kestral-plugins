@@ -2,6 +2,21 @@
 # Kestral plugin one-shot macOS setup script.
 #
 # Installs the Kestral plugin to Claude Code, Claude Desktop, and/or Codex.
+#
+# Usage:
+#   curl -fsSL https://raw.githubusercontent.com/Kestral-Team/kestral-plugins/main/setup.sh | bash
+#   bash setup.sh [--app claude-code|claude-desktop|codex] [--desktop-root <accountId>/<orgId>] [--go-mcp]
+#
+# Options:
+#   --app <targets>       Non-interactive target set (comma-separated: claude-code, claude-desktop, codex)
+#   --desktop-root <id>   Select Desktop session root when multiple exist
+#   --go-mcp              Install standalone Go kestral-mcp binary (no Node.js required; always latest release)
+#   -h, --help            Show this help
+#
+# Examples:
+#   bash setup.sh --app claude-code
+#   bash setup.sh --app codex --go-mcp
+#   curl -fsSL https://raw.githubusercontent.com/Kestral-Team/kestral-plugins/main/setup.sh | bash -s -- --go-mcp
 
 set -euo pipefail
 
@@ -25,7 +40,6 @@ APP_FLAG=""
 DESKTOP_ROOT_FLAG=""
 EXPLICIT_APP_FLAG=0
 USE_GO_MCP=0
-MCP_VERSION_FLAG=""
 
 # --- Detection / selection state ---
 HAS_GIT=0
@@ -53,6 +67,67 @@ DESKTOP_BACKUP_SUFFIX=""
 LOGFILE="${HOME}/.kestral/setup.log"
 mkdir -p "${HOME}/.kestral"
 : > "$LOGFILE"
+
+# --- Usage ---
+
+usage() {
+  cat <<EOF
+Kestral plugin setup (macOS)
+
+Usage:
+  curl -fsSL https://raw.githubusercontent.com/Kestral-Team/kestral-plugins/main/setup.sh | bash
+  bash setup.sh [--app claude-code|claude-desktop|codex] [--desktop-root <accountId>/<orgId>] [--go-mcp]
+
+Options:
+  --app <targets>       Non-interactive target set (comma-separated: claude-code, claude-desktop, codex)
+  --desktop-root <id>   Select Desktop session root when multiple exist
+  --go-mcp              Install standalone Go kestral-mcp binary (no Node.js required; always latest release)
+  -h, --help            Show this help
+
+Examples:
+  bash setup.sh --app claude-code
+  bash setup.sh --app codex --go-mcp
+  bash setup.sh --app claude-code,codex
+  bash setup.sh --app claude-desktop --desktop-root abc123/def456
+  curl -fsSL https://raw.githubusercontent.com/Kestral-Team/kestral-plugins/main/setup.sh | bash -s -- --go-mcp
+EOF
+}
+
+parse_args() {
+  while [ $# -gt 0 ]; do
+    case "$1" in
+      --app)
+        shift
+        APP_FLAG="${1:-}"
+        EXPLICIT_APP_FLAG=1
+        [ -n "$APP_FLAG" ] || abort "--app requires a value"
+        ;;
+      --desktop-root)
+        shift
+        DESKTOP_ROOT_FLAG="${1:-}"
+        [ -n "$DESKTOP_ROOT_FLAG" ] || abort "--desktop-root requires a value"
+        ;;
+      --go-mcp)
+        USE_GO_MCP=1
+        ;;
+      -h | --help)
+        usage
+        exit 0
+        ;;
+      --)
+        shift
+        break
+        ;;
+      -*)
+        abort "Unknown option: $1"
+        ;;
+      *)
+        break
+        ;;
+    esac
+    shift
+  done
+}
 
 _log_verbose() {
   printf '%s\n' "$*" >> "$LOGFILE"
@@ -150,74 +225,6 @@ read_tty() {
     return 1
   fi
   return 0
-}
-
-# --- Usage ---
-
-usage() {
-  cat <<EOF
-Kestral plugin setup (macOS)
-
-Usage:
-  curl -fsSL https://raw.githubusercontent.com/Kestral-Team/kestral-plugins/main/setup.sh | bash
-  bash setup.sh [--app claude-code|claude-desktop|codex] [--desktop-root <accountId>/<orgId>] [--go-mcp] [--mcp-version <semver>]
-
-Options:
-  --app <targets>       Non-interactive target set (comma-separated: claude-code, claude-desktop, codex)
-  --desktop-root <id>   Select Desktop session root when multiple exist
-  --go-mcp              Install the standalone Go kestral-mcp binary (no Node.js required)
-  --mcp-version <ver>   Plugin release version for --go-mcp download fallback (default: plugin manifest version)
-  -h, --help            Show this help
-
-Examples:
-  bash setup.sh --app claude-code
-  bash setup.sh --app codex --go-mcp
-  bash setup.sh --app claude-code,codex
-  bash setup.sh --app claude-desktop --desktop-root abc123/def456
-  bash setup.sh --go-mcp --mcp-version 0.1.4
-EOF
-}
-
-parse_args() {
-  while [ $# -gt 0 ]; do
-    case "$1" in
-      --app)
-        shift
-        APP_FLAG="${1:-}"
-        EXPLICIT_APP_FLAG=1
-        [ -n "$APP_FLAG" ] || abort "--app requires a value"
-        ;;
-      --desktop-root)
-        shift
-        DESKTOP_ROOT_FLAG="${1:-}"
-        [ -n "$DESKTOP_ROOT_FLAG" ] || abort "--desktop-root requires a value"
-        ;;
-      --go-mcp)
-        USE_GO_MCP=1
-        ;;
-      --mcp-version)
-        shift
-        MCP_VERSION_FLAG="${1:-}"
-        USE_GO_MCP=1
-        [ -n "$MCP_VERSION_FLAG" ] || abort "--mcp-version requires a value"
-        ;;
-      -h | --help)
-        usage
-        exit 0
-        ;;
-      --)
-        shift
-        break
-        ;;
-      -*)
-        abort "Unknown option: $1"
-        ;;
-      *)
-        break
-        ;;
-    esac
-    shift
-  done
 }
 
 # --- Prerequisites ---
@@ -340,52 +347,142 @@ ensure_node() {
   ok "Node.js $(node --version)"
 }
 
-ensure_python3() {
-  if ! command -v python3 >/dev/null 2>&1; then
-    abort_with_hint "python3 is required for --go-mcp install." \
-      "Install Python 3 from https://www.python.org/downloads/macos/ or run: brew install python"
-  fi
-  ok "python3 $(python3 --version 2>&1 | awk '{print $2}')"
+_json_write_atomic() {
+  local _file="$1"
+  local _content="$2"
+  local _tmp="${_file}.tmp.$$"
+  printf '%s\n' "$_content" > "$_tmp"
+  mv "$_tmp" "$_file"
 }
 
-_plugin_version_from_root() {
-  local _root="$1"
-  local _manifest="${_root}/.claude-plugin/plugin.json"
-  if [ ! -f "$_manifest" ]; then
-    return 1
-  fi
-  python3 - "$_manifest" <<'PY'
-import json
-import sys
-
-with open(sys.argv[1], encoding="utf-8") as handle:
-    print(json.load(handle)["version"])
-PY
-}
-
-_go_mcp_release_version() {
-  local _plugin_root="${1:-}"
-  if [ -n "$MCP_VERSION_FLAG" ]; then
-    printf '%s' "$MCP_VERSION_FLAG"
+ensure_jq() {
+  if command -v jq >/dev/null 2>&1; then
+    ok "jq $(jq --version)"
     return 0
   fi
-  if [ -n "$_plugin_root" ]; then
-    local _plugin_version=""
-    _plugin_version="$(_plugin_version_from_root "$_plugin_root" 2>/dev/null || true)"
-    if [ -n "$_plugin_version" ]; then
-      printf '%s' "$_plugin_version"
+
+  log "jq not found — attempting install..."
+  if command -v brew >/dev/null 2>&1; then
+    brew install jq >>"$LOGFILE" 2>&1 || true
+    if command -v jq >/dev/null 2>&1; then
+      ok "jq installed via Homebrew"
       return 0
     fi
   fi
-  local _bundled_root
-  _bundled_root="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-  local _bundled_version=""
-  _bundled_version="$(_plugin_version_from_root "$_bundled_root" 2>/dev/null || true)"
-  if [ -n "$_bundled_version" ]; then
-    printf '%s' "$_bundled_version"
-    return 0
+
+  abort_with_hint "jq is required for --go-mcp install." \
+    "Install jq via Homebrew: brew install jq"
+}
+
+_jq_installed_plugins_filter() {
+  cat <<'JQ'
+def convert_v1_to_v2:
+  if (.version // 0) == 2 then .
+  else {
+    version: 2,
+    plugins: (
+      (.plugins // {}) | with_entries(
+        if (.value | type) == "array" then . else .value = [.value] end
+      )
+    )
+  }
+  end;
+
+def user_entry($clone; $version; $iso; $sha):
+  {
+    scope: "user",
+    installPath: $clone,
+    version: $version,
+    installedAt: $iso,
+    lastUpdated: $iso,
+    gitCommitSha: $sha,
+    auto: false
+  };
+
+convert_v1_to_v2 |
+user_entry($clone; $version; $iso; $sha) as $entry |
+.plugins[$plugin_id] as $existing |
+.plugins[$plugin_id] = (
+  if ($existing | type) == "array" then
+    if any($existing[]; .scope == "user") then
+      [ $existing[] |
+        if .scope == "user" then
+          . + $entry | .installedAt = (.installedAt // $iso)
+        else . end
+      ]
+    else
+      $existing + [$entry]
+    end
+  else
+    [$entry]
+  end
+)
+JQ
+}
+
+_json_merge_known_marketplace() {
+  local _file="$1"
+  local _clone_dir="$2"
+  local _iso="$3"
+  local _result
+
+  if [ -f "$_file" ]; then
+    _result="$(jq --arg name "$MARKETPLACE_NAME" --arg clone "$_clone_dir" --arg repo "$MARKETPLACE_REPO" --arg iso "$_iso" \
+      '.[$name] = {"source": {"source": "github", "repo": $repo}, "installLocation": $clone, "lastUpdated": $iso}' \
+      "$_file")" || return 1
+  else
+    _result="$(jq -n --arg name "$MARKETPLACE_NAME" --arg clone "$_clone_dir" --arg repo "$MARKETPLACE_REPO" --arg iso "$_iso" \
+      '{($name): {"source": {"source": "github", "repo": $repo}, "installLocation": $clone, "lastUpdated": $iso}}')" || return 1
   fi
-  return 1
+  _json_write_atomic "$_file" "$_result"
+}
+
+_json_write_installed_plugin() {
+  local _file="$1"
+  local _clone_dir="$2"
+  local _iso="$3"
+  local _sha="$4"
+  local _version _filter _result
+
+  _version="$(jq -r '.version' "${_clone_dir}/.claude-plugin/plugin.json")" || return 1
+  _filter="$(_jq_installed_plugins_filter)"
+  if [ -f "$_file" ]; then
+    _result="$(jq --arg plugin_id "$PLUGIN_ID" --arg clone "$_clone_dir" --arg iso "$_iso" --arg sha "$_sha" --arg version "$_version" \
+      "$_filter" "$_file")" || return 1
+  else
+    _result="$(echo '{"version": 2, "plugins": {}}' | jq --arg plugin_id "$PLUGIN_ID" --arg clone "$_clone_dir" --arg iso "$_iso" --arg sha "$_sha" --arg version "$_version" \
+      "$_filter")" || return 1
+  fi
+  _json_write_atomic "$_file" "$_result"
+}
+
+_json_enable_cowork_plugin() {
+  local _file="$1"
+  local _clone_dir="$2"
+  local _iso="$3"
+  local _filter _result
+
+  _filter='
+.enabledPlugins = ((.enabledPlugins // {}) + {($plugin_id): true}) |
+.extraKnownMarketplaces = (
+  (.extraKnownMarketplaces // {}) |
+  if has($name) then . else
+    . + {($name): {
+      source: {source: "github", repo: $repo, name: $name},
+      installLocation: $clone,
+      lastUpdated: $iso
+    }}
+  end
+)
+'
+  if [ -f "$_file" ]; then
+    _result="$(jq --arg plugin_id "$PLUGIN_ID" --arg name "$MARKETPLACE_NAME" --arg repo "$MARKETPLACE_REPO" --arg clone "$_clone_dir" --arg iso "$_iso" \
+      "$_filter" "$_file")" || return 1
+  else
+    _result="$(echo '{"enabledPlugins": {}, "extraKnownMarketplaces": {}}' | jq --arg plugin_id "$PLUGIN_ID" --arg name "$MARKETPLACE_NAME" --arg repo "$MARKETPLACE_REPO" --arg clone "$_clone_dir" --arg iso "$_iso" \
+      "$_filter")" || return 1
+  fi
+  _json_write_atomic "$_file" "$_result"
 }
 
 _install_go_mcp_binary_from_path() {
@@ -396,7 +493,7 @@ _install_go_mcp_binary_from_path() {
 
 install_go_mcp_binary_from_plugin_root() {
   local _plugin_root="${1:-}"
-  local _version _tag _base_url _zip_url _sums_url _tmp_dir
+  local _release_label _zip_url _sums_url _tmp_dir
 
   if [ -n "$_plugin_root" ] && [ -x "${_plugin_root}/${KESTRAL_MCP_PLUGIN_BIN_REL}" ]; then
     _install_go_mcp_binary_from_path "${_plugin_root}/${KESTRAL_MCP_PLUGIN_BIN_REL}"
@@ -404,24 +501,18 @@ install_go_mcp_binary_from_plugin_root() {
     return 0
   fi
 
-  if ! _version="$(_go_mcp_release_version "$_plugin_root")"; then
-    abort_with_hint "Could not determine plugin release version for the Go MCP binary." \
-      "Pass --mcp-version <plugin-version> or install from a marketplace clone that includes bin/kestral-mcp."
-  fi
-
-  _tag="v${_version}"
-  _base_url="https://github.com/${MARKETPLACE_REPO}/releases/download/${_tag}"
-  _zip_url="${_base_url}/kestral-mcp-darwin-universal.zip"
-  _sums_url="${_base_url}/SHA256SUMS"
+  _release_label="latest"
+  _zip_url="https://github.com/${MARKETPLACE_REPO}/releases/latest/download/kestral-mcp-darwin-universal.zip"
+  _sums_url="https://github.com/${MARKETPLACE_REPO}/releases/latest/download/SHA256SUMS"
 
   mkdir -p "$KESTRAL_MCP_BIN_DIR"
   _tmp_dir="$(mktemp -d "${TMPDIR:-/tmp}/kestral-mcp-install.XXXXXX")"
 
-  log "Downloading Kestral MCP binary from ${MARKETPLACE_REPO} ${_tag}..."
+  log "Downloading Kestral MCP binary from ${MARKETPLACE_REPO} (${_release_label})..."
   if ! curl -fsSL "$_zip_url" -o "${_tmp_dir}/kestral-mcp-darwin-universal.zip"; then
     rm -rf "$_tmp_dir"
     abort_with_hint "Failed to download Kestral MCP binary." \
-      "Check that release ${_tag} exists on https://github.com/${MARKETPLACE_REPO}/releases and includes kestral-mcp-darwin-universal.zip, or pass --mcp-version."
+      "Check https://github.com/${MARKETPLACE_REPO}/releases includes kestral-mcp-darwin-universal.zip on the latest release."
   fi
 
   if curl -fsSL "$_sums_url" -o "${_tmp_dir}/SHA256SUMS" 2>/dev/null; then
@@ -434,7 +525,7 @@ install_go_mcp_binary_from_plugin_root() {
     }
     verbose "Verified SHA256 checksum for kestral-mcp-darwin-universal.zip"
   else
-    warn "SHA256SUMS not found for ${_tag} — skipping checksum verification."
+    warn "SHA256SUMS not found for ${_release_label} — skipping checksum verification."
   fi
 
   unzip -q -o "${_tmp_dir}/kestral-mcp-darwin-universal.zip" -d "$_tmp_dir"
@@ -445,7 +536,7 @@ install_go_mcp_binary_from_plugin_root() {
 
   _install_go_mcp_binary_from_path "${_tmp_dir}/kestral-mcp"
   rm -rf "$_tmp_dir"
-  ok "Installed kestral-mcp (${_tag}) → $KESTRAL_MCP_BIN"
+  ok "Installed kestral-mcp (${_release_label}) → $KESTRAL_MCP_BIN"
 }
 
 ensure_go_mcp_binary_installed() {
@@ -503,23 +594,12 @@ _rewrite_plugin_mcp_json() {
     return 0
   fi
 
-  python3 - "$_mcp_file" "$KESTRAL_MCP_BIN" "$KESTRAL_MCP_SERVER_NAME" <<'PY'
-import json
-import sys
-
-path, command, server_name = sys.argv[1:4]
-with open(path, encoding="utf-8") as handle:
-    data = json.load(handle)
-
-server = {"command": command, "args": []}
-for key in ("mcpServers", "mcp_servers"):
-    if key in data:
-        data[key] = {server_name: dict(server)}
-
-with open(path, "w", encoding="utf-8") as handle:
-    json.dump(data, handle, indent=2)
-    handle.write("\n")
-PY
+  local _result
+  _result="$(jq --arg cmd "$KESTRAL_MCP_BIN" --arg name "$KESTRAL_MCP_SERVER_NAME" '
+    if has("mcpServers") then .mcpServers[$name] = {"command": $cmd, "args": []} else . end |
+    if has("mcp_servers") then .mcp_servers[$name] = {"command": $cmd, "args": []} else . end
+  ' "$_mcp_file")" || return 1
+  _json_write_atomic "$_mcp_file" "$_result"
   verbose "Rewrote ${_mcp_file} → ${KESTRAL_MCP_BIN}"
 }
 
@@ -1137,27 +1217,7 @@ _register_marketplace() {
   _iso="$(date -u +"%Y-%m-%dT%H:%M:%S.000Z")"
 
   if [ "$USE_GO_MCP" -eq 1 ]; then
-    python3 - "$_known" "$_clone_dir" "$MARKETPLACE_NAME" "$MARKETPLACE_REPO" "$_iso" <<'PY' || return 1
-import json
-import os
-import sys
-
-file, clone_dir, name, repo, iso = sys.argv[1:6]
-data = {}
-if os.path.exists(file):
-    with open(file, encoding="utf-8") as handle:
-        data = json.load(handle)
-data[name] = {
-    "source": {"source": "github", "repo": repo},
-    "installLocation": clone_dir,
-    "lastUpdated": iso,
-}
-tmp = f"{file}.tmp.{os.getpid()}"
-with open(tmp, "w", encoding="utf-8") as handle:
-    json.dump(data, handle, indent=2)
-    handle.write("\n")
-os.replace(tmp, file)
-PY
+    _json_merge_known_marketplace "$_known" "$_clone_dir" "$_iso" || return 1
     verbose "Registered marketplace in known_marketplaces.json"
     return 0
   fi
@@ -1198,58 +1258,7 @@ _write_installed_plugin() {
   fi
 
   if [ "$USE_GO_MCP" -eq 1 ]; then
-    python3 - "$_installed" "$_clone_dir" "$PLUGIN_ID" "$_iso" "$_sha" <<'PY' || return 1
-import json
-import os
-import sys
-
-file, clone_dir, plugin_id, iso, sha = sys.argv[1:6]
-manifest_path = os.path.join(clone_dir, ".claude-plugin", "plugin.json")
-with open(manifest_path, encoding="utf-8") as handle:
-    version = json.load(handle)["version"]
-
-def convert_v1_to_v2(data):
-    if data.get("version") == 2:
-        return data
-    plugins = {}
-    for plugin_key, entry in (data.get("plugins") or {}).items():
-        plugins[plugin_key] = entry if isinstance(entry, list) else [entry]
-    return {"version": 2, "plugins": plugins}
-
-data = {"version": 2, "plugins": {}}
-if os.path.exists(file):
-    with open(file, encoding="utf-8") as handle:
-        data = convert_v1_to_v2(json.load(handle))
-
-entry = {
-    "scope": "user",
-    "installPath": clone_dir,
-    "version": version,
-    "installedAt": iso,
-    "lastUpdated": iso,
-    "gitCommitSha": sha,
-    "auto": False,
-}
-existing = data["plugins"].get(plugin_id)
-if isinstance(existing, list):
-    idx = next((i for i, item in enumerate(existing) if item.get("scope") == "user"), -1)
-    if idx >= 0:
-        merged = dict(existing[idx])
-        merged.update(entry)
-        merged["installedAt"] = existing[idx].get("installedAt") or iso
-        existing[idx] = merged
-    else:
-        existing.append(entry)
-    data["plugins"][plugin_id] = existing
-else:
-    data["plugins"][plugin_id] = [entry]
-
-tmp = f"{file}.tmp.{os.getpid()}"
-with open(tmp, "w", encoding="utf-8") as handle:
-    json.dump(data, handle, indent=2)
-    handle.write("\n")
-os.replace(tmp, file)
-PY
+    _json_write_installed_plugin "$_installed" "$_clone_dir" "$_iso" "$_sha" || return 1
     verbose "Wrote installed_plugins.json (schema v2)"
     return 0
   fi
@@ -1317,30 +1326,7 @@ _enable_plugin() {
   _iso="$(date -u +"%Y-%m-%dT%H:%M:%S.000Z")"
 
   if [ "$USE_GO_MCP" -eq 1 ]; then
-    python3 - "$_settings" "$PLUGIN_ID" "$MARKETPLACE_NAME" "$MARKETPLACE_REPO" "$(_desktop_marketplace_clone_dir)" "$_iso" <<'PY' || return 1
-import json
-import os
-import sys
-
-file, plugin_id, marketplace_name, repo, clone_dir, iso = sys.argv[1:7]
-data = {"enabledPlugins": {}}
-if os.path.exists(file):
-    with open(file, encoding="utf-8") as handle:
-        data = json.load(handle)
-data.setdefault("enabledPlugins", {})[plugin_id] = True
-data.setdefault("extraKnownMarketplaces", {})
-if marketplace_name not in data["extraKnownMarketplaces"]:
-    data["extraKnownMarketplaces"][marketplace_name] = {
-        "source": {"source": "github", "repo": repo, "name": marketplace_name},
-        "installLocation": clone_dir,
-        "lastUpdated": iso,
-    }
-tmp = f"{file}.tmp.{os.getpid()}"
-with open(tmp, "w", encoding="utf-8") as handle:
-    json.dump(data, handle, indent=2)
-    handle.write("\n")
-os.replace(tmp, file)
-PY
+    _json_enable_cowork_plugin "$_settings" "$(_desktop_marketplace_clone_dir)" "$_iso" || return 1
     verbose "Enabled plugin in cowork_settings.json"
     return 0
   fi
@@ -1727,9 +1713,9 @@ main() {
   require_macos
 
   if [ "$USE_GO_MCP" -eq 1 ]; then
-    section "Checking prerequisites (git, python3)"
+    section "Checking prerequisites (git, jq)"
     ensure_git
-    ensure_python3
+    ensure_jq
   else
     section "Checking prerequisites (git, Node.js 20+)"
     ensure_git

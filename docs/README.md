@@ -44,9 +44,10 @@ which npx        # must print a path
 
 After installing or upgrading Node, **fully quit and reopen** your Claude app before retrying setup.
 
-> **No Node?** Run the setup script with `--go-mcp` to install the standalone Go `kestral-mcp` binary instead — it has
-> no Node.js requirement (python3 is used during install). The plugin's MCP config is rewritten to launch the binary
-> from `~/.kestral/bin/kestral-mcp`.
+> **No Node?** Use `--go-mcp` to install the standalone Go `kestral-mcp` binary instead — no Node.js at runtime
+> (jq is used during install). The plugin's MCP config is rewritten to launch the binary from
+> `~/.kestral/bin/kestral-mcp`. The binary is taken from the plugin bundle when present, otherwise downloaded from the
+> latest GitHub release.
 
 ## Install
 
@@ -54,6 +55,18 @@ After installing or upgrading Node, **fully quit and reopen** your Claude app be
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/Kestral-Team/kestral-plugins/main/setup.sh | bash
+```
+
+**No Node.js (Go MCP binary):** pass `--go-mcp`. When piping from `curl`, use `bash -s --` so flags reach the script:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/Kestral-Team/kestral-plugins/main/setup.sh | bash -s -- --go-mcp
+```
+
+Pick targets non-interactively (e.g. Codex only):
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/Kestral-Team/kestral-plugins/main/setup.sh | bash -s -- --go-mcp --app codex
 ```
 
 The script handles prerequisites (git, Node 20+), marketplace registration, and — for Claude Desktop — the Cowork
@@ -229,24 +242,6 @@ claude plugin uninstall kestral@kestral-plugins
 ### Claude Desktop
 
 Use **Customize → Plugins** to uninstall. For manual removal if the GUI can't delete the entry, see the troubleshooting row above.
-
-## Engineering repo setup (`kestral-app`)
-
-If you work in the `kestral-app` monorepo, plugin skills are symlinked into `.cursor/skills/` from
-`plugins/kestral/skills/` — no marketplace install required. After cloning or when a new skill is added to the plugin,
-run from the repo root:
-
-```bash
-./scripts/linkPluginSkills.sh
-```
-
-Symlinks use relative paths (`../../plugins/kestral/skills/<name>`) so they resolve on any machine with the repo checked
-out. When using the published plugin instead, skills install to:
-
-| Host        | Path                                                                      |
-| ----------- | ------------------------------------------------------------------------- |
-| Cursor      | `~/.cursor/plugins/cache/kestral-plugins/kestral/<version>/skills/`       |
-| Claude Code | `~/.claude/plugins/cache/kestral-plugins/kestral/<version>/skills/`       |
 
 ## Re-running `/kestral:kestral-setup`
 

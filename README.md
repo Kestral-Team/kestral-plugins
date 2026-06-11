@@ -84,7 +84,7 @@ If the GUI cannot see or delete the entry, remove manually:
 
 ## Version
 
-Current release: **v0.4.17**
+Current release: **v0.4.18**
 
 ## Links
 
