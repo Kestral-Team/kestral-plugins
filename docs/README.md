@@ -1,8 +1,8 @@
 # Kestral Plugin
 
-Connect Claude Code, Claude Cowork, or Codex to [Kestral](https://app.kestral.ai) — an AI-powered project management tool for
-teams. Kestral stores your projects, tasks, documents, and customer feedback, and gives an AI agent context about all of
-it.
+Connect Claude Code, Claude Cowork, or Codex to [Kestral](https://app.kestral.ai) — an AI-powered project management
+tool for teams. Kestral stores your projects, tasks, documents, and customer feedback, and gives an AI agent context
+about all of it.
 
 This plugin lets you work with Kestral directly from the chat: organize scattered work into projects, search and update
 tasks, pull workspace knowledge into a conversation, or scaffold a new project with tasks.
@@ -25,8 +25,8 @@ tasks, pull workspace knowledge into a conversation, or scaffold a new project w
 ## Requirements
 
 Kestral's MCP bridge is a **local process** (`npx @kestral/kestral-mcp`) — not a remote HTTP connector like Slack or
-Linear. **Claude Code, Claude Cowork, and Codex** all spawn it on your Mac, so you need **Node.js 20+** on your
-**login PATH** (the environment GUI apps see — not just an interactive Terminal session).
+Linear. **Claude Code, Claude Cowork, and Codex** all spawn it on your Mac, so you need **Node.js 20+** on your **login
+PATH** (the environment GUI apps see — not just an interactive Terminal session).
 
 **Quick check** (open Terminal):
 
@@ -35,12 +35,12 @@ node --version   # must print v20 or higher
 which npx        # must print a path
 ```
 
-| Symptom | Likely cause | Fast fix |
-| --- | --- | --- |
-| `command not found` for `node` / `npx` | Node not installed | Install LTS from [nodejs.org](https://nodejs.org), or `brew install node` (Mac) |
-| `v16.x` or lower | Node too old | `npm install -g n && n lts` (Mac), `winget install OpenJS.NodeJS.LTS` (Windows), or reinstall from nodejs.org |
-| Node works in Terminal but Kestral MCP still fails | Not on login PATH | Restart Mac after install, or ensure `/usr/local/bin` / `/opt/homebrew/bin` is in PATH for GUI apps |
-| Cowork: other connectors work, Kestral doesn't | Kestral is the only plugin that needs local Node | Install Node 20+, fully quit Cowork, start a new task |
+| Symptom                                            | Likely cause                                     | Fast fix                                                                                                      |
+| -------------------------------------------------- | ------------------------------------------------ | ------------------------------------------------------------------------------------------------------------- |
+| `command not found` for `node` / `npx`             | Node not installed                               | Install LTS from [nodejs.org](https://nodejs.org), or `brew install node` (Mac)                               |
+| `v16.x` or lower                                   | Node too old                                     | `npm install -g n && n lts` (Mac), `winget install OpenJS.NodeJS.LTS` (Windows), or reinstall from nodejs.org |
+| Node works in Terminal but Kestral MCP still fails | Not on login PATH                                | Restart Mac after install, or ensure `/usr/local/bin` / `/opt/homebrew/bin` is in PATH for GUI apps           |
+| Cowork: other connectors work, Kestral doesn't     | Kestral is the only plugin that needs local Node | Install Node 20+, fully quit Cowork, start a new task                                                         |
 
 After installing or upgrading Node, **fully quit and reopen** your Claude app before retrying setup.
 
@@ -89,13 +89,16 @@ Pick your app below for manual steps (the same steps the script automates).
 4. In the URL field, enter `Kestral-Team/kestral-plugins`, then click **Sync**.
 5. Click **+** on the **Kestral** card to install the plugin.
 6. If the **This plugin includes local MCP servers** dialog appears, click **Continue** to install the MCP server.
-7. The **Kestral** MCP connector registers with the plugin. Check **Customize → Connectors**; if it is missing, fully quit and restart Cowork.
+7. The **Kestral** MCP connector registers with the plugin. Check **Customize → Connectors**; if it is missing, fully
+   quit and restart Cowork.
 8. The first Kestral tool call opens a browser window for OAuth sign-in.
 9. In Cowork, run `/kestral:kestral-setup` to connect your workspace and start onboarding.
 
 Setup and `upload_document` (local file uploads from disk) work the same as in Claude Code once **Kestral** is connected.
 
 ### Codex App
+
+**Recommended:** run `bash setup.sh --app codex` for automated install. Manual GUI steps below.
 
 1. Open **Plugins**, click **More**, then select **Add more**.
 2. In the repository field, enter `Kestral-Team/kestral-plugins` and leave the bottom two fields blank.
@@ -124,15 +127,18 @@ look for `kestral-setup`, `kestral-tasks`, `kestral-context`, `kestral-plan`, `k
 
 There are also lower-level skills you can call directly:
 
-| Command                | What it does                                                       |
-| ---------------------- | ------------------------------------------------------------------ |
-| `/kestral:scan-folder` | Preview a folder scan without uploading anything.                  |
-| `/kestral:scan-tasks`  | Detect task tools (Linear, Jira, etc.) and list importable tasks.  |
+| Command                | What it does                                                                |
+| ---------------------- | --------------------------------------------------------------------------- |
+| `/kestral:scan-folder` | Preview a folder scan without uploading anything.                           |
+| `/kestral:scan-tasks`  | Detect task tools (Linear, Jira, etc.) and list importable tasks.           |
 | `/kestral:upload`      | Upload documents and create a project (used by `kestral-setup` internally). |
 
-In Claude Code, type `/kestral:` and use autocomplete to see all available commands.
-In Codex, type `@kestral` to target the plugin, or invoke a bundled skill directly with `$kestral-setup`,
-`$kestral-tasks`, `$kestral-context`, `$kestral-plan`, `$kestral-plan-day`, or `$kestral-end-day-review`.
+In Claude Code, type `/kestral:` and use autocomplete to see all available commands. In Codex, type `@kestral` to target
+the plugin, or invoke a bundled skill directly with `$kestral-setup`, `$kestral-tasks`, `$kestral-context`,
+`$kestral-plan`, `$kestral-plan-day`, or `$kestral-end-day-review`.
+
+For a detailed guide to each skill — when to use it, examples, inputs, and how the lower-level skills compose — see the
+[skills README](skills/README.md).
 
 ## Getting started
 
@@ -193,15 +199,15 @@ these tools automatically via the Model Context Protocol (the way Claude Code ta
 
 ## Troubleshooting
 
-| Problem                   | Fix                                                                                                                            |
-| ------------------------- | ------------------------------------------------------------------------------------------------------------------------------ |
+| Problem                                            | Fix                                                                                                                                                                                                                                                                                                      |
+| -------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `Host key verification failed` on `plugin install` | Claude Code clones plugin sources over SSH and cannot prompt for GitHub's host key. Run `ssh-keyscan -t ed25519 github.com >> ~/.ssh/known_hosts`, then retry `claude plugin install kestral@kestral-plugins`. Or force HTTPS: `git config --global url."https://github.com/".insteadOf git@github.com:` |
 | Auth expired or invalid   | Reconnect the `Kestral` MCP server (`/mcp`) to re-authenticate via OAuth.                                                     |
 | Source not found          | Double-check the path, URL, connector, or tool name. Use an absolute path or `~` shorthand for local paths.                    |
 | No eligible files found   | Share another local path, repo, task system, document tool, or workstream bucket to give setup a usable signal.                |
 | Project Brain not enabled | "Project Brain isn't enabled for this workspace" — ask your workspace admin to enable it, then generate from the project page. |
 | MCP won't connect         | First run `node --version` and `which npx` (see **Requirements**). If Node is fine, run `/mcp` and confirm **Kestral** shows connected with tools. Re-run `/kestral:kestral-setup` or sign in from [Integrations](https://app.kestral.ai). |
-| Node missing or too old   | Kestral needs **Node 20+** on your Mac (all hosts). Run the quick check above. Setup shows full upgrade steps — fastest: `npm install -g n && n lts` (Mac), `winget install OpenJS.NodeJS.LTS` (Windows), or [nodejs.org](https://nodejs.org). Fully quit and reopen the app after. |
+| Node missing or too old   | Kestral needs **Node 20+** on your Mac (all hosts). See **Requirements** above for the quick check and upgrade steps — fastest: `npm install -g n && n lts` (Mac), `winget install OpenJS.NodeJS.LTS` (Windows), or [nodejs.org](https://nodejs.org). The macOS install script also checks Node before registering the plugin. Fully quit and reopen the app after. |
 | Network errors            | Check your connection. If the error persists, run `/kestral:kestral-setup` again.                                                       |
 | Codex: plugin added but no skills | Restart Codex after install. Enable the plugin under **Plugins** if it is disabled. Upgrade to the latest build from **Kestral Plugins** if you installed an older version. |
 | Codex: plugin not listed          | Repeat the install steps above (Plugins → More → Add more). After restart, confirm **Kestral** appears under **Kestral Plugins**. |
@@ -219,6 +225,24 @@ claude plugin uninstall kestral@kestral-plugins
 ### Claude Desktop
 
 Use **Customize → Plugins** to uninstall. For manual removal if the GUI can't delete the entry, see the troubleshooting row above.
+
+## Engineering repo setup (`kestral-app`)
+
+If you work in the `kestral-app` monorepo, plugin skills are symlinked into `.cursor/skills/` from
+`plugins/kestral/skills/` — no marketplace install required. After cloning or when a new skill is added to the plugin,
+run from the repo root:
+
+```bash
+./scripts/linkPluginSkills.sh
+```
+
+Symlinks use relative paths (`../../plugins/kestral/skills/<name>`) so they resolve on any machine with the repo checked
+out. When using the published plugin instead, skills install to:
+
+| Host        | Path                                                                      |
+| ----------- | ------------------------------------------------------------------------- |
+| Cursor      | `~/.cursor/plugins/cache/kestral-plugins/kestral/<version>/skills/`       |
+| Claude Code | `~/.claude/plugins/cache/kestral-plugins/kestral/<version>/skills/`       |
 
 ## Re-running `/kestral:kestral-setup`
 

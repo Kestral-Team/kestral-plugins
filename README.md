@@ -28,7 +28,7 @@ In Codex, type `@kestral` to target the plugin, or invoke a bundled skill direct
 
 ### Quick install (macOS)
 
-One command installs Kestral to **Claude Code and Claude Desktop** (when both are detected):
+One command installs Kestral to **Claude Code, Claude Desktop, and Codex** (all detected apps):
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/Kestral-Team/kestral-plugins/main/setup.sh | bash
@@ -39,10 +39,11 @@ Non-interactive examples:
 ```bash
 curl -fsSL https://raw.githubusercontent.com/Kestral-Team/kestral-plugins/main/setup.sh | bash -s -- --app claude-code
 curl -fsSL https://raw.githubusercontent.com/Kestral-Team/kestral-plugins/main/setup.sh | bash -s -- --app claude-desktop
+curl -fsSL https://raw.githubusercontent.com/Kestral-Team/kestral-plugins/main/setup.sh | bash -s -- --app codex
 ```
 
 **Note:** The script installs prerequisites (git, Node 20+), adds the Kestral marketplace via the
-`claude` CLI, and for Claude Desktop writes directly to Cowork's plugin files under
+`claude`/`codex` CLI, and for Claude Desktop writes directly to Cowork's plugin files under
 `~/Library/Application Support/Claude/`. [View the script source](https://github.com/Kestral-Team/kestral-plugins/blob/main/setup.sh)
 before running.
 
@@ -83,7 +84,7 @@ If the GUI cannot see or delete the entry, remove manually:
 
 ## Version
 
-Current release: **v0.4.16**
+Current release: **v0.4.17**
 
 ## Links
 

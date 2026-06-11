@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Kestral plugin one-shot macOS setup script.
 #
-# Installs the Kestral plugin to Claude Code and/or Claude Desktop.
+# Installs the Kestral plugin to Claude Code, Claude Desktop, and/or Codex.
 
 set -euo pipefail
 
@@ -9,6 +9,8 @@ MARKETPLACE_NAME="kestral-plugins"
 MARKETPLACE_REPO="Kestral-Team/kestral-plugins"
 MARKETPLACE_GIT_URL="https://github.com/${MARKETPLACE_REPO}.git"
 PLUGIN_ID="kestral@${MARKETPLACE_NAME}"
+CODEX_APP="/Applications/Codex.app"
+CODEX_LOCAL_MARKETPLACE_DIR="${HOME}/.kestral/codex-marketplace"
 CLAUDE_APP="/Applications/Claude.app"
 SESSIONS_BASE="${HOME}/Library/Application Support/Claude/local-agent-mode-sessions"
 MIN_NODE_MAJOR=20
@@ -19,7 +21,9 @@ DESKTOP_ROOT_FLAG=""
 EXPLICIT_APP_FLAG=0
 
 # --- Detection / selection state ---
+HAS_GIT=0
 HAS_CLAUDE_CLI=0
+HAS_CODEX_CLI=0
 HAS_DESKTOP_APP=0
 HAS_DESKTOP_READY=0
 DESKTOP_NOT_READY=0
@@ -32,6 +36,7 @@ DESKTOP_ROOT_MTIMES=()
 
 TARGET_RESULT_CLAUDE=""
 TARGET_RESULT_DESKTOP=""
+TARGET_RESULT_CODEX=""
 
 DESKTOP_SELECTED_ROOT=""
 DESKTOP_BACKUP_SUFFIX=""
@@ -148,15 +153,17 @@ Kestral plugin setup (macOS)
 
 Usage:
   curl -fsSL https://raw.githubusercontent.com/Kestral-Team/kestral-plugins/main/setup.sh | bash
-  bash setup.sh [--app claude-code|claude-desktop|claude-code,claude-desktop] [--desktop-root <accountId>/<orgId>]
+  bash setup.sh [--app claude-code|claude-desktop|codex] [--desktop-root <accountId>/<orgId>]
 
 Options:
-  --app <targets>       Non-interactive target set (comma-separated: claude-code, claude-desktop)
+  --app <targets>       Non-interactive target set (comma-separated: claude-code, claude-desktop, codex)
   --desktop-root <id>   Select Desktop session root when multiple exist
   -h, --help            Show this help
 
 Examples:
   bash setup.sh --app claude-code
+  bash setup.sh --app codex
+  bash setup.sh --app claude-code,codex
   bash setup.sh --app claude-desktop --desktop-root abc123/def456
 EOF
 }
@@ -203,40 +210,30 @@ require_macos() {
   fi
 }
 
-_ensure_xcode_clt() {
-  if xcode-select -p >/dev/null 2>&1; then
-    return 0
-  fi
-  log "Xcode Command Line Tools are required for git."
-  if [ -r /dev/tty ]; then
-    printf 'Opening the Apple installer — re-run this script after it finishes.\n' >/dev/tty
-  fi
-  xcode-select --install || true
-  abort_with_hint "Waiting for Xcode Command Line Tools." \
-    "Complete the Apple installer, then re-run this script."
-}
-
 ensure_git() {
   if command -v git >/dev/null 2>&1; then
+    HAS_GIT=1
     ok "git $(git --version | awk '{print $3}')"
     return 0
   fi
 
-  log "git not found — installing..."
+  log "git not found — attempting install..."
   if command -v brew >/dev/null 2>&1; then
-    brew install git
-    ok "git installed via Homebrew"
-    return 0
+    brew install git >>"$LOGFILE" 2>&1 || true
+    if command -v git >/dev/null 2>&1; then
+      HAS_GIT=1
+      ok "git installed via Homebrew"
+      return 0
+    fi
   fi
 
-  _ensure_xcode_clt
-  if command -v git >/dev/null 2>&1; then
-    ok "git available after CLT install prompt"
-    return 0
+  if ! xcode-select -p >/dev/null 2>&1; then
+    log "Xcode Command Line Tools can provide git. Run: xcode-select --install"
   fi
 
-  abort_with_hint "git is required but not installed." \
-    "Install Xcode Command Line Tools (xcode-select --install) or Homebrew (https://brew.sh), then re-run."
+  HAS_GIT=0
+  warn "git is not available."
+  return 0
 }
 
 _node_major_version() {
@@ -365,12 +362,17 @@ _enumerate_desktop_roots() {
 
 detect_apps() {
   HAS_CLAUDE_CLI=0
+  HAS_CODEX_CLI=0
   HAS_DESKTOP_APP=0
   HAS_DESKTOP_READY=0
   DESKTOP_NOT_READY=0
 
   if command -v claude >/dev/null 2>&1; then
     HAS_CLAUDE_CLI=1
+  fi
+
+  if _codex_bin >/dev/null; then
+    HAS_CODEX_CLI=1
   fi
 
   if [ -d "$CLAUDE_APP" ]; then
@@ -393,8 +395,11 @@ _print_detection_summary() {
   elif [ "$DESKTOP_NOT_READY" -eq 1 ]; then
     printf '    [ ] Claude Desktop (installed but not signed in — open it, sign in, re-run)\n'
   fi
-  if [ "$HAS_CLAUDE_CLI" -eq 0 ] && [ "$HAS_DESKTOP_APP" -eq 0 ]; then
-    printf '  (none — install Claude Code or Claude Desktop first)\n'
+  if [ "$HAS_CODEX_CLI" -eq 1 ]; then
+    printf '    [3] Codex (codex CLI found)\n'
+  fi
+  if [ "$HAS_CLAUDE_CLI" -eq 0 ] && [ "$HAS_DESKTOP_APP" -eq 0 ] && [ "$HAS_CODEX_CLI" -eq 0 ]; then
+    printf '  (none detected)\n'
   fi
 }
 
@@ -422,11 +427,10 @@ _parse_app_flag() {
         _add_target_if_missing "claude-desktop"
         ;;
       codex)
-        abort_with_hint "Codex setup is not supported yet." \
-          "Follow the Codex manual steps in https://github.com/Kestral-Team/kestral-plugins#codex-app"
+        _add_target_if_missing "codex"
         ;;
       *)
-        abort "Unknown --app target: $_part (use claude-code, claude-desktop, or claude-code,claude-desktop)"
+        abort "Unknown --app target: $_part (use claude-code, claude-desktop, or codex)"
         ;;
     esac
   done
@@ -441,6 +445,9 @@ select_targets() {
   fi
   if [ "$HAS_DESKTOP_READY" -eq 1 ]; then
     DETECTED_TARGETS+=("claude-desktop")
+  fi
+  if [ "$HAS_CODEX_CLI" -eq 1 ]; then
+    DETECTED_TARGETS+=("codex")
   fi
 
   _print_detection_summary
@@ -466,8 +473,8 @@ select_targets() {
   fi
 
   if [ "${#DETECTED_TARGETS[@]}" -eq 0 ]; then
-    abort_with_hint "No supported Claude apps detected." \
-      "Install Claude Code (https://claude.ai/code) or Claude Desktop (https://claude.ai/download), then re-run."
+    abort_with_hint "No supported apps detected." \
+      "Install Claude Code (https://claude.ai/code), Claude Desktop (https://claude.ai/download), or Codex (https://codex.openai.com), then re-run."
   fi
 
   # Default: all detected targets pre-selected
@@ -479,6 +486,9 @@ select_targets() {
   if [ "$HAS_DESKTOP_READY" -eq 1 ]; then
     _prompt="${_prompt}[2] Claude Desktop  "
   fi
+  if [ "$HAS_CODEX_CLI" -eq 1 ]; then
+    _prompt="${_prompt}[3] Codex  "
+  fi
   _prompt="${_prompt}— Enter = all, or type numbers (e.g. \"1\"): "
 
   if read_tty "$_prompt" _choice; then
@@ -487,7 +497,7 @@ select_targets() {
       SELECTED_TARGETS=("${DETECTED_TARGETS[@]}")
     else
       local _digit
-      for _digit in $(printf '%s' "$_choice" | grep -o '[12]' || true); do
+      for _digit in $(printf '%s' "$_choice" | grep -o '[123]' || true); do
         case "$_digit" in
           1)
             if [ "$HAS_CLAUDE_CLI" -eq 1 ]; then
@@ -497,6 +507,11 @@ select_targets() {
           2)
             if [ "$HAS_DESKTOP_READY" -eq 1 ]; then
               _add_target_if_missing "claude-desktop"
+            fi
+            ;;
+          3)
+            if [ "$HAS_CODEX_CLI" -eq 1 ]; then
+              _add_target_if_missing "codex"
             fi
             ;;
         esac
@@ -638,6 +653,11 @@ EOF
 }
 
 install_to_claude_code() {
+  if [ "$HAS_GIT" -eq 0 ]; then
+    warn "Claude Code requires git. Install via: xcode-select --install or brew install git"
+    return 1
+  fi
+
   if ! ensure_claude_cli; then
     return 1
   fi
@@ -1014,6 +1034,12 @@ EOF
 }
 
 install_to_claude_desktop() {
+  if [ "$HAS_GIT" -eq 0 ]; then
+    warn "Claude Desktop requires git. Install via: xcode-select --install or brew install git"
+    _print_desktop_gui_fallback
+    return 1
+  fi
+
   DESKTOP_BACKUP_SUFFIX=".kestral-backup-$(date +%s)"
 
   select_desktop_root || return 1
@@ -1048,6 +1074,202 @@ install_to_claude_desktop() {
   print_desktop_success
 }
 
+# --- Codex path ---
+
+_codex_bin() {
+  local _bin
+  _bin="$(command -v codex 2>/dev/null || true)"
+  if [ -n "$_bin" ]; then
+    printf '%s' "$_bin"
+    return 0
+  fi
+
+  local _bundled="${CODEX_APP}/Contents/Resources/codex"
+  if [ -x "$_bundled" ]; then
+    printf '%s' "$_bundled"
+    return 0
+  fi
+
+  return 1
+}
+
+_print_codex_install_instructions() {
+  cat <<EOF
+Install Codex Desktop, then re-run this script:
+
+  Download from https://codex.openai.com
+EOF
+}
+
+_print_codex_gui_fallback() {
+  cat <<'EOF'
+
+Codex manual install (GUI fallback):
+  1. Open Plugins, click More, then select Add more.
+  2. In the repository field, enter Kestral-Team/kestral-plugins.
+  3. Click More again, then find Kestral Plugins.
+  4. Click + in the Productivity section for the Kestral plugin.
+  5. Run $kestral-setup in Codex to connect your workspace.
+EOF
+}
+
+warn_if_codex_running() {
+  if pgrep -x Codex >/dev/null 2>&1; then
+    local _answer=""
+    if read_tty "  Codex is running. Quit it now? [Y/n] " _answer; then
+      case "$_answer" in
+        [nN] | [nN][oO])
+          warn "Proceeding while Codex is running — you must fully quit and reopen after install."
+          return 0
+          ;;
+      esac
+      log "Quitting Codex..."
+      osascript -e 'tell application "Codex" to quit' 2>/dev/null || true
+      local _wait=0
+      while pgrep -x Codex >/dev/null 2>&1; do
+        sleep 1
+        _wait=$((_wait + 1))
+        if [ "$_wait" -ge 10 ]; then
+          warn "Codex didn't quit in time — proceeding anyway."
+          return 0
+        fi
+      done
+      ok "Codex quit"
+    else
+      warn "Codex is running — you'll need to quit and reopen it after install."
+    fi
+  fi
+}
+
+ensure_codex_cli() {
+  local _bin _version
+  if ! _bin=$(_codex_bin); then
+    _print_codex_install_instructions
+    return 1
+  fi
+
+  _version=$("$_bin" --version 2>/dev/null | head -1 || echo found)
+  ok "codex CLI $_version"
+}
+
+_run_codex_cmd() {
+  local _bin
+  _bin=$(_codex_bin) || return 127
+  "$_bin" "$@" 2>&1
+}
+
+_curl_marketplace_tarball() {
+  local _dest="$1"
+  local _url="https://github.com/${MARKETPLACE_REPO}/archive/refs/heads/main.tar.gz"
+  log "Downloading marketplace via curl..."
+  rm -rf "$_dest"
+  mkdir -p "$_dest"
+  if ! curl -fsSL "$_url" | tar xz --strip-components=1 -C "$_dest"; then
+    warn "Failed to download marketplace tarball."
+    return 1
+  fi
+  ok "Marketplace downloaded to $_dest"
+}
+
+ensure_codex_marketplace() {
+  log "Registering Kestral marketplace..."
+  local _output _rc
+  set +e
+  _output="$(_run_codex_cmd plugin marketplace add "$MARKETPLACE_REPO")"
+  _rc=$?
+  set -e
+  verbose "codex marketplace add output: $_output (rc=$_rc)"
+
+  if [ "$_rc" -eq 0 ]; then
+    if printf '%s' "$_output" | grep -qi 'already'; then
+      log "Already registered — upgrading..."
+      set +e
+      _output="$(_run_codex_cmd plugin marketplace upgrade "$MARKETPLACE_NAME")"
+      _rc=$?
+      set -e
+      verbose "codex marketplace upgrade output: $_output (rc=$_rc)"
+      if [ "$_rc" -ne 0 ]; then
+        warn "Marketplace upgrade failed — using existing snapshot."
+        verbose "upgrade failure: $_output"
+      fi
+    fi
+    ok "Kestral marketplace registered"
+    return 0
+  fi
+
+  verbose "marketplace add failed: $_output"
+  warn "Trying tarball fallback..."
+
+  if ! _curl_marketplace_tarball "$CODEX_LOCAL_MARKETPLACE_DIR"; then
+    return 1
+  fi
+
+  set +e
+  _output="$(_run_codex_cmd plugin marketplace add "$CODEX_LOCAL_MARKETPLACE_DIR")"
+  _rc=$?
+  set -e
+  verbose "codex local marketplace add output: $_output (rc=$_rc)"
+
+  if [ "$_rc" -eq 0 ]; then
+    ok "Kestral marketplace registered from tarball"
+    return 0
+  fi
+
+  verbose "local marketplace add failure: $_output"
+  warn "Failed to register Kestral marketplace."
+  return 1
+}
+
+install_or_update_codex_plugin() {
+  log "Installing Kestral plugin..."
+  local _output _rc
+  set +e
+  _output="$(_run_codex_cmd plugin add "$PLUGIN_ID")"
+  _rc=$?
+  set -e
+  verbose "codex plugin add output: $_output (rc=$_rc)"
+
+  if [ "$_rc" -eq 0 ]; then
+    ok "Kestral plugin installed"
+    return 0
+  fi
+
+  if printf '%s' "$_output" | grep -qi 'already installed'; then
+    ok "Kestral plugin is up to date"
+    return 0
+  fi
+
+  verbose "codex plugin add failure: $_output"
+  warn "Failed to install Kestral plugin."
+  return 1
+}
+
+print_codex_success() {
+  cat <<'EOF'
+
+Codex: Kestral plugin is ready.
+  1. Fully quit and reopen Codex (required — running sessions won't reload plugin content).
+  2. Start a new thread (+ New thread — running threads never reload plugin content).
+  3. Type: $kestral-setup
+EOF
+}
+
+install_to_codex() {
+  warn_if_codex_running
+
+  if ! ensure_codex_cli; then
+    return 1
+  fi
+
+  if ensure_codex_marketplace && install_or_update_codex_plugin; then
+    print_codex_success
+    return 0
+  fi
+
+  _print_codex_gui_fallback
+  return 1
+}
+
 # --- Main target loop ---
 
 _run_target() {
@@ -1070,7 +1292,12 @@ _run_target() {
       fi
       ;;
     codex)
-      abort "Codex setup is not supported yet."
+      section "Installing Kestral to Codex"
+      if install_to_codex; then
+        TARGET_RESULT_CODEX="installed"
+      else
+        TARGET_RESULT_CODEX="FAILED"
+      fi
       ;;
     *)
       warn "Unknown target: $_target"
@@ -1097,6 +1324,14 @@ _print_summary() {
       _exit=1
     fi
   fi
+  if [ -n "$TARGET_RESULT_CODEX" ]; then
+    if [ "$TARGET_RESULT_CODEX" = "installed" ]; then
+      ok "Codex: installed"
+    else
+      warn "Codex: failed — see instructions above"
+      _exit=1
+    fi
+  fi
   if [ "$_exit" -ne 0 ]; then
     printf '\n  Full logs: %s\n' "$LOGFILE"
   fi
@@ -1111,7 +1346,7 @@ main() {
   ensure_git
   ensure_node
 
-  section "Detecting installed Claude apps"
+  section "Detecting installed apps"
   detect_apps
 
   section "Choosing install targets"

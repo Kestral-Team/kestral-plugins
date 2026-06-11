@@ -6,7 +6,7 @@
   "plugins": [
     {
       "name": "kestral",
-      "version": "0.4.16",
+      "version": "0.4.17",
       "source": {
         "source": "url",
         "url": "https://github.com/Kestral-Team/kestral-plugins.git",
