@@ -11,7 +11,7 @@ attention, what fits today, and what should be deferred.
 
 ## Prerequisites
 
-The `kestral` MCP server must show as **connected** (`/mcp`). Auth is automatic via OAuth. A calendar MCP/app connector
+The `Kestral` MCP server must show as **connected** (`/mcp`). Auth is automatic via OAuth. A calendar MCP/app connector
 should also be available for best results; if calendar access is missing, ask the user for fixed commitments before
 finalizing the plan.
 

@@ -44,6 +44,10 @@ which npx        # must print a path
 
 After installing or upgrading Node, **fully quit and reopen** your Claude app before retrying setup.
 
+> **No Node?** Run the setup script with `--go-mcp` to install the standalone Go `kestral-mcp` binary instead — it has
+> no Node.js requirement (python3 is used during install). The plugin's MCP config is rewritten to launch the binary
+> from `~/.kestral/bin/kestral-mcp`.
+
 ## Install
 
 **Recommended (macOS):** one command installs to Claude Code and Claude Desktop:

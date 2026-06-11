@@ -10,7 +10,7 @@ then ask before writing anything back to Kestral or local project files.
 
 ## Prerequisites
 
-The `kestral` MCP server must show as **connected** (`/mcp`). Auth is automatic via OAuth. Calendar access is optional,
+The `Kestral` MCP server must show as **connected** (`/mcp`). Auth is automatic via OAuth. Calendar access is optional,
 but use it when tomorrow prioritization depends on schedule realism.
 
 ## Entrypoint

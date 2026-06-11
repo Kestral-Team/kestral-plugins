@@ -14,11 +14,18 @@ CODEX_LOCAL_MARKETPLACE_DIR="${HOME}/.kestral/codex-marketplace"
 CLAUDE_APP="/Applications/Claude.app"
 SESSIONS_BASE="${HOME}/Library/Application Support/Claude/local-agent-mode-sessions"
 MIN_NODE_MAJOR=20
+KESTRAL_MCP_SERVER_NAME="Kestral"
+KESTRAL_MCP_PLUGIN_BIN_REL="bin/kestral-mcp"
+KESTRAL_MCP_BIN_DIR="${HOME}/.kestral/bin"
+KESTRAL_MCP_BIN="${KESTRAL_MCP_BIN_DIR}/kestral-mcp"
+GO_MCP_BINARY_INSTALLED=0
 
 # --- Parsed flags ---
 APP_FLAG=""
 DESKTOP_ROOT_FLAG=""
 EXPLICIT_APP_FLAG=0
+USE_GO_MCP=0
+MCP_VERSION_FLAG=""
 
 # --- Detection / selection state ---
 HAS_GIT=0
@@ -153,18 +160,21 @@ Kestral plugin setup (macOS)
 
 Usage:
   curl -fsSL https://raw.githubusercontent.com/Kestral-Team/kestral-plugins/main/setup.sh | bash
-  bash setup.sh [--app claude-code|claude-desktop|codex] [--desktop-root <accountId>/<orgId>]
+  bash setup.sh [--app claude-code|claude-desktop|codex] [--desktop-root <accountId>/<orgId>] [--go-mcp] [--mcp-version <semver>]
 
 Options:
   --app <targets>       Non-interactive target set (comma-separated: claude-code, claude-desktop, codex)
   --desktop-root <id>   Select Desktop session root when multiple exist
+  --go-mcp              Install the standalone Go kestral-mcp binary (no Node.js required)
+  --mcp-version <ver>   Plugin release version for --go-mcp download fallback (default: plugin manifest version)
   -h, --help            Show this help
 
 Examples:
   bash setup.sh --app claude-code
-  bash setup.sh --app codex
+  bash setup.sh --app codex --go-mcp
   bash setup.sh --app claude-code,codex
   bash setup.sh --app claude-desktop --desktop-root abc123/def456
+  bash setup.sh --go-mcp --mcp-version 0.1.4
 EOF
 }
 
@@ -181,6 +191,15 @@ parse_args() {
         shift
         DESKTOP_ROOT_FLAG="${1:-}"
         [ -n "$DESKTOP_ROOT_FLAG" ] || abort "--desktop-root requires a value"
+        ;;
+      --go-mcp)
+        USE_GO_MCP=1
+        ;;
+      --mcp-version)
+        shift
+        MCP_VERSION_FLAG="${1:-}"
+        USE_GO_MCP=1
+        [ -n "$MCP_VERSION_FLAG" ] || abort "--mcp-version requires a value"
         ;;
       -h | --help)
         usage
@@ -319,6 +338,210 @@ ensure_node() {
   fi
 
   ok "Node.js $(node --version)"
+}
+
+ensure_python3() {
+  if ! command -v python3 >/dev/null 2>&1; then
+    abort_with_hint "python3 is required for --go-mcp install." \
+      "Install Python 3 from https://www.python.org/downloads/macos/ or run: brew install python"
+  fi
+  ok "python3 $(python3 --version 2>&1 | awk '{print $2}')"
+}
+
+_plugin_version_from_root() {
+  local _root="$1"
+  local _manifest="${_root}/.claude-plugin/plugin.json"
+  if [ ! -f "$_manifest" ]; then
+    return 1
+  fi
+  python3 - "$_manifest" <<'PY'
+import json
+import sys
+
+with open(sys.argv[1], encoding="utf-8") as handle:
+    print(json.load(handle)["version"])
+PY
+}
+
+_go_mcp_release_version() {
+  local _plugin_root="${1:-}"
+  if [ -n "$MCP_VERSION_FLAG" ]; then
+    printf '%s' "$MCP_VERSION_FLAG"
+    return 0
+  fi
+  if [ -n "$_plugin_root" ]; then
+    local _plugin_version=""
+    _plugin_version="$(_plugin_version_from_root "$_plugin_root" 2>/dev/null || true)"
+    if [ -n "$_plugin_version" ]; then
+      printf '%s' "$_plugin_version"
+      return 0
+    fi
+  fi
+  local _bundled_root
+  _bundled_root="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+  local _bundled_version=""
+  _bundled_version="$(_plugin_version_from_root "$_bundled_root" 2>/dev/null || true)"
+  if [ -n "$_bundled_version" ]; then
+    printf '%s' "$_bundled_version"
+    return 0
+  fi
+  return 1
+}
+
+_install_go_mcp_binary_from_path() {
+  local _source="$1"
+  mkdir -p "$KESTRAL_MCP_BIN_DIR"
+  install -m 755 "$_source" "$KESTRAL_MCP_BIN"
+}
+
+install_go_mcp_binary_from_plugin_root() {
+  local _plugin_root="${1:-}"
+  local _version _tag _base_url _zip_url _sums_url _tmp_dir
+
+  if [ -n "$_plugin_root" ] && [ -x "${_plugin_root}/${KESTRAL_MCP_PLUGIN_BIN_REL}" ]; then
+    _install_go_mcp_binary_from_path "${_plugin_root}/${KESTRAL_MCP_PLUGIN_BIN_REL}"
+    ok "Installed kestral-mcp from plugin → $KESTRAL_MCP_BIN"
+    return 0
+  fi
+
+  if ! _version="$(_go_mcp_release_version "$_plugin_root")"; then
+    abort_with_hint "Could not determine plugin release version for the Go MCP binary." \
+      "Pass --mcp-version <plugin-version> or install from a marketplace clone that includes bin/kestral-mcp."
+  fi
+
+  _tag="v${_version}"
+  _base_url="https://github.com/${MARKETPLACE_REPO}/releases/download/${_tag}"
+  _zip_url="${_base_url}/kestral-mcp-darwin-universal.zip"
+  _sums_url="${_base_url}/SHA256SUMS"
+
+  mkdir -p "$KESTRAL_MCP_BIN_DIR"
+  _tmp_dir="$(mktemp -d "${TMPDIR:-/tmp}/kestral-mcp-install.XXXXXX")"
+
+  log "Downloading Kestral MCP binary from ${MARKETPLACE_REPO} ${_tag}..."
+  if ! curl -fsSL "$_zip_url" -o "${_tmp_dir}/kestral-mcp-darwin-universal.zip"; then
+    rm -rf "$_tmp_dir"
+    abort_with_hint "Failed to download Kestral MCP binary." \
+      "Check that release ${_tag} exists on https://github.com/${MARKETPLACE_REPO}/releases and includes kestral-mcp-darwin-universal.zip, or pass --mcp-version."
+  fi
+
+  if curl -fsSL "$_sums_url" -o "${_tmp_dir}/SHA256SUMS" 2>/dev/null; then
+    (
+      cd "$_tmp_dir" || exit 1
+      shasum -a 256 -c SHA256SUMS
+    ) || {
+      rm -rf "$_tmp_dir"
+      abort "Checksum verification failed for Kestral MCP binary."
+    }
+    verbose "Verified SHA256 checksum for kestral-mcp-darwin-universal.zip"
+  else
+    warn "SHA256SUMS not found for ${_tag} — skipping checksum verification."
+  fi
+
+  unzip -q -o "${_tmp_dir}/kestral-mcp-darwin-universal.zip" -d "$_tmp_dir"
+  if [ ! -f "${_tmp_dir}/kestral-mcp" ]; then
+    rm -rf "$_tmp_dir"
+    abort "Downloaded archive did not contain kestral-mcp."
+  fi
+
+  _install_go_mcp_binary_from_path "${_tmp_dir}/kestral-mcp"
+  rm -rf "$_tmp_dir"
+  ok "Installed kestral-mcp (${_tag}) → $KESTRAL_MCP_BIN"
+}
+
+ensure_go_mcp_binary_installed() {
+  local _plugin_root="${1:-}"
+  if [ "$GO_MCP_BINARY_INSTALLED" -eq 1 ]; then
+    return 0
+  fi
+  install_go_mcp_binary_from_plugin_root "$_plugin_root"
+  GO_MCP_BINARY_INSTALLED=1
+}
+
+_claude_marketplace_root() {
+  local _candidate
+  for _candidate in \
+    "${HOME}/.claude/plugins/marketplaces/${MARKETPLACE_NAME}" \
+    "${HOME}/.claude/plugins/marketplaces/kestral-plugins"; do
+    if [ -d "$_candidate" ]; then
+      printf '%s' "$_candidate"
+      return 0
+    fi
+  done
+  return 1
+}
+
+_codex_marketplace_root() {
+  if [ -d "$CODEX_LOCAL_MARKETPLACE_DIR" ]; then
+    printf '%s' "$CODEX_LOCAL_MARKETPLACE_DIR"
+    return 0
+  fi
+  local _candidate
+  for _candidate in \
+    "${HOME}/.codex/plugins/marketplaces/${MARKETPLACE_NAME}" \
+    "${HOME}/.codex/plugins/marketplaces/kestral-plugins"; do
+    if [ -d "$_candidate" ]; then
+      printf '%s' "$_candidate"
+      return 0
+    fi
+  done
+  return 1
+}
+
+# Undo a previous --go-mcp rewrite of a marketplace clone's .mcp.json so git updates
+# (pull/upgrade) see a clean tree. The file is rewritten again after the update.
+_restore_plugin_mcp_json_in_clone() {
+  local _clone_root="${1:-}"
+  if [ -n "$_clone_root" ] && [ -d "${_clone_root}/.git" ]; then
+    git -C "$_clone_root" checkout -- .mcp.json 2>/dev/null || true
+  fi
+}
+
+_rewrite_plugin_mcp_json() {
+  local _plugin_root="$1"
+  local _mcp_file="${_plugin_root}/.mcp.json"
+  if [ ! -f "$_mcp_file" ]; then
+    return 0
+  fi
+
+  python3 - "$_mcp_file" "$KESTRAL_MCP_BIN" "$KESTRAL_MCP_SERVER_NAME" <<'PY'
+import json
+import sys
+
+path, command, server_name = sys.argv[1:4]
+with open(path, encoding="utf-8") as handle:
+    data = json.load(handle)
+
+server = {"command": command, "args": []}
+for key in ("mcpServers", "mcp_servers"):
+    if key in data:
+        data[key] = {server_name: dict(server)}
+
+with open(path, "w", encoding="utf-8") as handle:
+    json.dump(data, handle, indent=2)
+    handle.write("\n")
+PY
+  verbose "Rewrote ${_mcp_file} → ${KESTRAL_MCP_BIN}"
+}
+
+_patch_kestral_mcp_json_under() {
+  local _root="$1"
+  local _mcp_file _dir
+  if [ ! -d "$_root" ]; then
+    return 0
+  fi
+  while IFS= read -r _mcp_file; do
+    _dir="$(dirname "$_mcp_file")"
+    _rewrite_plugin_mcp_json "$_dir"
+  done < <(find "$_root" \( -path '*kestral-plugins*' -o -path '*kestral@kestral-plugins*' \) -name '.mcp.json' 2>/dev/null)
+}
+
+_patch_installed_kestral_mcp_json() {
+  _patch_kestral_mcp_json_under "${HOME}/.claude"
+  _patch_kestral_mcp_json_under "${HOME}/.codex"
+  _patch_kestral_mcp_json_under "${HOME}/.kestral"
+  if [ -d "$SESSIONS_BASE" ]; then
+    _patch_kestral_mcp_json_under "$SESSIONS_BASE"
+  fi
 }
 
 # --- App detection ---
@@ -662,11 +885,22 @@ install_to_claude_code() {
     return 1
   fi
 
+  if [ "$USE_GO_MCP" -eq 1 ]; then
+    _restore_plugin_mcp_json_in_clone "$(_claude_marketplace_root 2>/dev/null || true)"
+  fi
   if ! ensure_marketplace; then
     return 1
   fi
+  if [ "$USE_GO_MCP" -eq 1 ]; then
+    local _marketplace_root=""
+    _marketplace_root="$(_claude_marketplace_root 2>/dev/null || true)"
+    ensure_go_mcp_binary_installed "$_marketplace_root"
+  fi
   if ! install_or_update_plugin; then
     return 1
+  fi
+  if [ "$USE_GO_MCP" -eq 1 ]; then
+    _patch_installed_kestral_mcp_json
   fi
   print_claude_success
 }
@@ -859,6 +1093,7 @@ clone_or_update_marketplace() {
   if [ -d "$_clone_dir/.git" ]; then
     log "Updating Kestral marketplace..."
     verbose "git pull --ff-only in $_clone_dir"
+    _restore_plugin_mcp_json_in_clone "$_clone_dir"
     if ! git -C "$_clone_dir" diff --quiet 2>/dev/null || ! git -C "$_clone_dir" diff --cached --quiet 2>/dev/null; then
       warn "Marketplace has local modifications — can't update automatically."
       verbose "Dirty working tree in $_clone_dir"
@@ -884,6 +1119,11 @@ clone_or_update_marketplace() {
     fi
     ok "Kestral marketplace installed"
   fi
+
+  if [ "$USE_GO_MCP" -eq 1 ]; then
+    ensure_go_mcp_binary_installed "$(_desktop_marketplace_clone_dir)"
+    _rewrite_plugin_mcp_json "$(_desktop_marketplace_clone_dir)"
+  fi
 }
 
 _register_marketplace() {
@@ -895,6 +1135,32 @@ _register_marketplace() {
   _backup_json_if_exists "$_known"
 
   _iso="$(date -u +"%Y-%m-%dT%H:%M:%S.000Z")"
+
+  if [ "$USE_GO_MCP" -eq 1 ]; then
+    python3 - "$_known" "$_clone_dir" "$MARKETPLACE_NAME" "$MARKETPLACE_REPO" "$_iso" <<'PY' || return 1
+import json
+import os
+import sys
+
+file, clone_dir, name, repo, iso = sys.argv[1:6]
+data = {}
+if os.path.exists(file):
+    with open(file, encoding="utf-8") as handle:
+        data = json.load(handle)
+data[name] = {
+    "source": {"source": "github", "repo": repo},
+    "installLocation": clone_dir,
+    "lastUpdated": iso,
+}
+tmp = f"{file}.tmp.{os.getpid()}"
+with open(tmp, "w", encoding="utf-8") as handle:
+    json.dump(data, handle, indent=2)
+    handle.write("\n")
+os.replace(tmp, file)
+PY
+    verbose "Registered marketplace in known_marketplaces.json"
+    return 0
+  fi
 
   node -e "
 const fs = require('fs');
@@ -929,6 +1195,63 @@ _write_installed_plugin() {
   _iso="$(date -u +"%Y-%m-%dT%H:%M:%S.000Z")"
   if ! _sha="$(git -C "$_clone_dir" rev-parse HEAD)"; then
     return 1
+  fi
+
+  if [ "$USE_GO_MCP" -eq 1 ]; then
+    python3 - "$_installed" "$_clone_dir" "$PLUGIN_ID" "$_iso" "$_sha" <<'PY' || return 1
+import json
+import os
+import sys
+
+file, clone_dir, plugin_id, iso, sha = sys.argv[1:6]
+manifest_path = os.path.join(clone_dir, ".claude-plugin", "plugin.json")
+with open(manifest_path, encoding="utf-8") as handle:
+    version = json.load(handle)["version"]
+
+def convert_v1_to_v2(data):
+    if data.get("version") == 2:
+        return data
+    plugins = {}
+    for plugin_key, entry in (data.get("plugins") or {}).items():
+        plugins[plugin_key] = entry if isinstance(entry, list) else [entry]
+    return {"version": 2, "plugins": plugins}
+
+data = {"version": 2, "plugins": {}}
+if os.path.exists(file):
+    with open(file, encoding="utf-8") as handle:
+        data = convert_v1_to_v2(json.load(handle))
+
+entry = {
+    "scope": "user",
+    "installPath": clone_dir,
+    "version": version,
+    "installedAt": iso,
+    "lastUpdated": iso,
+    "gitCommitSha": sha,
+    "auto": False,
+}
+existing = data["plugins"].get(plugin_id)
+if isinstance(existing, list):
+    idx = next((i for i, item in enumerate(existing) if item.get("scope") == "user"), -1)
+    if idx >= 0:
+        merged = dict(existing[idx])
+        merged.update(entry)
+        merged["installedAt"] = existing[idx].get("installedAt") or iso
+        existing[idx] = merged
+    else:
+        existing.append(entry)
+    data["plugins"][plugin_id] = existing
+else:
+    data["plugins"][plugin_id] = [entry]
+
+tmp = f"{file}.tmp.{os.getpid()}"
+with open(tmp, "w", encoding="utf-8") as handle:
+    json.dump(data, handle, indent=2)
+    handle.write("\n")
+os.replace(tmp, file)
+PY
+    verbose "Wrote installed_plugins.json (schema v2)"
+    return 0
   fi
 
   node -e "
@@ -988,9 +1311,39 @@ fs.renameSync(tmp, file);
 }
 
 _enable_plugin() {
-  local _settings
+  local _settings _iso
   _settings="$(_desktop_org_dir)/cowork_settings.json"
   _backup_json_if_exists "$_settings"
+  _iso="$(date -u +"%Y-%m-%dT%H:%M:%S.000Z")"
+
+  if [ "$USE_GO_MCP" -eq 1 ]; then
+    python3 - "$_settings" "$PLUGIN_ID" "$MARKETPLACE_NAME" "$MARKETPLACE_REPO" "$(_desktop_marketplace_clone_dir)" "$_iso" <<'PY' || return 1
+import json
+import os
+import sys
+
+file, plugin_id, marketplace_name, repo, clone_dir, iso = sys.argv[1:7]
+data = {"enabledPlugins": {}}
+if os.path.exists(file):
+    with open(file, encoding="utf-8") as handle:
+        data = json.load(handle)
+data.setdefault("enabledPlugins", {})[plugin_id] = True
+data.setdefault("extraKnownMarketplaces", {})
+if marketplace_name not in data["extraKnownMarketplaces"]:
+    data["extraKnownMarketplaces"][marketplace_name] = {
+        "source": {"source": "github", "repo": repo, "name": marketplace_name},
+        "installLocation": clone_dir,
+        "lastUpdated": iso,
+    }
+tmp = f"{file}.tmp.{os.getpid()}"
+with open(tmp, "w", encoding="utf-8") as handle:
+    json.dump(data, handle, indent=2)
+    handle.write("\n")
+os.replace(tmp, file)
+PY
+    verbose "Enabled plugin in cowork_settings.json"
+    return 0
+  fi
 
   node -e "
 const fs = require('fs');
@@ -1022,6 +1375,17 @@ fs.renameSync(tmp, file);
 }
 
 print_desktop_success() {
+  if [ "$USE_GO_MCP" -eq 1 ]; then
+    cat <<EOF
+
+Claude Desktop: Kestral plugin files are installed (Go MCP bridge at ${KESTRAL_MCP_BIN}).
+  1. Fully quit and reopen Claude Desktop (required — running sessions won't see disk edits).
+  2. Start a new task (+ New task — running tasks never reload plugin content).
+  3. In Cowork, run: /kestral:kestral-setup
+EOF
+    return 0
+  fi
+
   cat <<EOF
 
 Claude Desktop: Kestral plugin files are installed.
@@ -1261,7 +1625,27 @@ install_to_codex() {
     return 1
   fi
 
-  if ensure_codex_marketplace && install_or_update_codex_plugin; then
+  if [ "$USE_GO_MCP" -eq 1 ]; then
+    _restore_plugin_mcp_json_in_clone "$(_codex_marketplace_root 2>/dev/null || true)"
+  fi
+  if ! ensure_codex_marketplace; then
+    _print_codex_gui_fallback
+    return 1
+  fi
+
+  local _codex_marketplace_root=""
+  if [ "$USE_GO_MCP" -eq 1 ]; then
+    _codex_marketplace_root="$(_codex_marketplace_root 2>/dev/null || true)"
+    ensure_go_mcp_binary_installed "$_codex_marketplace_root"
+  fi
+
+  if install_or_update_codex_plugin; then
+    if [ "$USE_GO_MCP" -eq 1 ]; then
+      if [ -n "$_codex_marketplace_root" ]; then
+        _rewrite_plugin_mcp_json "$_codex_marketplace_root"
+      fi
+      _patch_installed_kestral_mcp_json
+    fi
     print_codex_success
     return 0
   fi
@@ -1342,9 +1726,15 @@ main() {
   parse_args "$@"
   require_macos
 
-  section "Checking prerequisites (git, Node.js 20+)"
-  ensure_git
-  ensure_node
+  if [ "$USE_GO_MCP" -eq 1 ]; then
+    section "Checking prerequisites (git, python3)"
+    ensure_git
+    ensure_python3
+  else
+    section "Checking prerequisites (git, Node.js 20+)"
+    ensure_git
+    ensure_node
+  fi
 
   section "Detecting installed apps"
   detect_apps
