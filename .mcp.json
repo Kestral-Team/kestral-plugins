@@ -1,20 +1,14 @@
 {
   "mcpServers": {
     "Kestral": {
-      "command": "npx",
-      "args": [
-        "-y",
-        "@kestral/kestral-mcp@latest"
-      ]
+      "command": "~/.kestral/bin/kestral-mcp",
+      "args": []
     }
   },
   "mcp_servers": {
     "Kestral": {
-      "command": "npx",
-      "args": [
-        "-y",
-        "@kestral/kestral-mcp@latest"
-      ]
+      "command": "~/.kestral/bin/kestral-mcp",
+      "args": []
     }
   }
 }

@@ -1,6 +1,6 @@
 ---
 name: kestral-setup
-description: Authenticate with Kestral and organize local files plus connected-tool context into one or more Kestral projects. Use only when the user explicitly runs setup or asks to onboard, organize, or import work into Kestral.
+description: Use when the user explicitly runs Kestral setup, asks to onboard, organize, or import work into Kestral, or wants projects created from files, repos, tasks, documents, or connected tools.
 ---
 
 # Setup
@@ -17,14 +17,28 @@ organized by inspecting available sources and proposing a focused starting struc
 **Kestral** must show as **connected** with `upload_document` in the tool list — including Cowork. If missing, reconnect
 in the client; do not send users to another app for local uploads.
 
+## Human-readable references
+
+Keep Kestral IDs internal unless the user asks for them. In user-facing output:
+
+- Tasks: show `slug - title` when a slug is available, linked with `url` when the host can render links.
+- Projects, documents, feedback, customers, tags, statuses, and other Kestral entities: show the readable name/title/label
+  first, linked with `url` when the host can render links.
+- People and actors: show display names; if unresolved, write `Unknown member (id: <rawId>)`.
+- Unknown non-member entities: write `Unknown <entity type> (id: <rawId>)`.
+- Approval tables and write-back plans must put the human-readable label first. Raw URLs, machine IDs, source IDs, and
+  bare slugs belong only in secondary metadata when useful.
+- Use existing display fields first; do extra lookups only for entities that matter to the answer.
+
 ## Workflow
 
 ### 0. Preflight
 
 Run before any Kestral MCP call. Stop on failure; exact messages in `docs/manifest-copy-spec.md`.
 
-**Kestral tools (all hosts)** — Confirm `upload_document` / `kestral_*` in this thread (`/mcp`). If absent → **MCP not
-connected** (host-specific bullets). Codex: **Kestral** server required — `node_repl` is not the bridge.
+**Kestral tools (all hosts)** — Confirm Kestral tools such as `upload_document`, `whoami`, or `query_entities` in this
+thread (`/mcp`). If absent → **MCP not connected** (host-specific bullets). Codex: **Kestral** server required —
+`node_repl` is not the bridge.
 
 ### 1. Authenticate
 
@@ -75,7 +89,7 @@ Use these source-specific helpers and patterns:
 
 | Source family | Guidance |
 | --- | --- |
-| Local files | Use `scan-folder/SKILL.md` for folders and explicit file lists. Keep file paths, sizes, sampled titles, candidate themes, and notable omissions. |
+| Local files | Use `scan-folder/SKILL.md` for folders and explicit file lists. Treat files as evidence first: inspect representative document content when possible, keep file paths, sizes, sampled titles, candidate themes, and notable omissions, then decide whether each file should also be uploaded. |
 | Task systems | Use `scan-tasks/SKILL.md` for Linear, Jira, GitHub Issues, and similar tools. Prefer open, in-progress, recently updated, high-priority, or recently completed work. |
 | Document systems | Discover Notion, Google Drive, Slack, Confluence, and other linkable sources through available MCP tools. Keep canonical URLs for `link_external_document`; content text is only a fallback snapshot. |
 | User buckets | Treat user-provided project names, goals, work areas, and outcomes as the taxonomy unless the user asks you to infer alternatives. |
@@ -90,6 +104,20 @@ missing or unreadable, ask one targeted question that would unblock setup.
 ### 4. Infer active workstreams
 
 Default to active workstreams, not archive categories or source-system silos.
+
+Documents are flexible evidence. A document may be:
+
+- A source to inspect so the agent can understand the user's work and propose an organization.
+- A local upload or external link to attach to a Kestral project.
+- **Inline text** pasted in chat (Slack thread, summary, notes) — attach with `create_document` and `projectId`, not the
+  project description field.
+- Both evidence and project context when it is useful for Project Brain.
+
+For a small document set, inspect enough content to understand the work at a high level before proposing projects. For a
+large document set, sample representative documents, summarize coverage, and let the user steer expansion. If only
+filename, path, metadata, or a failed extraction is available, say that clearly and do not present filename-only guesses
+as if the contents were understood. Ask one focused question only when the evidence is too thin or risky for a useful
+manifest.
 
 Taxonomy rules:
 
@@ -114,6 +142,8 @@ Default import is curated, not capped. Select the most relevant representative t
 If the user asks for more or all matching tasks/documents, import more or all in batches within the approved projects.
 
 ### 5. Render a multi-project manifest
+
+Use readable labels throughout the manifest: document names, source labels, task titles, and priority labels. External task IDs are provenance/debug details only; do not show them unless the user asks.
 
 Show proposed Kestral projects, not a source dump. Each proposed project includes:
 
@@ -151,11 +181,18 @@ Make clear that the curated manifest is a starting import, not a hard limit:
 
 ### 6. Manifest checkpoint
 
-Wait for user input after rendering the manifest. Supported commands:
+Wait for user input after rendering the manifest. Supported commands mirror `docs/manifest-copy-spec.md`. If an edit
+target is ambiguous in a multi-project manifest, ask one focused clarification before applying it.
 
 | Command or intent | Effect |
 | --- | --- |
-| `proceed` / `approve` / `create these` | Create selected projects and import selected context |
+| `proceed` / `approve` / `yes` / `go` / `create these` | Create selected projects and import selected context |
+| `remove <file>` | Remove a specific local file from the selected document list |
+| `add <path>` | Validate the path, stat its byte size, and add it to the selected local documents |
+| `remove <source> documents` | Remove all selected documents from a source, such as Notion or Google Drive |
+| `skip tasks` | Remove selected tasks from this run so no tasks are imported |
+| `title: <new>` / `change title <new>` | Override a proposed project title; ask if the target project is unclear |
+| `description: <new>` / `change description <new>` | Override a proposed project description; ask if the target project is unclear |
 | `only create <project>` | Deselect other proposed projects |
 | `skip <project>` | Remove a proposed project from this run |
 | `rename <project> to <new title>` | Update a proposed project title |
@@ -165,7 +202,8 @@ Wait for user input after rendering the manifest. Supported commands:
 | `use these buckets: <list>` | Switch to user-led taxonomy and remap sources |
 | `import more <source> into <project>` | Expand import scope for that project/source |
 | `import all matching <tasks/documents>` | Switch that project/source to bulk import mode |
-| `cancel` / `stop` | Exit cleanly without Kestral write calls |
+| `look at <folder> instead` / `change folder <path>` | Re-scan a new folder and remap the proposed taxonomy |
+| `cancel` / `no` / `stop` | Exit cleanly without Kestral write calls |
 
 Re-render the manifest after edits. Do not add redundant approval loops after the user approves normal curated setup.
 
@@ -192,18 +230,25 @@ For each selected project:
    and `url`.
 2. Upload selected local documents with `upload_document`.
 3. Link selected external documents with `link_external_document`.
-4. Create selected tasks with `create_tasks`.
-5. Trigger `trigger_brain_build` for that project.
+4. For **pasted inline content** in the manifest or conversation (Slack export text, summaries, notes with no file path
+   and no external URL), call `create_document` with `{ title, content, projectId }` — not `upload_document` or
+   `project_management`.
+5. Create selected tasks with `create_tasks`.
+6. Trigger `trigger_brain_build` for that project.
 
-For `upload_document`, pass `filePath` for one local file or `filePaths` for multiple local files when the tool schema
-supports it. If the host exposes only the legacy single-file schema, call `upload_document` once per selected local file.
+For `upload_document`, pass `filePaths` (an array of absolute paths) to upload one or more local files in a single call.
 
 Local uploads:
 
-- Use absolute `filePath` values only.
-- Do not read file bytes into the agent or pass content in the tool call.
-- If `.doc` or `.docx` files require conversion in the current host, convert only when needed; if conversion fails,
-  skip those files when other documents remain or stop that project's local upload if no local documents can be used.
+- Use absolute paths only.
+- Do not read file bytes into the agent or pass content in the tool call; `upload_document` streams from disk through
+  MCP/server upload behavior.
+- Exact file support and hard upload limits are enforced by the MCP/server. Skills may select likely document, image,
+  audio, video, and text candidates, but should report MCP upload failures instead of pre-declaring hard limits.
+- Uploadability is separate from inspectability. A document or image can be worth uploading even when its full contents
+  cannot fit in model context or no extraction tool is available.
+- If the MCP rejects a file type or the host needs conversion, skip that file when other documents remain, or ask whether
+  to convert or retry when it is central to the project.
 - Track per-file success and failure.
 
 External documents:
@@ -234,6 +279,9 @@ Return a compact summary:
 - Tasks created per project and source.
 - Project Brain status per project.
 - Skipped sources and item or batch failures.
+
+Present created projects, linked documents, uploaded documents, and imported tasks by readable title/name and URL when
+available.
 
 Always return successful project URLs when any project creation succeeded, even if imports or Project Brain failed.
 

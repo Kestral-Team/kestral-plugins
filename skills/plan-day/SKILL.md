@@ -1,6 +1,6 @@
 ---
 name: kestral-plan-day
-description: Turn Kestral daily or morning brief context plus the user's calendar into a realistic day plan. Use when the user asks to plan the day, start the workday, use a morning/daily brief, prioritize today, turn Kestral updates into focus blocks, or explicitly invokes /kestral:plan-day or $kestral-plan-day.
+description: Use when the user asks to plan today, start the workday, prioritize from a Kestral brief, use a morning or daily brief, or invokes /kestral:plan-day or $kestral-plan-day.
 ---
 
 # Plan Day
@@ -14,6 +14,19 @@ attention, what fits today, and what should be deferred.
 The `Kestral` MCP server must show as **connected** (`/mcp`). Auth is automatic via OAuth. A calendar MCP/app connector
 should also be available for best results; if calendar access is missing, ask the user for fixed commitments before
 finalizing the plan.
+
+## Human-readable references
+
+Keep Kestral IDs internal unless the user asks for them. In user-facing output:
+
+- Tasks: show `slug - title` when a slug is available, linked with `url` when the host can render links.
+- Projects, documents, feedback, customers, tags, statuses, and other Kestral entities: show the readable name/title/label
+  first, linked with `url` when the host can render links.
+- People and actors: show display names; if unresolved, write `Unknown member (id: <rawId>)`.
+- Unknown non-member entities: write `Unknown <entity type> (id: <rawId>)`.
+- Approval tables and write-back plans must put the human-readable label first. Raw URLs, machine IDs, source IDs, and
+  bare slugs belong only in secondary metadata when useful.
+- Use existing display fields first; do extra lookups only for entities that matter to the answer.
 
 ## Entrypoint
 
@@ -68,8 +81,10 @@ from the current workspace folder and using the first match.
   Do not require the user to explicitly say "remember", "note", "save", or "prefer".
 - Do not treat one-day constraints as durable preferences. Save only stable work-style, planning, scheduling, or
   write-back preferences that are likely to apply across future plan-day runs.
-- Update `.kestral/preferences.md` when a durable preference is clear. Ask first only when the preference is ambiguous,
-  appears one-off, conflicts with existing memory, or may include sensitive personal or meeting-specific content.
+- Update `.kestral/preferences.md` silently when a durable preference is clear. This is local memory maintenance, not a
+  Kestral write-back.
+- Ask before writing preferences only when the signal is ambiguous, appears one-off, conflicts with existing memory, or
+  may include sensitive personal or meeting-specific content.
 - If the user explicitly asks to update preferences, update `.kestral/preferences.md` in the same turn before finalizing.
   Preference-memory writes are local workspace memory maintenance, not Kestral write-backs; do not skip them because the
   user declined or redirected Kestral write-back for the day plan.
@@ -79,6 +94,8 @@ from the current workspace folder and using the first match.
 - Do not store credentials, private personal details, or sensitive meeting content in preferences.
 
 ## Workflow
+
+Use the same task rendering posture throughout: verify only decision-relevant tasks, keep raw IDs internal, and name tasks as `slug - title` when a slug exists. For projects, documents, and other entities, use readable names/titles plus URLs when useful.
 
 ### 0. Gather first
 
@@ -126,7 +143,8 @@ If the user has not provided constraints, stop after the readout and this questi
 best-effort plan.
 
 If the conversation reveals a new durable planning preference, update `.kestral/preferences.md` as local memory when the
-preference is clear. If it is ambiguous, one-off, sensitive, or conflicts with existing memory, ask before writing.
+preference is clear. Do not include this in the Kestral write-back approval plan. Ask before writing only when the
+preference is ambiguous, one-off, sensitive, or conflicts with existing memory.
 
 ### 3. Draft the day plan
 
@@ -164,11 +182,10 @@ Other valid targets:
 - Attach the document to a project when the user selects one primary project.
 - Comment on a specific Kestral task when the day plan is primarily a task execution plan.
 - Update task priority/due dates only when the user explicitly asks for those mutations.
-- Kestral write-back approval is not required for `.kestral/preferences.md` memory updates covered by the User
-  preferences rules.
+- `.kestral/preferences.md` memory updates are not Kestral write-backs and do not require the write-back approval table.
 
-When updating `.kestral/preferences.md`, briefly report the local file path. After Kestral writes, return the Kestral
-link.
+When updating `.kestral/preferences.md`, mention the local file path only if useful. After Kestral writes, return the
+Kestral link.
 
 ## Missing or stale data
 

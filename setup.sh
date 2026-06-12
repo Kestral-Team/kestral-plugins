@@ -5,18 +5,19 @@
 #
 # Usage:
 #   curl -fsSL https://raw.githubusercontent.com/Kestral-Team/kestral-plugins/main/setup.sh | bash
-#   bash setup.sh [--app claude-code|claude-desktop|codex] [--desktop-root <accountId>/<orgId>] [--go-mcp]
+#   bash setup.sh [--app claude-code|claude-desktop|codex] [--desktop-root <accountId>/<orgId>] [--remote-mcp]
 #
 # Options:
 #   --app <targets>       Non-interactive target set (comma-separated: claude-code, claude-desktop, codex)
 #   --desktop-root <id>   Select Desktop session root when multiple exist
-#   --go-mcp              Install standalone Go kestral-mcp binary (no Node.js required; always latest release)
+#   --remote-mcp          Use Kestral's hosted MCP endpoint (only git required; no local process)
 #   -h, --help            Show this help
 #
 # Examples:
 #   bash setup.sh --app claude-code
-#   bash setup.sh --app codex --go-mcp
-#   curl -fsSL https://raw.githubusercontent.com/Kestral-Team/kestral-plugins/main/setup.sh | bash -s -- --go-mcp
+#   bash setup.sh --app codex
+#   curl -fsSL https://raw.githubusercontent.com/Kestral-Team/kestral-plugins/main/setup.sh | bash
+#   curl -fsSL https://raw.githubusercontent.com/Kestral-Team/kestral-plugins/main/setup.sh | bash -s -- --remote-mcp
 
 set -euo pipefail
 
@@ -28,18 +29,18 @@ CODEX_APP="/Applications/Codex.app"
 CODEX_LOCAL_MARKETPLACE_DIR="${HOME}/.kestral/codex-marketplace"
 CLAUDE_APP="/Applications/Claude.app"
 SESSIONS_BASE="${HOME}/Library/Application Support/Claude/local-agent-mode-sessions"
-MIN_NODE_MAJOR=20
 KESTRAL_MCP_SERVER_NAME="Kestral"
 KESTRAL_MCP_PLUGIN_BIN_REL="bin/kestral-mcp"
 KESTRAL_MCP_BIN_DIR="${HOME}/.kestral/bin"
 KESTRAL_MCP_BIN="${KESTRAL_MCP_BIN_DIR}/kestral-mcp"
 GO_MCP_BINARY_INSTALLED=0
+RUBY_BIN=""
 
 # --- Parsed flags ---
 APP_FLAG=""
 DESKTOP_ROOT_FLAG=""
 EXPLICIT_APP_FLAG=0
-USE_GO_MCP=0
+USE_REMOTE_MCP=0
 
 # --- Detection / selection state ---
 HAS_GIT=0
@@ -61,6 +62,10 @@ TARGET_RESULT_CODEX=""
 
 DESKTOP_SELECTED_ROOT=""
 DESKTOP_BACKUP_SUFFIX=""
+DESKTOP_RESTART_PENDING=0
+DESKTOP_REOPENED=0
+CODEX_RESTART_PENDING=0
+CODEX_REOPENED=0
 
 # --- Logfile ---
 
@@ -76,20 +81,20 @@ Kestral plugin setup (macOS)
 
 Usage:
   curl -fsSL https://raw.githubusercontent.com/Kestral-Team/kestral-plugins/main/setup.sh | bash
-  bash setup.sh [--app claude-code|claude-desktop|codex] [--desktop-root <accountId>/<orgId>] [--go-mcp]
+  bash setup.sh [--app claude-code|claude-desktop|codex] [--desktop-root <accountId>/<orgId>] [--remote-mcp]
 
 Options:
   --app <targets>       Non-interactive target set (comma-separated: claude-code, claude-desktop, codex)
   --desktop-root <id>   Select Desktop session root when multiple exist
-  --go-mcp              Install standalone Go kestral-mcp binary (no Node.js required; always latest release)
+  --remote-mcp          Use Kestral's hosted MCP endpoint (only git required; no local process)
   -h, --help            Show this help
 
 Examples:
   bash setup.sh --app claude-code
-  bash setup.sh --app codex --go-mcp
+  bash setup.sh --app codex
   bash setup.sh --app claude-code,codex
   bash setup.sh --app claude-desktop --desktop-root abc123/def456
-  curl -fsSL https://raw.githubusercontent.com/Kestral-Team/kestral-plugins/main/setup.sh | bash -s -- --go-mcp
+  curl -fsSL https://raw.githubusercontent.com/Kestral-Team/kestral-plugins/main/setup.sh | bash -s -- --remote-mcp
 EOF
 }
 
@@ -107,8 +112,8 @@ parse_args() {
         DESKTOP_ROOT_FLAG="${1:-}"
         [ -n "$DESKTOP_ROOT_FLAG" ] || abort "--desktop-root requires a value"
         ;;
-      --go-mcp)
-        USE_GO_MCP=1
+      --remote-mcp)
+        USE_REMOTE_MCP=1
         ;;
       -h | --help)
         usage
@@ -262,91 +267,6 @@ ensure_git() {
   return 0
 }
 
-_node_major_version() {
-  node --version 2>/dev/null | sed 's/^v//' | cut -d. -f1
-}
-
-_ensure_node_via_brew() {
-  if ! command -v brew >/dev/null 2>&1; then
-    return 1
-  fi
-  local _answer=""
-  if read_tty "Install Node.js via Homebrew? [Y/n] " _answer; then
-    case "$_answer" in
-      [nN] | [nN][oO])
-        return 1
-        ;;
-    esac
-    log "Installing node via Homebrew..."
-    brew install node
-    return 0
-  fi
-  return 1
-}
-
-_ensure_node_upgrade_via_brew() {
-  if ! command -v brew >/dev/null 2>&1; then
-    return 1
-  fi
-  local _answer=""
-  if read_tty "Upgrade Node.js via Homebrew? [Y/n] " _answer; then
-    case "$_answer" in
-      [nN] | [nN][oO])
-        return 1
-        ;;
-    esac
-    log "Upgrading node via Homebrew..."
-    brew upgrade node || brew install node
-    return 0
-  fi
-  return 1
-}
-
-_print_node_install_instructions() {
-  cat <<EOF
-Node.js ${MIN_NODE_MAJOR}+ is required (Desktop install uses node for JSON merges; the plugin needs npx).
-
-Install options:
-  • Download LTS from https://nodejs.org
-  • Homebrew: /bin/bash -c "\$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)" then brew install node
-  • Upgrade (Mac): npm install -g n && n lts
-
-After installing Node, fully quit and reopen your Claude app. If Cowork still can't find node, restart your Mac
-so /opt/homebrew/bin is on the GUI login PATH.
-EOF
-}
-
-ensure_node() {
-  if ! command -v node >/dev/null 2>&1; then
-    log "Node.js not found."
-    if _ensure_node_via_brew; then
-      :
-    else
-      _print_node_install_instructions
-      abort "Node.js is required."
-    fi
-  fi
-
-  local _major
-  _major="$(_node_major_version)"
-  if [ -z "$_major" ] || [ "$_major" -lt "$MIN_NODE_MAJOR" ]; then
-    log "Node.js v${_major:-?} is below required v${MIN_NODE_MAJOR}+."
-    if _ensure_node_upgrade_via_brew; then
-      _major="$(_node_major_version)"
-    else
-      _print_node_install_instructions
-      abort "Node.js ${MIN_NODE_MAJOR}+ is required."
-    fi
-  fi
-
-  if [ "$_major" -lt "$MIN_NODE_MAJOR" ]; then
-    _print_node_install_instructions
-    abort "Node.js ${MIN_NODE_MAJOR}+ is required (found v${_major})."
-  fi
-
-  ok "Node.js $(node --version)"
-}
-
 _json_write_atomic() {
   local _file="$1"
   local _content="$2"
@@ -355,69 +275,22 @@ _json_write_atomic() {
   mv "$_tmp" "$_file"
 }
 
-ensure_jq() {
-  if command -v jq >/dev/null 2>&1; then
-    ok "jq $(jq --version)"
+ensure_ruby() {
+  local _ruby=""
+  if command -v ruby >/dev/null 2>&1; then
+    _ruby="ruby"
+  elif [ -x /usr/bin/ruby ]; then
+    _ruby="/usr/bin/ruby"
+  fi
+
+  if [ -n "$_ruby" ] && "$_ruby" -e 'require "json"' 2>/dev/null; then
+    RUBY_BIN="$_ruby"
+    ok "Ruby $("$_ruby" --version | awk '{print $2}')"
     return 0
   fi
 
-  log "jq not found — attempting install..."
-  if command -v brew >/dev/null 2>&1; then
-    brew install jq >>"$LOGFILE" 2>&1 || true
-    if command -v jq >/dev/null 2>&1; then
-      ok "jq installed via Homebrew"
-      return 0
-    fi
-  fi
-
-  abort_with_hint "jq is required for --go-mcp install." \
-    "Install jq via Homebrew: brew install jq"
-}
-
-_jq_installed_plugins_filter() {
-  cat <<'JQ'
-def convert_v1_to_v2:
-  if (.version // 0) == 2 then .
-  else {
-    version: 2,
-    plugins: (
-      (.plugins // {}) | with_entries(
-        if (.value | type) == "array" then . else .value = [.value] end
-      )
-    )
-  }
-  end;
-
-def user_entry($clone; $version; $iso; $sha):
-  {
-    scope: "user",
-    installPath: $clone,
-    version: $version,
-    installedAt: $iso,
-    lastUpdated: $iso,
-    gitCommitSha: $sha,
-    auto: false
-  };
-
-convert_v1_to_v2 |
-user_entry($clone; $version; $iso; $sha) as $entry |
-.plugins[$plugin_id] as $existing |
-.plugins[$plugin_id] = (
-  if ($existing | type) == "array" then
-    if any($existing[]; .scope == "user") then
-      [ $existing[] |
-        if .scope == "user" then
-          . + $entry | .installedAt = (.installedAt // $iso)
-        else . end
-      ]
-    else
-      $existing + [$entry]
-    end
-  else
-    [$entry]
-  end
-)
-JQ
+  abort_with_hint "Ruby is required for setup." \
+    "Ruby comes with macOS. Open Terminal and run: ruby --version"
 }
 
 _json_merge_known_marketplace() {
@@ -426,14 +299,22 @@ _json_merge_known_marketplace() {
   local _iso="$3"
   local _result
 
-  if [ -f "$_file" ]; then
-    _result="$(jq --arg name "$MARKETPLACE_NAME" --arg clone "$_clone_dir" --arg repo "$MARKETPLACE_REPO" --arg iso "$_iso" \
-      '.[$name] = {"source": {"source": "github", "repo": $repo}, "installLocation": $clone, "lastUpdated": $iso}' \
-      "$_file")" || return 1
-  else
-    _result="$(jq -n --arg name "$MARKETPLACE_NAME" --arg clone "$_clone_dir" --arg repo "$MARKETPLACE_REPO" --arg iso "$_iso" \
-      '{($name): {"source": {"source": "github", "repo": $repo}, "installLocation": $clone, "lastUpdated": $iso}}')" || return 1
-  fi
+  _result="$("$RUBY_BIN" -e "$(cat <<'RUBY'
+require 'json'
+file = ARGV[0]
+clone_dir = ARGV[1]
+name = ARGV[2]
+repo = ARGV[3]
+iso = ARGV[4]
+data = File.exist?(file) ? JSON.parse(File.read(file)) : {}
+data[name] = {
+  'source' => { 'source' => 'github', 'repo' => repo },
+  'installLocation' => clone_dir,
+  'lastUpdated' => iso
+}
+print JSON.pretty_generate(data) + "\n"
+RUBY
+)" "$_file" "$_clone_dir" "$MARKETPLACE_NAME" "$MARKETPLACE_REPO" "$_iso")" || return 1
   _json_write_atomic "$_file" "$_result"
 }
 
@@ -442,17 +323,59 @@ _json_write_installed_plugin() {
   local _clone_dir="$2"
   local _iso="$3"
   local _sha="$4"
-  local _version _filter _result
+  local _result
 
-  _version="$(jq -r '.version' "${_clone_dir}/.claude-plugin/plugin.json")" || return 1
-  _filter="$(_jq_installed_plugins_filter)"
-  if [ -f "$_file" ]; then
-    _result="$(jq --arg plugin_id "$PLUGIN_ID" --arg clone "$_clone_dir" --arg iso "$_iso" --arg sha "$_sha" --arg version "$_version" \
-      "$_filter" "$_file")" || return 1
+  _result="$("$RUBY_BIN" -e "$(cat <<'RUBY'
+require 'json'
+file = ARGV[0]
+clone_dir = ARGV[1]
+plugin_id = ARGV[2]
+iso = ARGV[3]
+sha = ARGV[4]
+
+def convert_v1_to_v2(data)
+  return data if data['version'] == 2
+  plugins = {}
+  (data['plugins'] || {}).each do |id, entry|
+    plugins[id] = entry.is_a?(Array) ? entry : [entry]
+  end
+  { 'version' => 2, 'plugins' => plugins }
+end
+
+manifest_path = File.join(clone_dir, '.claude-plugin', 'plugin.json')
+version = JSON.parse(File.read(manifest_path))['version']
+
+data = { 'version' => 2, 'plugins' => {} }
+data = convert_v1_to_v2(JSON.parse(File.read(file))) if File.exist?(file)
+
+entry = {
+  'scope' => 'user',
+  'installPath' => clone_dir,
+  'version' => version,
+  'installedAt' => iso,
+  'lastUpdated' => iso,
+  'gitCommitSha' => sha,
+  'auto' => false
+}
+
+existing = data['plugins'][plugin_id]
+if existing.is_a?(Array)
+  idx = existing.index { |e| e['scope'] == 'user' }
+  if idx
+    merged = existing[idx].merge(entry)
+    merged['installedAt'] = existing[idx]['installedAt'] || iso
+    existing[idx] = merged
   else
-    _result="$(echo '{"version": 2, "plugins": {}}' | jq --arg plugin_id "$PLUGIN_ID" --arg clone "$_clone_dir" --arg iso "$_iso" --arg sha "$_sha" --arg version "$_version" \
-      "$_filter")" || return 1
-  fi
+    existing << entry
+  end
+  data['plugins'][plugin_id] = existing
+else
+  data['plugins'][plugin_id] = [entry]
+end
+
+print JSON.pretty_generate(data) + "\n"
+RUBY
+)" "$_file" "$_clone_dir" "$PLUGIN_ID" "$_iso" "$_sha")" || return 1
   _json_write_atomic "$_file" "$_result"
 }
 
@@ -460,28 +383,32 @@ _json_enable_cowork_plugin() {
   local _file="$1"
   local _clone_dir="$2"
   local _iso="$3"
-  local _filter _result
+  local _result
 
-  _filter='
-.enabledPlugins = ((.enabledPlugins // {}) + {($plugin_id): true}) |
-.extraKnownMarketplaces = (
-  (.extraKnownMarketplaces // {}) |
-  if has($name) then . else
-    . + {($name): {
-      source: {source: "github", repo: $repo, name: $name},
-      installLocation: $clone,
-      lastUpdated: $iso
-    }}
-  end
-)
-'
-  if [ -f "$_file" ]; then
-    _result="$(jq --arg plugin_id "$PLUGIN_ID" --arg name "$MARKETPLACE_NAME" --arg repo "$MARKETPLACE_REPO" --arg clone "$_clone_dir" --arg iso "$_iso" \
-      "$_filter" "$_file")" || return 1
-  else
-    _result="$(echo '{"enabledPlugins": {}, "extraKnownMarketplaces": {}}' | jq --arg plugin_id "$PLUGIN_ID" --arg name "$MARKETPLACE_NAME" --arg repo "$MARKETPLACE_REPO" --arg clone "$_clone_dir" --arg iso "$_iso" \
-      "$_filter")" || return 1
-  fi
+  _result="$("$RUBY_BIN" -e "$(cat <<'RUBY'
+require 'json'
+file = ARGV[0]
+plugin_id = ARGV[1]
+marketplace_name = ARGV[2]
+repo = ARGV[3]
+clone_dir = ARGV[4]
+iso = ARGV[5]
+
+data = { 'enabledPlugins' => {}, 'extraKnownMarketplaces' => {} }
+data = JSON.parse(File.read(file)) if File.exist?(file)
+data['enabledPlugins'] ||= {}
+data['enabledPlugins'][plugin_id] = true
+data['extraKnownMarketplaces'] ||= {}
+unless data['extraKnownMarketplaces'].key?(marketplace_name)
+  data['extraKnownMarketplaces'][marketplace_name] = {
+    'source' => { 'source' => 'github', 'repo' => repo, 'name' => marketplace_name },
+    'installLocation' => clone_dir,
+    'lastUpdated' => iso
+  }
+end
+print JSON.pretty_generate(data) + "\n"
+RUBY
+)" "$_file" "$PLUGIN_ID" "$MARKETPLACE_NAME" "$MARKETPLACE_REPO" "$_clone_dir" "$_iso")" || return 1
   _json_write_atomic "$_file" "$_result"
 }
 
@@ -508,10 +435,10 @@ install_go_mcp_binary_from_plugin_root() {
   mkdir -p "$KESTRAL_MCP_BIN_DIR"
   _tmp_dir="$(mktemp -d "${TMPDIR:-/tmp}/kestral-mcp-install.XXXXXX")"
 
-  log "Downloading Kestral MCP binary from ${MARKETPLACE_REPO} (${_release_label})..."
+  log "Downloading Kestral helper from ${MARKETPLACE_REPO} (${_release_label})..."
   if ! curl -fsSL "$_zip_url" -o "${_tmp_dir}/kestral-mcp-darwin-universal.zip"; then
     rm -rf "$_tmp_dir"
-    abort_with_hint "Failed to download Kestral MCP binary." \
+    abort_with_hint "Failed to download the Kestral helper." \
       "Check https://github.com/${MARKETPLACE_REPO}/releases includes kestral-mcp-darwin-universal.zip on the latest release."
   fi
 
@@ -521,7 +448,7 @@ install_go_mcp_binary_from_plugin_root() {
       shasum -a 256 -c SHA256SUMS
     ) || {
       rm -rf "$_tmp_dir"
-      abort "Checksum verification failed for Kestral MCP binary."
+      abort "Checksum verification failed for the Kestral helper."
     }
     verbose "Verified SHA256 checksum for kestral-mcp-darwin-universal.zip"
   else
@@ -578,8 +505,8 @@ _codex_marketplace_root() {
   return 1
 }
 
-# Undo a previous --go-mcp rewrite of a marketplace clone's .mcp.json so git updates
-# (pull/upgrade) see a clean tree. The file is rewritten again after the update.
+# Restore .mcp.json in a marketplace clone before git pull so the working tree is clean.
+# The file is rewritten again after the update.
 _restore_plugin_mcp_json_in_clone() {
   local _clone_root="${1:-}"
   if [ -n "$_clone_root" ] && [ -d "${_clone_root}/.git" ]; then
@@ -595,41 +522,85 @@ _rewrite_plugin_mcp_json() {
   fi
 
   local _result
-  _result="$(jq --arg cmd "$KESTRAL_MCP_BIN" --arg name "$KESTRAL_MCP_SERVER_NAME" '
-    if has("mcpServers") then .mcpServers[$name] = {"command": $cmd, "args": []} else . end |
-    if has("mcp_servers") then .mcp_servers[$name] = {"command": $cmd, "args": []} else . end
-  ' "$_mcp_file")" || return 1
+  _result="$("$RUBY_BIN" -e "$(cat <<'RUBY'
+require 'json'
+file = ARGV[0]
+cmd = ARGV[1]
+name = ARGV[2]
+data = JSON.parse(File.read(file))
+if data.key?('mcpServers')
+  data['mcpServers'] = {} unless data['mcpServers'].is_a?(Hash)
+  data['mcpServers'][name] = { 'command' => cmd, 'args' => [] }
+end
+if data.key?('mcp_servers')
+  data['mcp_servers'] = {} unless data['mcp_servers'].is_a?(Hash)
+  data['mcp_servers'][name] = { 'command' => cmd, 'args' => [] }
+end
+print JSON.pretty_generate(data) + "\n"
+RUBY
+)" "$_mcp_file" "$KESTRAL_MCP_BIN" "$KESTRAL_MCP_SERVER_NAME")" || return 1
   _json_write_atomic "$_mcp_file" "$_result"
   verbose "Rewrote ${_mcp_file} → ${KESTRAL_MCP_BIN}"
 }
 
 _patch_kestral_mcp_json_under() {
   local _root="$1"
+  local _rewrite_fn="$2"
   local _mcp_file _dir
   if [ ! -d "$_root" ]; then
     return 0
   fi
   while IFS= read -r _mcp_file; do
     _dir="$(dirname "$_mcp_file")"
-    _rewrite_plugin_mcp_json "$_dir"
+    "$_rewrite_fn" "$_dir"
   done < <(find "$_root" \( -path '*kestral-plugins*' -o -path '*kestral@kestral-plugins*' \) -name '.mcp.json' 2>/dev/null)
 }
 
-_patch_installed_kestral_mcp_json() {
-  _patch_kestral_mcp_json_under "${HOME}/.claude"
-  _patch_kestral_mcp_json_under "${HOME}/.codex"
-  _patch_kestral_mcp_json_under "${HOME}/.kestral"
+REMOTE_MCP_URL="https://app.kestral.ai/mcp"
+
+_rewrite_plugin_mcp_json_remote() {
+  local _plugin_root="$1"
+  local _mcp_file="${_plugin_root}/.mcp.json"
+  if [ ! -f "$_mcp_file" ]; then
+    return 0
+  fi
+  local _content
+  _content=$(printf '%s\n' "{
+  \"mcpServers\": {
+    \"Kestral\": {
+      \"url\": \"${REMOTE_MCP_URL}\"
+    }
+  },
+  \"mcp_servers\": {
+    \"Kestral\": {
+      \"url\": \"${REMOTE_MCP_URL}\"
+    }
+  }
+}")
+  _json_write_atomic "$_mcp_file" "$_content"
+  verbose "Rewrote ${_mcp_file} → ${REMOTE_MCP_URL}"
+}
+
+_mcp_rewrite_fn() {
+  if [ "$USE_REMOTE_MCP" -eq 1 ]; then
+    printf '_rewrite_plugin_mcp_json_remote'
+  else
+    printf '_rewrite_plugin_mcp_json'
+  fi
+}
+
+_patch_all_installed_mcp_json() {
+  local _fn
+  _fn="$(_mcp_rewrite_fn)"
+  _patch_kestral_mcp_json_under "${HOME}/.claude" "$_fn"
+  _patch_kestral_mcp_json_under "${HOME}/.codex" "$_fn"
+  _patch_kestral_mcp_json_under "${HOME}/.kestral" "$_fn"
   if [ -d "$SESSIONS_BASE" ]; then
-    _patch_kestral_mcp_json_under "$SESSIONS_BASE"
+    _patch_kestral_mcp_json_under "$SESSIONS_BASE" "$_fn"
   fi
 }
 
 # --- App detection ---
-
-_is_valid_desktop_org_root() {
-  local _org_path="$1"
-  [ -f "${_org_path}/cowork_settings.json" ] || [ -d "${_org_path}/cowork_plugins" ]
-}
 
 _enumerate_desktop_roots() {
   DESKTOP_ROOTS=()
@@ -649,16 +620,16 @@ _enumerate_desktop_roots() {
     for _org in "$_account"/*; do
       [ -d "$_org" ] || continue
       _org_path="$_org"
-      if _is_valid_desktop_org_root "$_org_path"; then
-        _mtime=0
-        if [ -d "${_org_path}/cowork_plugins" ]; then
-          _mtime="$(stat -f '%m' "${_org_path}/cowork_plugins" 2>/dev/null || echo 0)"
-        elif [ -f "${_org_path}/cowork_settings.json" ]; then
-          _mtime="$(stat -f '%m' "${_org_path}/cowork_settings.json" 2>/dev/null || echo 0)"
-        fi
-        DESKTOP_ROOTS+=("${_acc_name}/$(basename "$_org")")
-        DESKTOP_ROOT_MTIMES+=("$_mtime")
+      _mtime=0
+      if [ -d "${_org_path}/cowork_plugins" ]; then
+        _mtime="$(stat -f '%m' "${_org_path}/cowork_plugins" 2>/dev/null || echo 0)"
+      elif [ -f "${_org_path}/cowork_settings.json" ]; then
+        _mtime="$(stat -f '%m' "${_org_path}/cowork_settings.json" 2>/dev/null || echo 0)"
+      else
+        _mtime="$(stat -f '%m' "${_org_path}" 2>/dev/null || echo 0)"
       fi
+      DESKTOP_ROOTS+=("${_acc_name}/$(basename "$_org")")
+      DESKTOP_ROOT_MTIMES+=("$_mtime")
     done
   done
 }
@@ -947,11 +918,23 @@ install_or_update_plugin() {
 }
 
 print_claude_success() {
+  if [ "$USE_REMOTE_MCP" -eq 1 ]; then
+    cat <<EOF
+
+Claude Code: Kestral plugin is ready (connects to Kestral at ${REMOTE_MCP_URL}).
+  1. Fully quit and reopen Claude Code if it was running (required — running sessions won't reload plugin content).
+  2. Run: claude
+  3. In chat: /kestral:kestral-setup
+EOF
+    return 0
+  fi
+
   cat <<EOF
 
 Claude Code: Kestral plugin is ready.
-  1. Run: claude
-  2. In chat: /kestral:kestral-setup
+  1. Fully quit and reopen Claude Code if it was running (required — running sessions won't reload plugin content).
+  2. Run: claude
+  3. In chat: /kestral:kestral-setup
 EOF
 }
 
@@ -965,13 +948,11 @@ install_to_claude_code() {
     return 1
   fi
 
-  if [ "$USE_GO_MCP" -eq 1 ]; then
-    _restore_plugin_mcp_json_in_clone "$(_claude_marketplace_root 2>/dev/null || true)"
-  fi
+  _restore_plugin_mcp_json_in_clone "$(_claude_marketplace_root 2>/dev/null || true)"
   if ! ensure_marketplace; then
     return 1
   fi
-  if [ "$USE_GO_MCP" -eq 1 ]; then
+  if [ "$USE_REMOTE_MCP" -ne 1 ]; then
     local _marketplace_root=""
     _marketplace_root="$(_claude_marketplace_root 2>/dev/null || true)"
     ensure_go_mcp_binary_installed "$_marketplace_root"
@@ -979,9 +960,7 @@ install_to_claude_code() {
   if ! install_or_update_plugin; then
     return 1
   fi
-  if [ "$USE_GO_MCP" -eq 1 ]; then
-    _patch_installed_kestral_mcp_json
-  fi
+  _patch_all_installed_mcp_json
   print_claude_success
 }
 
@@ -1092,30 +1071,73 @@ select_desktop_root() {
   return 1
 }
 
+_reopen_claude_desktop() {
+  if [ ! -d "$CLAUDE_APP" ]; then
+    warn "Claude Desktop not found at $CLAUDE_APP — open it manually after install."
+    return 1
+  fi
+  log "Reopening Claude Desktop..."
+  if open "$CLAUDE_APP" >> "$LOGFILE" 2>&1; then
+    DESKTOP_REOPENED=1
+    ok "Claude Desktop reopened"
+    return 0
+  fi
+  warn "Couldn't reopen Claude Desktop automatically — open it manually."
+  return 1
+}
+
+_finish_desktop_restart() {
+  if [ "$DESKTOP_RESTART_PENDING" -eq 1 ] && [ "$DESKTOP_REOPENED" -eq 0 ]; then
+    _reopen_claude_desktop || true
+  fi
+}
+
+_reopen_codex() {
+  if [ ! -d "$CODEX_APP" ]; then
+    warn "Codex not found at $CODEX_APP — open it manually after install."
+    return 1
+  fi
+  log "Reopening Codex..."
+  if open "$CODEX_APP" >> "$LOGFILE" 2>&1; then
+    CODEX_REOPENED=1
+    ok "Codex reopened"
+    return 0
+  fi
+  warn "Couldn't reopen Codex automatically — open it manually."
+  return 1
+}
+
+_finish_codex_restart() {
+  if [ "$CODEX_RESTART_PENDING" -eq 1 ] && [ "$CODEX_REOPENED" -eq 0 ]; then
+    _reopen_codex || true
+  fi
+}
+
 warn_if_desktop_running() {
   if pgrep -x Claude >/dev/null 2>&1; then
     local _answer=""
-    if read_tty "  Claude Desktop is running. Quit it now? [Y/n] " _answer; then
+    if read_tty "  Claude Desktop is running. Restart now to load the Kestral plugin? [Y/n] " _answer; then
       case "$_answer" in
         [nN] | [nN][oO])
-          warn "Proceeding while Claude Desktop is running — you must fully quit and reopen after install."
+          warn "Proceeding while Claude Desktop is running — restart after install to load the Kestral plugin."
           return 0
           ;;
       esac
-      log "Quitting Claude Desktop..."
+      log "Restarting Claude Desktop..."
       osascript -e 'tell application "Claude" to quit' 2>/dev/null || true
       local _wait=0
       while pgrep -x Claude >/dev/null 2>&1; do
         sleep 1
         _wait=$((_wait + 1))
         if [ "$_wait" -ge 10 ]; then
-          warn "Claude Desktop didn't quit in time — proceeding anyway."
+          warn "Claude Desktop didn't stop in time — proceeding anyway."
           return 0
         fi
       done
-      ok "Claude Desktop quit"
+      DESKTOP_RESTART_PENDING=1
+      ok "Claude Desktop stopped — will reopen after install completes."
     else
-      warn "Claude Desktop is running — you'll need to quit and reopen it after install."
+      warn "Claude Desktop is running — restart after install to load the Kestral plugin."
     fi
   fi
 }
@@ -1160,6 +1182,7 @@ _desktop_install_failed() {
   warn "Desktop install failed — restoring previous state..."
   verbose "Restoring JSON backups (suffix: $DESKTOP_BACKUP_SUFFIX)"
   _restore_desktop_backups
+  _finish_desktop_restart
   printf '  → Logs: %s\n' "$LOGFILE" >&2
   _print_desktop_gui_fallback
   return 1
@@ -1200,7 +1223,9 @@ clone_or_update_marketplace() {
     ok "Kestral marketplace installed"
   fi
 
-  if [ "$USE_GO_MCP" -eq 1 ]; then
+  if [ "$USE_REMOTE_MCP" -eq 1 ]; then
+    _rewrite_plugin_mcp_json_remote "$(_desktop_marketplace_clone_dir)"
+  else
     ensure_go_mcp_binary_installed "$(_desktop_marketplace_clone_dir)"
     _rewrite_plugin_mcp_json "$(_desktop_marketplace_clone_dir)"
   fi
@@ -1216,32 +1241,7 @@ _register_marketplace() {
 
   _iso="$(date -u +"%Y-%m-%dT%H:%M:%S.000Z")"
 
-  if [ "$USE_GO_MCP" -eq 1 ]; then
-    _json_merge_known_marketplace "$_known" "$_clone_dir" "$_iso" || return 1
-    verbose "Registered marketplace in known_marketplaces.json"
-    return 0
-  fi
-
-  node -e "
-const fs = require('fs');
-const file = process.argv[1];
-const cloneDir = process.argv[2];
-const name = process.argv[3];
-const repo = process.argv[4];
-const iso = process.argv[5];
-let data = {};
-if (fs.existsSync(file)) {
-  data = JSON.parse(fs.readFileSync(file, 'utf8'));
-}
-data[name] = {
-  source: { source: 'github', repo },
-  installLocation: cloneDir,
-  lastUpdated: iso,
-};
-const tmp = file + '.tmp.' + process.pid;
-fs.writeFileSync(tmp, JSON.stringify(data, null, 2) + '\n');
-fs.renameSync(tmp, file);
-" "$_known" "$_clone_dir" "$MARKETPLACE_NAME" "$MARKETPLACE_REPO" "$_iso" || return 1
+  _json_merge_known_marketplace "$_known" "$_clone_dir" "$_iso" || return 1
   verbose "Registered marketplace in known_marketplaces.json"
 }
 
@@ -1257,65 +1257,7 @@ _write_installed_plugin() {
     return 1
   fi
 
-  if [ "$USE_GO_MCP" -eq 1 ]; then
-    _json_write_installed_plugin "$_installed" "$_clone_dir" "$_iso" "$_sha" || return 1
-    verbose "Wrote installed_plugins.json (schema v2)"
-    return 0
-  fi
-
-  node -e "
-const fs = require('fs');
-const path = require('path');
-const file = process.argv[1];
-const cloneDir = process.argv[2];
-const pluginId = process.argv[3];
-const iso = process.argv[4];
-const sha = process.argv[5];
-const manifestPath = path.join(cloneDir, '.claude-plugin', 'plugin.json');
-const version = JSON.parse(fs.readFileSync(manifestPath, 'utf8')).version;
-
-function convertV1ToV2(data) {
-  if (data.version === 2) return data;
-  const plugins = {};
-  for (const [id, entry] of Object.entries(data.plugins || {})) {
-    if (Array.isArray(entry)) {
-      plugins[id] = entry;
-    } else {
-      plugins[id] = [entry];
-    }
-  }
-  return { version: 2, plugins };
-}
-
-let data = { version: 2, plugins: {} };
-if (fs.existsSync(file)) {
-  data = convertV1ToV2(JSON.parse(fs.readFileSync(file, 'utf8')));
-}
-const entry = {
-  scope: 'user',
-  installPath: cloneDir,
-  version,
-  installedAt: iso,
-  lastUpdated: iso,
-  gitCommitSha: sha,
-  auto: false,
-};
-const existing = data.plugins[pluginId];
-if (existing && Array.isArray(existing)) {
-  const idx = existing.findIndex(e => e.scope === 'user');
-  if (idx >= 0) {
-    existing[idx] = { ...existing[idx], ...entry, installedAt: existing[idx].installedAt || iso };
-  } else {
-    existing.push(entry);
-  }
-  data.plugins[pluginId] = existing;
-} else {
-  data.plugins[pluginId] = [entry];
-}
-const tmp = file + '.tmp.' + process.pid;
-fs.writeFileSync(tmp, JSON.stringify(data, null, 2) + '\n');
-fs.renameSync(tmp, file);
-" "$_installed" "$_clone_dir" "$PLUGIN_ID" "$_iso" "$_sha" || return 1
+  _json_write_installed_plugin "$_installed" "$_clone_dir" "$_iso" "$_sha" || return 1
   verbose "Wrote installed_plugins.json (schema v2)"
 }
 
@@ -1325,67 +1267,37 @@ _enable_plugin() {
   _backup_json_if_exists "$_settings"
   _iso="$(date -u +"%Y-%m-%dT%H:%M:%S.000Z")"
 
-  if [ "$USE_GO_MCP" -eq 1 ]; then
-    _json_enable_cowork_plugin "$_settings" "$(_desktop_marketplace_clone_dir)" "$_iso" || return 1
-    verbose "Enabled plugin in cowork_settings.json"
-    return 0
-  fi
-
-  node -e "
-const fs = require('fs');
-const file = process.argv[1];
-const pluginId = process.argv[2];
-const marketplaceName = process.argv[3];
-const repo = process.argv[4];
-const cloneDir = process.argv[5];
-const iso = process.argv[6];
-let data = { enabledPlugins: {} };
-if (fs.existsSync(file)) {
-  data = JSON.parse(fs.readFileSync(file, 'utf8'));
-}
-if (!data.enabledPlugins) data.enabledPlugins = {};
-data.enabledPlugins[pluginId] = true;
-if (!data.extraKnownMarketplaces) data.extraKnownMarketplaces = {};
-if (!data.extraKnownMarketplaces[marketplaceName]) {
-  data.extraKnownMarketplaces[marketplaceName] = {
-    source: { source: 'github', repo, name: marketplaceName },
-    installLocation: cloneDir,
-    lastUpdated: iso,
-  };
-}
-const tmp = file + '.tmp.' + process.pid;
-fs.writeFileSync(tmp, JSON.stringify(data, null, 2) + '\n');
-fs.renameSync(tmp, file);
-" "$_settings" "$PLUGIN_ID" "$MARKETPLACE_NAME" "$MARKETPLACE_REPO" "$(_desktop_marketplace_clone_dir)" "$(date -u +"%Y-%m-%dT%H:%M:%S.000Z")" || return 1
+  _json_enable_cowork_plugin "$_settings" "$(_desktop_marketplace_clone_dir)" "$_iso" || return 1
   verbose "Enabled plugin in cowork_settings.json"
 }
 
 print_desktop_success() {
-  if [ "$USE_GO_MCP" -eq 1 ]; then
-    cat <<EOF
-
-Claude Desktop: Kestral plugin files are installed (Go MCP bridge at ${KESTRAL_MCP_BIN}).
-  1. Fully quit and reopen Claude Desktop (required — running sessions won't see disk edits).
-  2. Start a new task (+ New task — running tasks never reload plugin content).
-  3. In Cowork, run: /kestral:kestral-setup
-EOF
-    return 0
+  local _detail=""
+  if [ "$USE_REMOTE_MCP" -eq 1 ]; then
+    _detail=" (connects to Kestral at ${REMOTE_MCP_URL})"
+  else
+    _detail=" (helper at ${KESTRAL_MCP_BIN})"
   fi
 
-  cat <<EOF
-
-Claude Desktop: Kestral plugin files are installed.
-  1. Fully quit and reopen Claude Desktop (required — running sessions won't see disk edits).
-  2. Start a new task (+ New task — running tasks never reload plugin content).
-  3. In Cowork, run: /kestral:kestral-setup
-
-If Node was just installed, fully quit and reopen Claude Desktop (or restart your Mac) so Node is on the GUI login PATH.
-EOF
+  printf '\nClaude Desktop: Kestral plugin files are installed%s.\n' "$_detail"
+  local _step=1
+  if [ "$DESKTOP_REOPENED" -ne 1 ]; then
+    printf '  %d. Fully quit and reopen Claude Desktop (required — running sessions won'\''t see disk edits).\n' "$_step"
+    _step=$((_step + 1))
+  fi
+  printf '  %d. Start a new task (+ New task — running tasks never reload plugin content).\n' "$_step"
+  _step=$((_step + 1))
+  printf '  %d. In Cowork, run: /kestral:kestral-setup\n' "$_step"
 }
 
 install_to_claude_desktop() {
   if [ "$HAS_GIT" -eq 0 ]; then
     warn "Claude Desktop requires git. Install via: xcode-select --install or brew install git"
+    _print_desktop_gui_fallback
+    return 1
+  fi
+
+  if [ "$USE_REMOTE_MCP" -eq 1 ] && ! ensure_ruby; then
     _print_desktop_gui_fallback
     return 1
   fi
@@ -1396,6 +1308,7 @@ install_to_claude_desktop() {
   warn_if_desktop_running
 
   if ! clone_or_update_marketplace; then
+    _finish_desktop_restart
     return 1
   fi
 
@@ -1421,6 +1334,7 @@ install_to_claude_desktop() {
         "${_dir}/installed_plugins.json${DESKTOP_BACKUP_SUFFIX}" \
         "${_org_dir}/cowork_settings.json${DESKTOP_BACKUP_SUFFIX}" 2>/dev/null || true
 
+  _finish_desktop_restart
   print_desktop_success
 }
 
@@ -1459,34 +1373,36 @@ Codex manual install (GUI fallback):
   2. In the repository field, enter Kestral-Team/kestral-plugins.
   3. Click More again, then find Kestral Plugins.
   4. Click + in the Productivity section for the Kestral plugin.
-  5. Run $kestral-setup in Codex to connect your workspace.
+  5. Fully quit and reopen Codex (required — running sessions won't reload plugin content).
+  6. In a new thread, run $kestral-setup to connect your workspace.
 EOF
 }
 
 warn_if_codex_running() {
   if pgrep -x Codex >/dev/null 2>&1; then
     local _answer=""
-    if read_tty "  Codex is running. Quit it now? [Y/n] " _answer; then
+    if read_tty "  Codex is running. Restart now to load the Kestral plugin? [Y/n] " _answer; then
       case "$_answer" in
         [nN] | [nN][oO])
-          warn "Proceeding while Codex is running — you must fully quit and reopen after install."
+          warn "Proceeding while Codex is running — restart after install to load the Kestral plugin."
           return 0
           ;;
       esac
-      log "Quitting Codex..."
+      log "Restarting Codex..."
       osascript -e 'tell application "Codex" to quit' 2>/dev/null || true
       local _wait=0
       while pgrep -x Codex >/dev/null 2>&1; do
         sleep 1
         _wait=$((_wait + 1))
         if [ "$_wait" -ge 10 ]; then
-          warn "Codex didn't quit in time — proceeding anyway."
+          warn "Codex didn't stop in time — proceeding anyway."
           return 0
         fi
       done
-      ok "Codex quit"
+      CODEX_RESTART_PENDING=1
+      ok "Codex stopped — will reopen after install completes."
     else
-      warn "Codex is running — you'll need to quit and reopen it after install."
+      warn "Codex is running — restart after install to load the Kestral plugin."
     fi
   fi
 }
@@ -1595,47 +1511,55 @@ install_or_update_codex_plugin() {
 }
 
 print_codex_success() {
-  cat <<'EOF'
+  local _detail=""
+  if [ "$USE_REMOTE_MCP" -eq 1 ]; then
+    _detail=" (connects to Kestral at ${REMOTE_MCP_URL})"
+  fi
 
-Codex: Kestral plugin is ready.
-  1. Fully quit and reopen Codex (required — running sessions won't reload plugin content).
-  2. Start a new thread (+ New thread — running threads never reload plugin content).
-  3. Type: $kestral-setup
-EOF
+  printf '\nCodex: Kestral plugin is ready%s.\n' "$_detail"
+  local _step=1
+  if [ "$CODEX_REOPENED" -ne 1 ]; then
+    printf '  %d. Fully quit and reopen Codex (required — running sessions won'\''t reload plugin content).\n' "$_step"
+    _step=$((_step + 1))
+  fi
+  printf '  %d. Start a new thread (+ New thread — running threads never reload plugin content).\n' "$_step"
+  _step=$((_step + 1))
+  # shellcheck disable=SC2016
+  printf '  %d. Type: $kestral-setup\n' "$_step"
 }
 
 install_to_codex() {
   warn_if_codex_running
 
   if ! ensure_codex_cli; then
+    _finish_codex_restart
     return 1
   fi
 
-  if [ "$USE_GO_MCP" -eq 1 ]; then
-    _restore_plugin_mcp_json_in_clone "$(_codex_marketplace_root 2>/dev/null || true)"
-  fi
+  _restore_plugin_mcp_json_in_clone "$(_codex_marketplace_root 2>/dev/null || true)"
   if ! ensure_codex_marketplace; then
+    _finish_codex_restart
     _print_codex_gui_fallback
     return 1
   fi
 
   local _codex_marketplace_root=""
-  if [ "$USE_GO_MCP" -eq 1 ]; then
-    _codex_marketplace_root="$(_codex_marketplace_root 2>/dev/null || true)"
+  _codex_marketplace_root="$(_codex_marketplace_root 2>/dev/null || true)"
+  if [ "$USE_REMOTE_MCP" -ne 1 ]; then
     ensure_go_mcp_binary_installed "$_codex_marketplace_root"
   fi
 
   if install_or_update_codex_plugin; then
-    if [ "$USE_GO_MCP" -eq 1 ]; then
-      if [ -n "$_codex_marketplace_root" ]; then
-        _rewrite_plugin_mcp_json "$_codex_marketplace_root"
-      fi
-      _patch_installed_kestral_mcp_json
+    if [ -n "$_codex_marketplace_root" ]; then
+      "$(_mcp_rewrite_fn)" "$_codex_marketplace_root"
     fi
+    _patch_all_installed_mcp_json
+    _finish_codex_restart
     print_codex_success
     return 0
   fi
 
+  _finish_codex_restart
   _print_codex_gui_fallback
   return 1
 }
@@ -1712,14 +1636,13 @@ main() {
   parse_args "$@"
   require_macos
 
-  if [ "$USE_GO_MCP" -eq 1 ]; then
-    section "Checking prerequisites (git, jq)"
+  if [ "$USE_REMOTE_MCP" -eq 1 ]; then
+    section "Checking prerequisites (git)"
     ensure_git
-    ensure_jq
   else
-    section "Checking prerequisites (git, Node.js 20+)"
+    section "Checking prerequisites (git, Ruby)"
     ensure_git
-    ensure_node
+    ensure_ruby
   fi
 
   section "Detecting installed apps"

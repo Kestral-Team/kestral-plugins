@@ -31,7 +31,7 @@ Brain generation, and imports tasks.
 
 Work with Kestral tasks without leaving the chat: filtered lists, task details, status changes, comments, assignment.
 
-- **When to use:** "show my open tasks", "move KES-42 to in progress", "comment on the auth task".
+- **When to use:** "show my open tasks", "move AUTH-12 to in progress", "comment on the auth task".
 - **Example:** `/kestral:tasks show my open tasks in the auth project` → returns a filtered task list.
 
 ### `context` — pull workspace knowledge into the chat
@@ -58,6 +58,14 @@ for your fixed commitments instead.
 
 - **When to use:** starting the workday, prioritizing today, turning the morning brief into action.
 - **Example:** `/kestral:plan-day` → summarizes updates, asks constraints, drafts focus blocks.
+
+### `sync` — save chat context to a project
+
+Save notes, Slack summaries, or other pasted text from the conversation into the right place in Kestral — as a project
+document, file upload, or external link. Uses project documents, not the project description field.
+
+- **When to use:** "Add this Slack thread to the Atlas project", "Save these meeting notes to Kestral."
+- **Example:** `/kestral:sync add this summary to Project Atlas` → creates a document attached to that project.
 
 ### `end-day-review` — close out the day
 

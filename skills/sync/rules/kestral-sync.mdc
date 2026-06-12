@@ -1,0 +1,19 @@
+---
+description: Routing rules when saving chat context to a Kestral project via MCP
+globs:
+alwaysApply: false
+---
+
+# Kestral sync routing
+
+When saving **new content** to a project from chat:
+
+| Intent | MCP tool |
+| ------ | -------- |
+| Inline text (Slack paste, summary, notes) | `create_document` + `projectId` |
+| File on disk | `upload_document` |
+| External URL | `link_external_document` |
+| Task/project mutations | `project_management` — not for new doc bodies |
+| Short project summary only | `update_project` description (brief, not a dump) |
+
+Never use `project_management` or project description updates as a substitute for creating a document.

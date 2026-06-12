@@ -1,13 +1,13 @@
 ---
 name: kestral-scan-folder
-description: Scan local files as evidence for Kestral setup, returning selected documents, source counts, and candidate workstream hints. Use when the user or kestral-setup asks for local file inventory.
+description: Use when kestral-setup or the user asks to scan local folders or explicit file paths as evidence for Kestral project setup.
 ---
 
 # Scan Folder
 
 Walk a local folder or explicit file list and return local evidence that `kestral-setup/SKILL.md` can use to infer one
-or more candidate workstreams. This helper inventories documents, samples likely context files, and reports signals
-without deciding the final project taxonomy on its own.
+or more candidate workstreams. This helper inventories documents, images, media, and likely context files, samples
+representative content where practical, and reports signals without deciding the final project taxonomy on its own.
 
 Selection numbers in this skill are curated preview defaults for a first pass. They are not hard caps: if the user asks
 to import more or all matching local files, return enough metadata for `kestral-setup` to expand the approved import in
@@ -24,8 +24,10 @@ The caller provides either:
 
 ### 1. Discover files
 
-If a folder path was given, use `Glob` with pattern
-`**/*.{pdf,docx,txt,md,markdown,csv,jpg,jpeg,png,webp,heic,heif,mp3,m4a,mp4}` rooted at that folder.
+If a folder path was given, use `Glob` with common local context patterns such as
+`**/*.{pdf,docx,txt,md,markdown,csv,jpg,jpeg,png,webp,heic,heif,mp3,m4a,mp4}` rooted at that folder. These patterns are
+candidate discovery filters, not the source of truth for upload support; MCP/server behavior owns exact support and hard
+limits.
 
 If explicit files were given, validate each path exists and is readable.
 
@@ -47,7 +49,8 @@ For each retained eligible file, record `byteSize` (via `stat` in Bash or Glob m
 
 Read or extract lightweight content from the top ~5 text/document candidates (prefer `README*`, `docs/`, architecture,
 overview). For binary documents, images, audio, and video, use file path, name, size, and metadata as evidence unless a
-local extraction/transcription tool is already available. Do not load raw media bytes into model context.
+local extraction/transcription tool is already available. Do not load raw media bytes into model context. A file can be a
+valid upload candidate even when it cannot be inspected deeply.
 
 ### 5. Identify local signals
 
@@ -87,6 +90,9 @@ For each **selected** file only, record:
 
 ## Output
 
+This skill has no Kestral entities yet. Use filenames and relative paths as the readable handles; do not introduce
+Kestral IDs.
+
 Return a JSON object with this shape:
 
 ```json
@@ -118,6 +124,7 @@ Return a JSON object with this shape:
 - **This skill scans local files only.** Enumerating MCP document sources (Notion, Google Drive, Slack, Confluence) is
   the `kestral-setup` skill's job (see `kestral-setup/SKILL.md` step 3a) — it has visibility into the conversation's loaded MCP tools.
 - Local documents use provenance source label `local-folder` (stored server-side in metadata).
-- Uploadable extensions: `.pdf`, `.docx`, `.txt`, `.md`, `.markdown`, `.csv`, `.jpg`, `.jpeg`, `.png`, `.webp`, `.heic`,
-  `.heif`, `.mp3`, `.m4a`, `.mp4`.
-- `.doc` files are not uploadable through the local bridge; convert them to `.docx` before import.
+- Candidate local context categories include documents, images, audio/video, text, Markdown, and CSV files. Exact upload
+  support and hard limits are enforced by MCP/server behavior, not this skill.
+- If the MCP rejects a selected file or requires conversion, report that per file and let `kestral-setup` decide whether
+  to skip, ask for conversion, or retry.

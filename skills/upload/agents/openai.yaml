@@ -1,5 +1,7 @@
 interface:
   display_name: "Kestral Upload"
+  short_description: "Apply an approved Kestral import manifest"
+  default_prompt: "Use $kestral-upload to apply this approved setup manifest."
 
 policy:
   allow_implicit_invocation: false

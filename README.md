@@ -22,9 +22,9 @@ In Codex, type `@kestral` to target the plugin, or invoke a bundled skill direct
 
 ## Install
 
-> **Requires [Node.js](https://nodejs.org) 20+.** The plugin launches a small local bridge via `npx`
-> (`@kestral/kestral-mcp`) so folder onboarding and document upload can read files from your machine. The bridge signs
-> in to Kestral via OAuth (a browser opens on first use) and uploads file bytes directly to storage.
+The plugin installs a small local helper (`~/.kestral/bin/kestral-mcp`) so folder onboarding and document upload
+can read files from your machine. Prerequisites: **macOS**, **git**, and **Ruby** (included with macOS by default).
+No Node.js required.
 
 ### Quick install (macOS)
 
@@ -42,7 +42,7 @@ curl -fsSL https://raw.githubusercontent.com/Kestral-Team/kestral-plugins/main/s
 curl -fsSL https://raw.githubusercontent.com/Kestral-Team/kestral-plugins/main/setup.sh | bash -s -- --app codex
 ```
 
-**Note:** The script installs prerequisites (git, Node 20+), adds the Kestral marketplace via the
+**Note:** The script checks prerequisites, installs the Kestral helper, adds the Kestral marketplace via the
 `claude`/`codex` CLI, and for Claude Desktop writes directly to Cowork's plugin files under
 `~/Library/Application Support/Claude/`. [View the script source](https://github.com/Kestral-Team/kestral-plugins/blob/main/setup.sh)
 before running.
@@ -84,7 +84,7 @@ If the GUI cannot see or delete the entry, remove manually:
 
 ## Version
 
-Current release: **v0.4.18**
+Current release: **v0.4.19**
 
 ## Links
 

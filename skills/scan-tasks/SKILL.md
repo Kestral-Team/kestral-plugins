@@ -1,6 +1,6 @@
 ---
 name: kestral-scan-tasks
-description: Detect task MCPs, list tasks, and translate to Kestral schema. Use when the user or kestral-setup asks to scan importable tasks.
+description: Use when kestral-setup or the user asks to scan task systems such as Linear, Jira, GitHub Issues, Asana, ClickUp, or Shortcut for importable work.
 ---
 
 # Scan Tasks
@@ -63,6 +63,9 @@ matching task in batches using metadata and source IDs where possible. Fetch des
 imported. Do not impose a Kestral setup cap on import volume; only technical, API, or batch-size limits apply.
 
 ## Translation
+
+Return readable task import data. External task IDs from Linear, Jira, GitHub, or other sources are provenance/debug
+details only and should not appear in the setup manifest unless the user explicitly asks for source IDs.
 
 For each task from each source, translate to Kestral schema:
 

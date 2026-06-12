@@ -1,5 +1,7 @@
 interface:
   display_name: "Kestral Setup"
+  short_description: "Organize sources into Kestral projects"
+  default_prompt: "Use $kestral-setup to organize my work into Kestral projects."
 
 policy:
   allow_implicit_invocation: false

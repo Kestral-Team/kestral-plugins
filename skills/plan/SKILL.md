@@ -1,6 +1,6 @@
 ---
 name: kestral-plan
-description: Scaffold a new Kestral project with tasks from a goal or brief. Use only when the user explicitly asks to plan or scaffold a project.
+description: Use when the user explicitly asks to create or scaffold a Kestral project from a goal or brief, add seed tasks, or invokes /kestral:plan or $kestral-plan.
 ---
 
 # Plan
@@ -11,6 +11,19 @@ you review and edit it, then creates everything in Kestral with one approval.
 ## Prerequisites
 
 The `Kestral` MCP server must show as **connected** (`/mcp`). Auth is automatic via OAuth (browser opens on first use).
+
+## Human-readable references
+
+Keep Kestral IDs internal unless the user asks for them. In user-facing output:
+
+- Tasks: show `slug - title` when a slug is available, linked with `url` when the host can render links.
+- Projects, documents, feedback, customers, tags, statuses, and other Kestral entities: show the readable name/title/label
+  first, linked with `url` when the host can render links.
+- People and actors: show display names; if unresolved, write `Unknown member (id: <rawId>)`.
+- Unknown non-member entities: write `Unknown <entity type> (id: <rawId>)`.
+- Approval tables and write-back plans must put the human-readable label first. Raw URLs, machine IDs, source IDs, and
+  bare slugs belong only in secondary metadata when useful.
+- Use existing display fields first; do extra lookups only for entities that matter to the answer.
 
 ## Workflow
 
@@ -33,6 +46,9 @@ Accept free text. The brief can be a single sentence or multiple paragraphs.
 Call `query_entities({ type: "projects", query: "<inferred title from brief>" })`.
 
 If any results look like a match, show them:
+
+Show project names, lifecycle status, task counts, and URLs when available. Keep project IDs internal unless the user
+asks for them.
 
 ```
 I found existing projects that might overlap:
@@ -148,13 +164,16 @@ The `source` field is always `"plugin"` for tasks created by this skill.
 
 ### 7. Present results
 
-> Your project is ready: **\<url\>**
+If individual created tasks are listed, use task title before creation and `slug - title` after creation when the slug
+is available.
+
+> Your project is ready: [Auth OIDC Migration](\<url\>)
 >
 > Created 8 tasks. Tags applied: auth, migration.
 
 If task creation partially failed:
 
-> Your project is ready: **\<url\>**
+> Your project is ready: [Auth OIDC Migration](\<url\>)
 >
 > Created 6 of 8 tasks. 2 could not be created — you can add them manually in Kestral.
 
@@ -191,5 +210,5 @@ On cancel: "Cancelled. No changes were made in Kestral."
 | ------------------------ | ----------------------------------------------------------------------------------------- |
 | 401 / unauthorized       | "Authentication expired. Please reconnect the MCP server to re-authenticate."             |
 | Project creation failed  | "Could not create the project: `<error>`. Try again or check `/mcp`."                     |
-| Task creation all failed | "Project created at `<url>`, but task creation failed. Add tasks manually."               |
+| Task creation all failed | "Project created: [\<project title\>](\<url\>), but task creation failed. Add tasks manually." |
 | Tag assignment failed    | "Project and tasks created. Could not apply tag `<name>` — apply it manually in Kestral." |

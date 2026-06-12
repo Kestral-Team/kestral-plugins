@@ -1,6 +1,6 @@
 ---
 name: kestral-context
-description: Pull Kestral docs, projects, and tasks into the chat as context for the agent. Use only when the user explicitly asks for workspace context.
+description: Use when the user explicitly asks to search Kestral workspace context, pull Kestral documents, projects, or tasks into chat, or invokes /kestral:context or $kestral-context.
 ---
 
 # Context
@@ -12,6 +12,19 @@ auth migration?" without you having to paste anything.
 ## Prerequisites
 
 The `Kestral` MCP server must show as **connected** (`/mcp`). Auth is automatic via OAuth (browser opens on first use).
+
+## Human-readable references
+
+Keep Kestral IDs internal unless the user asks for them. In user-facing output:
+
+- Tasks: show `slug - title` when a slug is available, linked with `url` when the host can render links.
+- Projects, documents, feedback, customers, tags, statuses, and other Kestral entities: show the readable name/title/label
+  first, linked with `url` when the host can render links.
+- People and actors: show display names; if unresolved, write `Unknown member (id: <rawId>)`.
+- Unknown non-member entities: write `Unknown <entity type> (id: <rawId>)`.
+- Approval tables and write-back plans must put the human-readable label first. Raw URLs, machine IDs, source IDs, and
+  bare slugs belong only in secondary metadata when useful.
+- Use existing display fields first; do extra lookups only for entities that matter to the answer.
 
 ## Workflow
 
@@ -53,10 +66,10 @@ Found in Kestral for "auth migration":
     4. Auth Overhaul                           (active, 8 tasks)
 
   Tasks (4):
-    5. Migrate OAuth tokens to new format      (in_progress, high)
-    6. Update redirect handler                 (todo, medium)
-    7. Write migration rollback script         (todo, medium)
-    8. QA auth flow on staging                 (todo, low)
+    5. AUTH-12 - Migrate OAuth tokens to new format       (in_progress, high)
+    6. AUTH-13 - Update redirect handler                  (todo, medium)
+    7. AUTH-14 - Write migration rollback script          (todo, medium)
+    8. AUTH-15 - QA auth flow on staging                  (todo, low)
 
 Which items should I pull into context? (numbers, "all", "docs only", or "skip")
 ```
@@ -67,6 +80,8 @@ Which items should I pull into context? (numbers, "all", "docs only", or "skip")
 - Show document type and approximate size (from search result metadata) when available.
 - Show project lifecycle status and task count.
 - Show task status and priority.
+- For tasks, show `slug - title` when available; otherwise show the task title.
+- For projects and documents, show the readable name/title and URL when available; do not show raw Kestral IDs as handles.
 - If a category has zero results, omit it from the display.
 - If all three searches return zero results: "I didn't find anything in Kestral matching that topic.
   Try different keywords or check that the relevant project/docs exist."
@@ -144,5 +159,5 @@ messages.
 | Failure | Message |
 | --- | --- |
 | 401 / unauthorized | "Authentication expired. Please reconnect the MCP server to re-authenticate." |
-| Document not found | "Document `<id>` not found — it may have been deleted. Skipping." |
+| Document not found | "Selected document not found — it may have been deleted. Skipping." |
 | Search returned error | "Search failed: `<error>`. Try again or check that the MCP server is connected (`/mcp`)." |

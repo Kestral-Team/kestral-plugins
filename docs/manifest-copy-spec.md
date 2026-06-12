@@ -267,7 +267,7 @@ Use when Kestral MCP tools are absent in the session. Pick host-specific bullets
 > I can't see any Kestral MCP tools in this session yet, so I can't start setup.
 >
 > **All hosts:** Run `/mcp` (or your app's MCP settings) and confirm a **Kestral** / **kestral** server is connected
-> with tools like `upload_document` and `kestral_whoami`. The setup skill alone is not enough — the MCP bridge must be
+> with tools like `upload_document` and `whoami`. The setup skill alone is not enough — the MCP bridge must be
 > running in this thread.
 >
 > **Claude Cowork:**
@@ -278,8 +278,7 @@ Use when Kestral MCP tools are absent in the session. Pick host-specific bullets
 > **Codex:**
 > - Fully quit and restart Codex after installing the plugin.
 > - In **Settings → MCP Servers**, look for **Kestral** / **kestral** — **not** `node_repl` (that is Codex's JS sandbox).
-> - If only `node_repl` appears, add a manual Kestral entry in `~/.codex/config.toml` that runs
->   `npx -y @kestral/kestral-mcp`, restart, and open a new thread.
+> - If only `node_repl` appears, re-run the setup script (`bash setup.sh --app codex`), restart, and open a new thread.
 >
 > **Claude Code:**
 > - Run `/mcp` and reconnect the **kestral** server if it shows disconnected.

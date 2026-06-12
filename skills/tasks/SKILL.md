@@ -1,6 +1,6 @@
 ---
 name: kestral-tasks
-description: Search, view, and update Kestral tasks from the chat. Use only when the user explicitly asks to list, inspect, or update tasks.
+description: Use when the user explicitly asks to list, inspect, update, assign, or comment on Kestral tasks, or invokes /kestral:tasks or $kestral-tasks.
 ---
 
 # Tasks
@@ -10,6 +10,19 @@ Search, view, and update tasks in your Kestral workspace without leaving the cha
 ## Prerequisites
 
 The `Kestral` MCP server must show as **connected** (`/mcp`). Auth is automatic via OAuth (browser opens on first use).
+
+## Human-readable references
+
+Keep Kestral IDs internal unless the user asks for them. In user-facing output:
+
+- Tasks: show `slug - title` when a slug is available, linked with `url` when the host can render links.
+- Projects, documents, feedback, customers, tags, statuses, and other Kestral entities: show the readable name/title/label
+  first, linked with `url` when the host can render links.
+- People and actors: show display names; if unresolved, write `Unknown member (id: <rawId>)`.
+- Unknown non-member entities: write `Unknown <entity type> (id: <rawId>)`.
+- Approval tables and write-back plans must put the human-readable label first. Raw URLs, machine IDs, source IDs, and
+  bare slugs belong only in secondary metadata when useful.
+- Use existing display fields first; do extra lookups only for entities that matter to the answer.
 
 ## Workflow
 
@@ -24,8 +37,8 @@ The user's prompt determines which path to follow:
 | User says                                                                            | Intent         | Path   |
 | ------------------------------------------------------------------------------------ | -------------- | ------ |
 | "show my tasks", "list open tasks in auth project"                                   | **List**       | Step 3 |
-| "show task AbC123", "get details on AbC123"                                          | **Drill-down** | Step 4 |
-| "mark AbC123 done", "assign AbC123 to Sarah", "comment on AbC123: shipped in PR #42" | **Update**     | Step 5 |
+| "show task AUTH-12", "get details on AUTH-12"                                        | **Drill-down** | Step 4 |
+| "mark AUTH-12 done", "assign AUTH-12 to Sarah", "comment on AUTH-12: shipped in PR #42" | **Update**  | Step 5 |
 
 If the intent is ambiguous, ask one clarifying question.
 
@@ -53,51 +66,59 @@ status, priority, tag, date, and project filtering via semantic search and AI pa
 
 Call `query_entities` with `type: "tasks"` and the assembled query.
 
-#### 3c. Render results
+#### 3c. Resolve display values
 
-Show a compact table:
+Before rendering, prefer display fields already returned by the task search result: `slug`, `title`, `url`,
+`statusName`, `priorityLabel`, `projectName`, and any display-name fields.
 
-```
+If a rendered row has `assigneeId` or `createdById` but no readable name, call `list_members` once, build an ID-to-name
+map, and use it for all rows. If a member ID still cannot be resolved, render `Unknown member (id: <rawId>)`.
+
+#### 3d. Render results
+
+Show a compact table. Use task slug + title as the user-facing handle. Link the handle when `url` is available.
+
+```markdown
 Tasks (12 results):
 
-  ID       | Title                          | Status      | Priority | Assignee
-  ─────────┼────────────────────────────────┼─────────────┼──────────┼──────────
-  AbC123   | Fix auth redirect loop         | in_progress | high     | Sarah
-  XyZ789   | Add dark mode toggle           | todo        | medium   | —
-  …
+| Task | Status | Priority | Assignee |
+| --- | --- | --- | --- |
+| [AUTH-12 - Migrate OAuth tokens to new format](https://app.kestral.ai/workspace/abc/task/example1) | In Progress | High | Alice Chen |
+| AUTH-13 - Update redirect handler | To Do | Medium | Unassigned |
 
-Say a task ID to see details, or describe an update ("mark AbC123 done").
+Say a task slug or title to see details, or describe an update ("mark AUTH-12 done").
 ```
 
 If zero results: "No tasks matched those filters. Try broadening the search."
 
 ### 4. Drill-down
 
+If the user gives a slug or title from the displayed list, map it back to that row's task ID before lookup; if it is
+ambiguous or not in the list, search or ask one clarifying question.
+
 Call `entity_lookup({ id: taskId, type: "task" })`.
 
 Render:
 
-```
-Task AbC123: Fix auth redirect loop
+```markdown
+Task [AUTH-12 - Migrate OAuth tokens to new format](https://app.kestral.ai/workspace/abc/task/example1)
 
-  Status:      in_progress
-  Priority:    high
-  Assignee:    Sarah
+  Status:      In Progress
+  Priority:    High
+  Assignee:    Alice Chen
+  Created by:  Bob Park
   Project:     Auth Overhaul
-  Due:         2026-06-15
-  Tags:        bug, auth
+  Due:         2026-07-01
+  Tags:        auth, migration
 
   Description:
-    The OAuth redirect is looping when the session cookie…
+    Migrate existing OAuth 1.0 tokens to the new OIDC format...
 
-  Subtasks (2):
-    • AbC124  Investigate cookie SameSite flag    [done]
-    • AbC125  Update redirect handler             [todo]
+  Subtasks:
+    -
 
-  Recent comments (3):
-    Sarah (May 20): "Reproduced on Chrome 130…"
-    Dev (May 22): "SameSite=Lax fixes it locally."
-    Sarah (May 24): "Deploying fix in PR #312."
+  Recent comments:
+    Bob Park (2026-06-09): "Started token audit — 3 of 5 providers migrated."
 ```
 
 After rendering, prompt: "What would you like to do? (update status, comment, assign, go back to list)"
@@ -120,8 +141,8 @@ Before writing, resolve any human-readable references to IDs:
 Show exactly what will change:
 
 ```
-I'll update task AbC123:
-  • Status: in_progress → done
+I'll update AUTH-12 - Migrate OAuth tokens to new format:
+  • Status: In Progress → Done
   • Comment: "Shipped in PR #312"
 
 Confirm? (yes / no)
@@ -157,7 +178,7 @@ separate calls. Tag operations use the `project_management` agent.
 
 After each write, confirm what changed:
 
-> Updated task AbC123: status → done. Added comment: "Shipped in PR #312".
+> Updated AUTH-12 - Migrate OAuth tokens to new format: status → Done. Added comment: "Shipped in PR #312".
 
 If the write fails, show the error and suggest retrying or reconnecting the MCP server if it's an auth issue.
 
@@ -166,6 +187,6 @@ If the write fails, show the error and suggest retrying or reconnecting the MCP 
 | Failure                      | Message                                                                                   |
 | ---------------------------- | ----------------------------------------------------------------------------------------- |
 | 401 / unauthorized           | "Authentication expired. Please reconnect the MCP server to re-authenticate."             |
-| Task not found               | "Task `<id>` not found in your workspace. Double-check the ID."                           |
+| Task not found               | "Task `<reference>` not found in your workspace. Double-check the reference."              |
 | Project not found for filter | "I couldn't find a project matching `<query>`. Try a different name."                     |
 | Write failed                 | "Update failed: `<error>`. Try again, or reconnect the MCP server if it's an auth issue." |
