@@ -1,6 +1,6 @@
 {
   "name": "kestral",
-  "version": "0.4.19",
+  "version": "0.4.20",
   "description": "Onboard projects, search and update tasks, pull workspace context, and plan or review workdays — all from Codex CLI.",
   "skills": "./skills/",
   "mcpServers": "./.mcp.json",
