@@ -5,8 +5,8 @@ description: Use when the user explicitly asks to create or scaffold a Kestral p
 
 # Plan
 
-Create a new Kestral project with seed tasks from a goal, brief, or conversation. The skill drafts a project plan, lets
-you review and edit it, then creates everything in Kestral with one approval.
+Create a new Kestral project with seed tasks from a goal, brief, or conversation. The skill drafts a project plan, shows
+it for review, and creates everything in Kestral.
 
 ## Prerequisites
 
@@ -97,16 +97,15 @@ Tasks (8):
   8. [low]     QA full auth flow on staging
 
 Tags: auth, migration
-
-Approve, edit, or cancel?
 ```
 
 **Supported checkpoint commands:**
 
 | Command                                                   | Effect                                          |
 | --------------------------------------------------------- | ----------------------------------------------- |
-| **approve** / **yes** / **go**                            | Create the project and tasks in Kestral         |
-| **cancel** / **no**                                       | Exit — no Kestral API calls                     |
+| **ok** / **yes** / **go**                            | Create the project and tasks in Kestral         |
+| **revise**                                           | Edit the plan before proceeding                 |
+| **cancel** / **no**                                  | Exit — no Kestral API calls                     |
 | **add** `<task title>`                                    | Append a task (default priority: medium)        |
 | **add** `<task title>` `[high]`                           | Append a task with explicit priority            |
 | **remove** `<number>` or **remove** `<title>`             | Remove a task by number or title match          |
@@ -116,14 +115,18 @@ Approve, edit, or cancel?
 | **reprioritize** `<number>` `<priority>`                  | Change a task's priority                        |
 | **tag:** `<tag1>, <tag2>`                                 | Set tags to apply to the project after creation |
 
-Re-render the manifest after each edit. Loop until the user approves or cancels.
+After rendering, proceed to step 6 on permission-aware hosts (Claude Code, Claude Cowork, Cursor, Codex with tool
+permissions) — do not block waiting for a separate manifest approval. Re-render after edits; honor `cancel` before writes.
+
+On hosts **without** per-tool permission prompts, wait for explicit `ok` / `yes` / `go` before any write MCP call. Ask:
+"Okay to proceed? ok/revise/cancel"
 
 **Task count limit:** If the user `add`s beyond **15 tasks**, warn: "That's a lot of tasks for one project. Consider
-splitting into multiple projects, or approve and I'll create them all."
+splitting into multiple projects, or I'll create them all."
 
 ### 6. Create the project
 
-On approve:
+Proceed after the checkpoint (or on explicit ok for no-permission hosts):
 
 **6a. Create project.** Call `create_project`:
 
@@ -194,11 +197,9 @@ New tasks (5):
   1. [medium]  Write token migration script
   2. [medium]  Update login flow to use OIDC
   …
-
-Approve, edit, or cancel?
 ```
 
-- On approve, call `create_tasks` with the existing project ID.
+- Proceed to `create_tasks` with the existing project ID (or wait for explicit ok on no-permission hosts).
 
 ## Cancel behavior
 

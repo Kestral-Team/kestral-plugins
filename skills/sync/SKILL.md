@@ -1,51 +1,259 @@
 ---
 name: kestral-sync
-description: Use when the user asks to save notes, summaries, or Slack context to a Kestral project, keep project context up to date from chat, or invokes /kestral:sync or $kestral-sync.
+description: >-
+  Keep Kestral in sync with your coding session: task lookup, conflict detection, progress comments,
+  status updates, PR linking, and task creation — all via the Kestral MCP. Install the companion
+  rule/snippet for ambient sync (auto-triggers on push, PR, phase completion); invoke manually as
+  the "sync now" escape hatch.
 ---
 
-# Sync context to Kestral
+# Kestral Sync
 
-Save new information from the conversation into the right place in Kestral — as a project document, file upload, or
-external link — without stuffing long text into a project description.
+## When to Sync
 
-## Prerequisites
+Update the Kestral task when:
 
-The **Kestral** MCP server must show as **connected** (`/mcp`). Auth is automatic via OAuth (browser opens on first use).
+- **Implementation:** phase/feature complete, first branch push, PR created, blocker worth documenting
+- **Retroactive:** bug investigated and fixed, unlinked branch pushed (prompt to create task)
+- **Review:** code review complete (post Review Summary — even when clean)
+- **Decision:** spike or prototype concluded (capture the proceed/pivot/kill verdict)
+- **General:** user asks to sync, user asks to create a task for the branch
 
-## Which tool to use
+Do NOT update on every commit or minor edit.
 
-| What the user wants to store | Tool | Notes |
-| ---------------------------- | ---- | ----- |
-| New text from chat (Slack thread, summary, notes, specs) | `create_document` with `projectId` | **Preferred** — creates and attaches in one step |
-| A file on their computer | `upload_document` | Local Kestral bridge only; streams from disk |
-| A link in Notion, Drive, Slack, Confluence | `link_external_document` | Keeps live sync with the source |
-| Change tasks, tags, status, or project title | `project_management`, `update_task`, or `update_project` | **Not** for uploading new document body text |
-| Short project blurb only | `update_project` description | One or two sentences — not a full context dump |
+**Dedup:** Before posting, call `entity_lookup` to read existing comments. If the most recent comment covers the same
+work with no new progress, skip.
 
-## Workflow
+---
 
-### 1. Resolve the project
+## Core Infrastructure
 
-If the user names a project, use `entity_lookup` or `query_entities` to find its ID. Keep IDs internal unless the user
-asks for them.
+### Auth Check
 
-### 2. Store the content
+Before any Kestral MCP write:
 
-- **Inline text:** Call `create_document` with a clear `title`, the full `content`, and `projectId`. Confirm the
-  response shows the document is linked to the project.
-- **Local file:** Call `upload_document` with `filePaths` and `projectId`.
-- **External link:** Call `link_external_document` with `url`, `title`, and `projectId`.
+1. Call `whoami`
+2. If it fails → inform user, **stop** — do not attempt further calls
 
-Do **not** call `project_management` to upload pasted content. Do **not** append long text to `update_project`
-description.
+All MCP calls require an `explanation` field — use a clear description of the operation.
 
-### 3. Confirm for the user
+### Task Lookup — Fast Lookup Chain
 
-Present the document title linked with `url` from the tool response. Say clearly when the document was attached to the
-named project.
+Find the Kestral task for the current work. Each step is 1–3 seconds except the last; stop as soon as you have a match:
 
-## Error handling
+1. **Slug in branch name:** if the branch contains a slug (e.g. `kes-42-fix-auth`), call `entity_lookup` with the slug
+   directly — instant.
+2. **Branch→task exact match:** `query_entities({ type: "tasks", branchName: "<current-branch>" })`. Returns the task
+   linked to this branch via `update_task({ branchName })`, if any (0 or 1 result).
+3. **My active tasks:**
+   `query_entities({ type: "tasks", assigneeFilter: "me", statusFilter: ["in_progress"],
+   skipTagResolution: true })`.
+   Exactly one match → use it. Multiple → pick the one whose title best matches the branch name.
+4. **Keyword search:** `query_entities({ type: "tasks", assigneeFilter: "me", keyword: "<branch-slug-as-words>" })`.
+   Convert the branch slug to words (e.g. `feat/improve-auth-flow` → `"improve auth flow"`). Trigram fuzzy,
+   deterministic.
+5. **`research`** — **last resort only** (10–30 seconds). Frame as the user-facing problem, include branch name.
 
-- On 401, ask the user to reconnect Kestral in their MCP settings, then retry.
-- If attachment looks wrong after `create_document`, look up the document again and check which projects it belongs to
-  before trying to attach it separately.
+After resolution:
+
+- One clear match → use it
+- Multiple matches → ask the user to pick
+- No matches → ask the user; offer to create a task (see Task Creation)
+- Hold the task ID in session context for subsequent updates
+
+If the user provided a task URL, slug, or ID directly, skip the chain and call `entity_lookup` immediately.
+
+#### Status Discovery
+
+Workspaces have custom statuses. Call `list_statuses` to discover valid `statusKey` values before any status update.
+Examples in this skill use common defaults like `in_progress` and `awaiting_review` — always confirm they exist in the
+workspace first.
+
+#### Archived Project Guard
+
+Skip archived projects (`archivedAt` non-null) when choosing a target — the server rejects writes to them.
+
+### Conflict Check
+
+Before starting implementation or claiming a task:
+
+1. Get `memberId` from `whoami`
+2. Compare `entity.assigneeId` against `memberId`
+3. **Already done:** status is Done → verify against the codebase before redoing
+4. **No conflict:** `assigneeId` is null (and status Todo/Backlog) or matches current user
+5. **Conflict:** `assigneeId` differs AND status is active (In Progress, Awaiting Review, etc.)
+6. **On conflict or done:** warn user with `assigneeName`, `statusName`, and any open PRs from `prLinks`
+7. Ask: **proceed** / **coordinate** / **pick a different task**
+
+**Adjacent-work:** if lookup returns near-matches that overlap the planned scope and are active or Done, surface what's
+already been done and propose a scope adjustment.
+
+### Context Pull
+
+Before building, pull project context so the agent knows *why* the task exists:
+
+1. **Identify project:** task → `entity_lookup` → `projectId`. Or `query_entities` (type: "projects"); ask if ambiguous.
+2. **Pull project brain:** `entity_lookup({ id: "<projectId>", type: "project_brain" })`.
+   - Check `brainGenerationStatus` in the response: if `queued` or `running`, tell the user "Brain is building (~30s)"
+     instead of "no brain found."
+   - If no brain exists, mention `trigger_brain_build` as an option.
+3. **Pull related tasks:** `query_entities` (type: "tasks") scoped to the project.
+4. **Pull customer feedback:** `query_entities` (type: "feedback") or `search_content` scoped to the project — surfaces
+   the user-facing *why*.
+5. **Summarize** — present a brief digest; do not dump the full brain output.
+
+**Session start option:** `get_daily_brief` returns a personal summary of what changed across all your projects — useful
+at the start of a session.
+
+---
+
+## Task Creation
+
+### From Branch
+
+When the user wants a task for the current branch (no existing task found):
+
+1. **Gather context:** `git branch --show-current`, `git log --oneline -20`, `git diff --stat main...HEAD`
+2. **Find project:** `query_entities` (type: "projects") with branch/commit keywords; ask if ambiguous.
+3. **Create:** `create_tasks` — title from branch + commits, description as plain-language markdown (Summary, What was
+   built, Why it matters), `source: "mcp"`.
+4. **Register branch:** `update_task({ branchName: "<branch>" })` — enables step 2 of the lookup chain for all future
+   lookups.
+5. **Link PR** (if one exists): `link_pr_to_task`.
+6. **Confirm:** present the task URL.
+
+### From Bugfix
+
+Title: `Fix: [what was broken, user-facing]`
+
+Description:
+
+- **What broke:** [user-visible symptom]
+- **Root cause:** [1-sentence technical cause, plain language]
+- **Fix:** [what was changed and why]
+- **Impact:** [who was affected, severity, duration if known]
+- **Related:** [link to support ticket, alert, or Slack thread if applicable]
+
+If the PR is already merged: create with status `done`, link PR, skip progress comments — the task is a historical
+record.
+
+---
+
+## Task Updates
+
+### Task Pickup
+
+When the user picks up a task:
+
+1. Task Lookup (fast chain above)
+2. Conflict Check
+3. **Claim:** `update_task({ assigneeId: <memberId>, statusKey: "in_progress", branchName: "<branch>" })` — registers
+   the branch for deterministic lookup. Returns 409 if the branch is already linked to another task (conflict signal).
+4. **Confirm:** "Claimed KES-42, set to In Progress."
+
+### Status Update
+
+Call `list_statuses` first, then `update_task` with the appropriate `statusKey`. Only update at meaningful transitions.
+Run the Acceptance Check before setting a task to `done`.
+
+### Acceptance Check
+
+Before marking done:
+
+1. `entity_lookup` — get acceptance criteria from the task description
+2. `git diff --stat main...HEAD` — see what changed
+3. For each criterion: satisfied? (Yes / No / Partial)
+4. All satisfied → proceed. Gaps → report, ask user.
+
+---
+
+## Comments
+
+All comments are posted via `comment_task`. Follow the writing style rule: **conversational outcomes** ("Users can now
+filter by date range"), not implementation jargon ("Added filterByDateRange param"). No file paths or function names.
+2–4 lines max.
+
+### Progress Comment
+
+```markdown
+**Progress Update**
+
+[1–2 sentence plain-language summary of outcomes]
+
+**Up next:** [what remains, or "Done!" if complete]
+```
+
+Add `**Blocked on:** [description]` if applicable.
+
+### Bugfix Comment
+
+For fixes on an **existing** task (technical content is appropriate here — exception to the style rule):
+
+```markdown
+**Bugfix**
+
+**What broke:** [user-visible symptom] **Root cause:** [1-sentence technical cause] **Fix:** [what was changed and why]
+**Evidence:** [logs, stack trace, or PR link]
+```
+
+### Decision Comment
+
+When a spike or prototype concludes:
+
+```markdown
+**Decision: [proceed / pivot / kill]**
+
+[1–2 sentence rationale]
+
+**Evidence:** [link to prototype/benchmark/branch] **Next:** [follow-up task title, or "No further action"]
+```
+
+### Review Summary
+
+Post after completing a code review — **whether findings are clean or not**:
+
+```markdown
+**Review Summary**
+
+[What the change does for users + review verdict]
+
+**Scope:** [files/areas reviewed, PR link] **Findings:** [N critical / N medium / N low — or "Clean — no issues found"]
+**Up next:** [fixes needed, or "Ready for merge"]
+```
+
+---
+
+## Linking
+
+### Branch/PR Linking
+
+**Atomic PR linking (preferred):**
+`link_pr_to_task({ taskId, prUrl, statusKey: "awaiting_review",
+comment: "PR opened: <title>" })` — links the PR,
+transitions status, and posts a comment in one call instead of three.
+
+- PR exists → `link_pr_to_task` (auto-assigns if unassigned, posts GitHub PR comment)
+- Branch only (no PR yet) → `comment_task`: `Started work on branch \`branch-name\``
+- Post each link **once per session**
+
+### Full Sync
+
+Complete sync workflow (user asks to sync, or auto-trigger fires):
+
+1. Auth check
+2. Diff context: `git log --oneline -10`, `git diff --stat main...HEAD`
+3. Task lookup (fast chain) — `entity_lookup` also returns existing comments
+4. **Dedup:** if the most recent comment covers the same branch/scope with no new progress → skip, confirm "no updates"
+5. Status update (skip if already correct; Acceptance Check before `done`)
+6. Comment — pick the format: Review Summary after a review, Decision Comment after a spike, Bugfix Comment for a fix,
+   otherwise Progress Comment
+7. Branch/PR linking if applicable
+8. Confirm what was synced (include task URL)
+
+---
+
+## Complex Operations
+
+For multi-step or multi-entity operations (bulk updates, project archiving, subtask hierarchy, tag management, task
+prioritization), use the `project_management` tool with a natural-language request. It routes to an AI agent that
+handles the right sequence of actions (10–30 seconds).

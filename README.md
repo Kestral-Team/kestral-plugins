@@ -22,13 +22,9 @@ In Codex, type `@kestral` to target the plugin, or invoke a bundled skill direct
 
 ## Install
 
-The plugin installs a small local helper (`~/.kestral/bin/kestral-mcp`) so folder onboarding and document upload
-can read files from your machine. Prerequisites: **macOS**, **git**, and **Ruby** (included with macOS by default).
-No Node.js required.
-
-### Quick install (macOS)
-
-One command installs Kestral to **Claude Code, Claude Desktop, and Codex** (all detected apps):
+**Quick install (macOS):** one command connects to Kestral at `https://app.kestral.ai/mcp` and installs to **Claude Code,
+Claude Desktop, and Codex** (all detected apps). Prerequisites: **git** (and **Ruby** for Claude Desktop — included with
+macOS).
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/Kestral-Team/kestral-plugins/main/setup.sh | bash
@@ -42,10 +38,18 @@ curl -fsSL https://raw.githubusercontent.com/Kestral-Team/kestral-plugins/main/s
 curl -fsSL https://raw.githubusercontent.com/Kestral-Team/kestral-plugins/main/setup.sh | bash -s -- --app codex
 ```
 
-**Note:** The script checks prerequisites, installs the Kestral helper, adds the Kestral marketplace via the
-`claude`/`codex` CLI, and for Claude Desktop writes directly to Cowork's plugin files under
-`~/Library/Application Support/Claude/`. [View the script source](https://github.com/Kestral-Team/kestral-plugins/blob/main/setup.sh)
-before running.
+**Note:** The script registers the Kestral marketplace via the `claude`/`codex` CLI, and for Claude Desktop writes
+directly to Cowork's plugin files under `~/Library/Application Support/Claude/`.
+[View the script source](https://github.com/Kestral-Team/kestral-plugins/blob/main/setup.sh) before running.
+
+### Advanced: local file upload (macOS only)
+
+If you need to upload many files from your computer, pass `--go-mcp` to install a small local helper at
+`~/.kestral/bin/kestral-mcp`:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/Kestral-Team/kestral-plugins/main/setup.sh | bash -s -- --go-mcp
+```
 
 ### Claude Code (manual)
 
@@ -84,7 +88,7 @@ If the GUI cannot see or delete the entry, remove manually:
 
 ## Version
 
-Current release: **v0.4.20**
+Current release: **v0.4.21**
 
 ## Links
 

@@ -93,8 +93,6 @@ Extra candidates to revisit later
 - Legacy billing cleanup: stale tasks and low recent activity.
 
 This is a curated first pass. I'll import the most relevant context now and leave the rest available to add later.
-
-Approve, edit, or cancel?
 ```
 
 ### Rules
@@ -130,18 +128,21 @@ Phrases the `kestral-setup` skill must recognize at the manifest checkpoint:
 | `import more <source> into <project>`                 | Expand import scope for that project/source                                        |
 | `import all matching <tasks/documents>`              | Switch that project/source to bulk import mode                                     |
 | `look at <folder> instead` or `change folder <path>` | Re-scan a new folder and remap the proposed taxonomy                               |
-| `approve` / `yes` / `go`                             | Proceed to upload                                                                  |
-| `cancel` / `no`                                      | Exit cleanly — no Kestral API calls                                                |
+| `ok` / `yes` / `go` / `create these`                   | Proceed to upload                                                                  |
+| `revise`                                               | Edit the manifest before proceeding (same as edit commands below)                  |
+| `cancel` / `no`                                        | Exit cleanly — no Kestral API calls                                                |
 
 **Precedence:** user-provided buckets and explicit rename/split/merge commands override inferred taxonomy. `change
 folder` / `look at <folder> instead` refreshes local-file evidence and remaps the proposed projects. Other edits stack
 on the latest manifest.
 
 **Bulk import confirmation:** Ask for explicit confirmation when the user requests a large bulk import or more than 5
-projects, using one concise scope summary such as: "This will import 437 tasks and 82 documents into 3 projects.
-Proceed?"
+projects. Summarize scope, then ask: "Okay to proceed? ok/revise/cancel" — for example: "This will import 437 tasks and
+82 documents into 3 projects. Okay to proceed? ok/revise/cancel"
 
-Re-render the manifest after each edit. Loop until the user approves or cancels.
+Re-render the manifest after each edit. On permission-aware hosts, proceed to writes after rendering unless the user
+edits or cancels — do not loop waiting for explicit manifest approval. On hosts without per-tool permission prompts,
+loop until the user replies ok or cancel.
 
 ## Plan manifest format
 
@@ -165,8 +166,6 @@ Tasks (8):
   8. [low]     QA full auth flow on staging
 
 Tags: auth, migration
-
-Approve, edit, or cancel?
 ```
 
 ### Adding tasks to an existing project
@@ -180,13 +179,11 @@ New tasks (5):
   3. [medium]  Update API auth middleware
   4. [low]     Update developer documentation
   5. [low]     QA full auth flow on staging
-
-Approve, edit, or cancel?
 ```
 
 ### Plan edit grammar
 
-Extends the shared grammar from the **Edit grammar** section above — `approve` and `cancel` work in all plan manifests.
+Extends the shared grammar from the **Edit grammar** section above — `ok` and `cancel` work in all plan manifests.
 `title:` and `description:` are only available in the **new-project** flow; the existing-project checkpoint is
 tasks-only so title/description edits are disabled. Additional plan-specific phrases:
 
@@ -199,10 +196,12 @@ tasks-only so title/description edits are disabled. Additional plan-specific phr
 | `reprioritize <number> <priority>`    | Change a task's priority                        |
 | `tag: <tag1>, <tag2>`                 | Set tags to apply to the project after creation |
 
-Re-render the manifest after each edit. Loop until the user approves or cancels.
+Re-render the manifest after each edit. On permission-aware hosts, proceed to writes after rendering unless the user
+edits or cancels — do not loop waiting for explicit manifest approval. On hosts without per-tool permission prompts,
+loop until the user replies ok or cancel.
 
 **Task count limit:** If the user `add`s beyond 15 tasks, warn: "That's a lot of tasks for one project. Consider
-splitting into multiple projects, or approve and I'll create them all."
+splitting into multiple projects, or I'll create them all."
 
 ## Error message conventions
 

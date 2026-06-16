@@ -1,19 +1,76 @@
 ---
-description: Routing rules when saving chat context to a Kestral project via MCP
-globs:
-alwaysApply: false
+alwaysApply: true
 ---
 
-# Kestral sync routing
+# Kestral Sync
 
-When saving **new content** to a project from chat:
+Keep Kestral in sync with your coding work via the Kestral MCP tools. Use judgment — skip for trivial one-off fixes,
+debugging notes, or exploratory sketches.
 
-| Intent | MCP tool |
-| ------ | -------- |
-| Inline text (Slack paste, summary, notes) | `create_document` + `projectId` |
-| File on disk | `upload_document` |
-| External URL | `link_external_document` |
-| Task/project mutations | `project_management` — not for new doc bodies |
-| Short project summary only | `update_project` description (brief, not a dump) |
+For full procedures (comment formats, task creation, acceptance check): read `.cursor/skills/kestral-sync/SKILL.md` if
+installed locally, or the `sync/SKILL.md` from the Kestral plugin.
 
-Never use `project_management` or project description updates as a substitute for creating a document.
+## Workflow
+
+### Starting new work
+
+1. **Fast lookup:** extract slug from branch name → `entity_lookup`; or `query_entities({ branchName })` for exact
+   branch→task match; or `query_entities({ assigneeFilter: "me", statusFilter: ["in_progress"] })` for active tasks. Use
+   `research` only as a last resort (10–30s).
+2. If a task is found:
+   - **Assigned to someone else + active status** → warn the user (conflict)
+   - **Unassigned or backlog** → link to it rather than creating a duplicate
+3. If no match, proceed — offer to create a task after the work takes shape
+
+### During implementation
+
+- After each meaningful phase: post a progress comment via `comment_task`
+- Do NOT update on every commit or minor edit
+
+### After completing work
+
+- Update task status (use `list_statuses` to discover valid keys — never hardcode)
+- Before setting done: run the **Acceptance Check** from the skill (compare diff against task acceptance criteria)
+- Post a final progress comment
+- Prefer `link_pr_to_task({ statusKey, comment })` for atomic PR link + status + comment in one call
+
+### On branch push
+
+After every `git push` where a Kestral task is linked:
+
+1. **First push:** `update_task` (status if still todo, plus `branchName` for deterministic future lookup) +
+   `comment_task` (Progress Comment with branch name and what was implemented) + `link_pr_to_task` if a PR exists
+2. **Subsequent pushes:** `comment_task` only if meaningful new progress since the last comment
+3. If no PR exists yet, post a branch comment: `Started work on branch \`branch-name\``
+
+### Other processes (review, bugfix, spike)
+
+These have their own comment formats (Review Summary, Decision Comment, Bugfix Comment, retroactive task creation) — see
+the kestral-sync skill rather than improvising.
+
+## Conflict Check (inline — no skill read needed)
+
+After resolving a task via `entity_lookup`:
+
+1. Compare `entity.assigneeId` against `whoami().memberId`
+2. If status is Done (any assignee) → work may already be complete; verify against the codebase before redoing
+3. If assigneeId is null (and status Todo/Backlog) or matches current user → no conflict
+4. If assigneeId differs AND status is active → **conflict**
+5. On conflict or already done: warn user with `assigneeName`, `statusName`, and any open PRs from `prLinks`
+6. Ask: proceed / coordinate / pick a different task
+
+## MCP Tools Quick Reference
+
+| Action                                 | Tool                                           |
+| -------------------------------------- | ---------------------------------------------- |
+| Find task by slug or ID                | `entity_lookup`                                |
+| Find task by branch                    | `query_entities({ branchName })`               |
+| Filter tasks by status/keyword         | `query_entities` (much faster than `research`) |
+| Deep concept search                    | `research` (last resort, 10–30s)               |
+| Discover status keys                   | `list_statuses`                                |
+| Update status / register branch        | `update_task`                                  |
+| Post comment                           | `comment_task`                                 |
+| Link PR (atomic with status + comment) | `link_pr_to_task`                              |
+| Create task                            | `create_tasks`                                 |
+| Check auth                             | `whoami`                                       |
+| Complex multi-step operations          | `project_management`                           |

@@ -19,25 +19,24 @@ tasks, pull workspace knowledge into a conversation, or scaffold a new project w
   command line.
 - **Give the agent your workspace context.** Search Kestral for docs, projects, and tasks, then pull them into the
   conversation so the agent can answer questions with real data.
+- **Keep tasks in sync while you code.** Your agent reads Kestral before building (no duplicate work), writes
+  plain-language progress as you go, and links PRs to tasks automatically. Install the companion rule or snippet for
+  ambient sync — no manual invocation needed.
 - **Plan and review workdays quickly.** Describe a goal to create a project, turn your Kestral daily brief and calendar
   into a realistic plan for today, or close out the day with an evidence-backed review and tomorrow priorities.
 
 ## Requirements
 
-The setup script installs a small local helper that lets the plugin read files from your machine and upload them to
-Kestral. Prerequisites: **macOS**, **git**, and **Ruby** (included with macOS by default).
+**macOS quick install:** **git** only for Claude Code and Codex. Claude Desktop also needs **Ruby** (included with macOS).
 
-> **Alternatives:**
->
-> - **Cowork connector only** — zero dependencies. Open **Customize → Connectors → Add custom connector**, enter
->   `https://app.kestral.ai/mcp`, and you're done. This gives Cowork the Kestral tools, but not plugin slash commands —
->   see [Cowork connector only](#claude-cowork) below.
-> - `--remote-mcp` — only **git** required (no local helper, no Ruby). Connects directly to Kestral's hosted endpoint
->   instead of running a process on your Mac. Desktop install still needs Ruby for plugin file setup.
+> **Cowork connector only** — zero dependencies. Open **Customize → Connectors → Add custom connector**, enter
+> `https://app.kestral.ai/mcp`, and you're done. This gives Cowork the Kestral tools, but not plugin slash commands —
+> see [Cowork connector only](#claude-cowork) below.
 
 ## Install
 
-**Recommended (macOS):** one command installs to Claude Code, Claude Desktop, and Codex (all detected apps):
+**Recommended (macOS):** one command connects to Kestral at `https://app.kestral.ai/mcp` and installs to Claude Code,
+Claude Cowork, and Codex (all detected apps):
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/Kestral-Team/kestral-plugins/main/setup.sh | bash
@@ -49,17 +48,21 @@ Pick targets non-interactively (e.g. Codex only):
 curl -fsSL https://raw.githubusercontent.com/Kestral-Team/kestral-plugins/main/setup.sh | bash -s -- --app codex
 ```
 
-**No local helper (`--remote-mcp`):** pass `--remote-mcp`. Only git is required for Claude Code and Codex.
-Claude Desktop also needs Ruby (included with macOS):
-
-```bash
-curl -fsSL https://raw.githubusercontent.com/Kestral-Team/kestral-plugins/main/setup.sh | bash -s -- --remote-mcp
-```
-
-The script checks prerequisites, installs the Kestral helper, registers the marketplace, and — for Claude Desktop —
-writes plugin files under `~/Library/Application Support/Claude/`.
+The script checks prerequisites, registers the marketplace, and — for Claude Cowork — writes plugin files under
+`~/Library/Application Support/Claude/`.
 [View source](https://github.com/Kestral-Team/kestral-plugins/blob/main/setup.sh) or download first:
 `curl -fsSL https://raw.githubusercontent.com/Kestral-Team/kestral-plugins/main/setup.sh -o kestral-setup.sh && less kestral-setup.sh` then `bash kestral-setup.sh`.
+
+### Advanced: local file upload (macOS only)
+
+Use this if you need to upload many files from your computer. Installs a small local helper at
+`~/.kestral/bin/kestral-mcp`:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/Kestral-Team/kestral-plugins/main/setup.sh | bash -s -- --go-mcp
+```
+
+Requires **git** and **Ruby** (included with macOS).
 
 Pick your app below for manual steps (the same steps the script automates).
 
@@ -128,12 +131,12 @@ Setup and `upload_document` (local file uploads from disk) work the same as in C
 6. Run `/kestral-setup` in Codex to connect your workspace.
 
    Codex does **not** use Claude-style `/kestral:…` slash commands for other skills — use `$kestral-setup`,
-   `$kestral-tasks`, `$kestral-context`, `$kestral-plan`, `$kestral-plan-day`, or `$kestral-end-day-review`, or type
-   `@kestral` to target the plugin.
+   `$kestral-tasks`, `$kestral-context`, `$kestral-plan`, `$kestral-plan-day`, `$kestral-end-day-review`, or
+   `$kestral-sync`, or type `@kestral` to target the plugin.
 
 After installing in Codex, fully quit and restart the app so it reloads the plugin cache. In a new thread, type `$` and
-look for `kestral-setup`, `kestral-tasks`, `kestral-context`, `kestral-plan`, `kestral-plan-day`, or
-`kestral-end-day-review`.
+look for `kestral-setup`, `kestral-tasks`, `kestral-context`, `kestral-plan`, `kestral-plan-day`,
+`kestral-end-day-review`, or `kestral-sync`.
 
 ## What you can do
 
@@ -142,10 +145,11 @@ look for `kestral-setup`, `kestral-tasks`, `kestral-context`, `kestral-plan`, `k
 | `/kestral:kestral-setup`    | Organize local files and connected-tool context into one or more Kestral projects. | `/kestral:kestral-setup` → scans files and connected tools, proposes 1-3 projects, imports selected context, and starts Project Brain. |
 | `/kestral:tasks`   | Search, view, and update tasks in your workspace.                         | `/kestral:tasks show my open tasks in the auth project` → returns a filtered task list.    |
 | `/kestral:context` | Pull docs, projects, and tasks into the chat as context.                  | `/kestral:context auth migration` → finds matching docs and tasks, asks which to load.     |
-| `/kestral:plan`    | Scaffold a new project with seed tasks from a brief.                      | `/kestral:plan migrate OAuth to OIDC` → drafts a project with 8 tasks, waits for approval. |
+| `/kestral:plan`    | Scaffold a new project with seed tasks from a brief.                      | `/kestral:plan migrate OAuth to OIDC` → drafts a project with 8 tasks, then creates after showing the plan. |
 | `/kestral:plan-day` | Turn your Kestral daily brief and calendar into a ranked plan for today. | `/kestral:plan-day` → summarizes updates, asks constraints, and drafts focus blocks.       |
 | `/kestral:sync`    | Save pasted notes or summaries to a project as a document.                 | `/kestral:sync add this Slack summary to Atlas` → creates a linked project document.        |
 | `/kestral:end-day-review` | Summarize today, reconcile project updates, and prioritize tomorrow. | `/kestral:end-day-review` → reviews today's trail, proposes write-backs, and asks before writing. |
+| `/kestral:sync` | Sync coding progress to Kestral: conflict check, status, comments, PR links. | `/kestral:sync` → checks conflicts, posts progress, links PRs. Install the [companion rule/snippet](skills/sync/README.md) for ambient sync. |
 
 There are also lower-level skills you can call directly:
 
@@ -157,7 +161,7 @@ There are also lower-level skills you can call directly:
 
 In Claude Code, type `/kestral:` and use autocomplete to see all available commands. In Codex, type `@kestral` to target
 the plugin, or invoke a bundled skill directly with `$kestral-setup`, `$kestral-tasks`, `$kestral-context`,
-`$kestral-plan`, `$kestral-plan-day`, or `$kestral-end-day-review`.
+`$kestral-plan`, `$kestral-plan-day`, `$kestral-end-day-review`, or `$kestral-sync`.
 
 For a detailed guide to each skill — when to use it, examples, inputs, and how the lower-level skills compose — see the
 [skills README](skills/README.md).
@@ -197,8 +201,9 @@ or "import all matching tasks into Auth Reliability".
 ```
 
 After onboarding, use `/kestral:tasks` to work with your tasks, `/kestral:context` to pull knowledge into conversations,
-`/kestral:plan` to create new projects, `/kestral:plan-day` to turn your daily brief and calendar into a focus plan, and
-`/kestral:end-day-review` to close out the day with project updates and tomorrow priorities.
+`/kestral:plan` to create new projects, `/kestral:plan-day` to turn your daily brief and calendar into a focus plan,
+`/kestral:end-day-review` to close out the day with project updates and tomorrow priorities, and `/kestral:sync` to keep
+tasks in sync while you code (or install the [companion rule/snippet](skills/sync/README.md) for ambient sync).
 
 ## Supported document and task sources
 
@@ -232,7 +237,7 @@ these tools automatically when they are loaded in your session.
 | Codex: plugin added but no skills | Restart Codex after install. Enable the plugin under **Plugins** if it is disabled. Upgrade to the latest build from **Kestral Plugins** if you installed an older version. |
 | Codex: plugin not listed          | Repeat the install steps above (Plugins → More → Add more). After restart, confirm **Kestral** appears under **Kestral Plugins**. |
 | Desktop: connector added but no tools | Start a **new task** (running tasks don't pick up new connectors), then ask Cowork to use Kestral. Check **Customize → Connectors** — Kestral should show a green status. If it shows an error, remove and re-add the connector. |
-| Desktop: script install not visible after restart | Fully quit Claude Desktop, start a **new task**, check Customize → Plugins. If missing, use the GUI install steps above or manual removal (delete `cowork_plugins/marketplaces/kestral-plugins/`, remove `kestral@kestral-plugins` from `installed_plugins.json` and `cowork_settings.json#enabledPlugins`, remove `kestral-plugins` from `known_marketplaces.json` and `extraKnownMarketplaces`). |
+| Desktop: script install not visible after restart | Fully quit Claude Cowork, start a **new task**, check Customize → Plugins. If missing, use the GUI install steps above or manual removal (delete `cowork_plugins/marketplaces/kestral-plugins/`, remove `kestral@kestral-plugins` from `installed_plugins.json` and `cowork_settings.json#enabledPlugins`, remove `kestral-plugins` from `known_marketplaces.json` and `extraKnownMarketplaces`). |
 
 ## Uninstall
 
@@ -243,7 +248,7 @@ claude plugin uninstall kestral@kestral-plugins
 # optional: claude plugin marketplace remove kestral-plugins
 ```
 
-### Claude Desktop
+### Claude Cowork
 
 Use **Customize → Plugins** to uninstall. For manual removal if the GUI can't delete the entry, see the troubleshooting row above.
 

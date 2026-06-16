@@ -37,8 +37,14 @@ Keep Kestral IDs internal unless the user asks for them. In user-facing output:
 Run before any Kestral MCP call. Stop on failure; exact messages in `docs/manifest-copy-spec.md`.
 
 **Kestral tools (all hosts)** — Confirm Kestral tools such as `upload_document`, `whoami`, or `query_entities` in this
-thread (`/mcp`). If absent → **MCP not connected** (host-specific bullets). Codex: **Kestral** server required —
-`node_repl` is not the bridge.
+thread (`/mcp`). If absent → **MCP not connected**. Give the user the matching troubleshooting steps:
+
+- **Claude Code Desktop / Claude Cowork:** Open **Customize → Kestral plugin → Connectors**, click **Install** on
+  Kestral, then click **Add**. Once connected, run `/kestral:kestral-setup` again.
+- **Claude Code CLI:** Open settings (gear icon or `/config`), go to **MCP Servers**, add or reconnect the **Kestral**
+  server, then run `/kestral:kestral-setup` again.
+- **Cursor:** Open **Settings → MCP Servers**, add or reconnect the **Kestral** MCP server, then retry.
+- **Codex:** Open **Settings → MCP Servers**, add or reconnect the **Kestral** MCP server, then retry.
 
 ### 1. Authenticate
 
@@ -181,12 +187,17 @@ Make clear that the curated manifest is a starting import, not a hard limit:
 
 ### 6. Manifest checkpoint
 
-Wait for user input after rendering the manifest. Supported commands mirror `docs/manifest-copy-spec.md`. If an edit
-target is ambiguous in a multi-project manifest, ask one focused clarification before applying it.
+Render the manifest for visibility, then proceed — do not block on a separate manifest approval when the host already
+prompts for write-tool permission (Claude Code, Claude Cowork, Cursor, Codex with tool permissions enabled).
+
+Then continue to step 7 unless the user sends an edit or cancel command first. Supported commands mirror
+`docs/manifest-copy-spec.md`. If an edit target is ambiguous in a multi-project manifest, ask one focused clarification
+before applying it:
 
 | Command or intent | Effect |
 | --- | --- |
-| `proceed` / `approve` / `yes` / `go` / `create these` | Create selected projects and import selected context |
+| `ok` / `yes` / `go` / `create these` | Proceed to create selected projects and import selected context |
+| `revise` | Edit the manifest before proceeding (same as edit commands below) |
 | `remove <file>` | Remove a specific local file from the selected document list |
 | `add <path>` | Validate the path, stat its byte size, and add it to the selected local documents |
 | `remove <source> documents` | Remove all selected documents from a source, such as Notion or Google Drive |
@@ -205,24 +216,30 @@ target is ambiguous in a multi-project manifest, ask one focused clarification b
 | `look at <folder> instead` / `change folder <path>` | Re-scan a new folder and remap the proposed taxonomy |
 | `cancel` / `no` / `stop` | Exit cleanly without Kestral write calls |
 
-Re-render the manifest after edits. Do not add redundant approval loops after the user approves normal curated setup.
+Re-render the manifest after edits. Do not add redundant approval loops — the host's tool-permission prompt is the
+approval gate for normal curated setup.
 
-Ask for explicit confirmation only when:
+**Hosts without per-tool permission prompts** (agents that auto-run MCP writes with no confirmation): wait for explicit
+`ok` / `create these` before calling any write MCP tool. Ask: "Okay to proceed? ok/revise/cancel"
+
+Ask for explicit confirmation and wait before writes when:
 
 - The user requests a large bulk import.
 - The run would create more than 5 projects.
 - The scope is ambiguous or risky enough that a mistaken import would be hard to unwind.
+- The host does not provide per-tool permission prompts.
 
 For large writes, confirm scope in one concise message, such as:
 
-> This will import 437 tasks and 82 documents into 3 projects. Proceed?
+> This will import 437 tasks and 82 documents into 3 projects. Okay to proceed? ok/revise/cancel
 
 Do not ask separate confirmations for every project, source, document batch, or task batch.
 
 ### 7. Apply selected projects and imports
 
-On approval, apply each selected project. Use parallel write calls only where writes are independent and the host allows
-it; otherwise proceed sequentially with compact progress updates. Always preserve successful project URLs.
+Apply each selected project after the manifest checkpoint (or after explicit ok for no-permission hosts). Use parallel
+write calls only where writes are independent and the host allows it; otherwise proceed sequentially with compact progress
+updates. Always preserve successful project URLs.
 
 For each selected project:
 
@@ -324,8 +341,10 @@ When the user chooses:
 - Use parallel tool calls for independent reads.
 - Keep sub-agent outputs compact.
 - Do not load huge task or document bodies into main context when metadata, paths, URLs, and IDs are enough.
-- Inform before acting, then avoid redundant approval loops.
-- Ask explicit confirmation only for large bulk imports, creating more than 5 projects, or ambiguous/risky scope.
+- Inform before acting, then avoid redundant approval loops — show the manifest and proceed on normal curated setup;
+  the host's tool-permission prompt is the write approval gate.
+- Ask explicit confirmation only for large bulk imports, creating more than 5 projects, ambiguous/risky scope, or
+  hosts without per-tool permission prompts.
 - Do not ask separate confirmations for every project, source, document batch, or task batch.
 
 ## Cancel Behavior

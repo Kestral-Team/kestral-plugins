@@ -8,8 +8,8 @@ the [plugin README](../README.md).
 
 | Host                        | How to invoke                                                                                            |
 | --------------------------- | -------------------------------------------------------------------------------------------------------- |
-| Claude Code / Claude Cowork | `/kestral:<skill>` — e.g. `/kestral:tasks`, `/kestral:kestral-setup`. Type `/kestral:` for autocomplete. |
-| Codex                       | `$kestral-<name>` — e.g. `$kestral-tasks`, `$kestral-setup` — or type `@kestral` to target the plugin.   |
+| Claude Code / Claude Cowork | `/kestral:<skill>` — e.g. `/kestral:tasks`, `/kestral:sync`. Type `/kestral:` for autocomplete. |
+| Codex                       | `$kestral-<name>` — e.g. `$kestral-tasks`, `$kestral-sync` — or type `@kestral` to target the plugin.   |
 
 All skills require the **Kestral** MCP server to be connected (`/mcp`). Auth is automatic via OAuth — a browser window
 opens on first use; on a 401, reconnect the MCP server.
@@ -18,12 +18,12 @@ opens on first use; on a 401, reconnect the MCP server.
 
 ### `kestral-setup` — onboard a project
 
-Authenticate and onboard a local folder into a new Kestral project: scans documents, enriches with connected sources
-(Slack, Notion, Google Drive, Linear, Jira, …), shows a manifest for approval, then uploads documents, triggers Project
-Brain generation, and imports tasks.
+Authenticate and onboard local files and connected-tool context into one or more Kestral projects: scans documents,
+enriches with connected sources (Slack, Notion, Google Drive, Linear, Jira, …), shows a manifest, then uploads
+documents, triggers Project Brain generation, and imports tasks.
 
 - **When to use:** first-time setup, or any time you want to turn a folder of docs into a Kestral project.
-- **Example:** `/kestral:kestral-setup` → asks which folder to scan, shows a manifest, uploads on approval.
+- **Example:** `/kestral:kestral-setup` → asks which folder to scan, shows a manifest, then creates projects.
 - **Note:** each run creates a fresh project — there is no update-in-place. Composes `scan-folder`, `scan-tasks`, and
   `upload` internally.
 
@@ -44,11 +44,11 @@ pulls them into the conversation so the agent can answer with real workspace dat
 
 ### `plan` — scaffold a new project from a brief
 
-Drafts a new Kestral project with seed tasks from a goal, brief, or the current conversation. You review and edit the
-draft, then it creates everything in Kestral with one approval.
+Drafts a new Kestral project with seed tasks from a goal, brief, or the current conversation. Shows the draft, then
+creates everything in Kestral.
 
 - **When to use:** starting a new initiative you want tracked in Kestral.
-- **Example:** `/kestral:plan migrate OAuth to OIDC` → drafts a project with seed tasks, waits for approval.
+- **Example:** `/kestral:plan migrate OAuth to OIDC` → drafts a project with seed tasks, then creates it.
 
 ### `plan-day` — plan today from your daily brief
 
@@ -76,6 +76,18 @@ files.
 - **When to use:** wrapping up the day, reconciling project state, prepping tomorrow.
 - **Example:** `/kestral:end-day-review` → reviews today's trail, proposes updates, asks before writing.
 
+### `sync` — keep Kestral in sync while you code
+
+Ambient sync between your coding agent and Kestral: conflict detection before building, plain-language progress
+comments, status transitions, and PR linking — mostly automatic via the companion rule/snippet, with a manual "sync now"
+escape hatch.
+
+- **When to use:** install the [companion rule/snippet](sync/README.md) for ambient sync; invoke manually to force an
+  immediate sync.
+- **Example:** `/kestral:sync` → checks for conflicts, posts progress, links PRs.
+- **Note:** ambient-first — the primary install is the always-on rule (Cursor) or AGENTS.md snippet (Claude Code,
+  Codex). See the [sync README](sync/README.md) for per-platform install instructions.
+
 ## Lower-level building blocks
 
 These are composed by `kestral-setup` but can be invoked directly when you want just one step.
@@ -86,7 +98,7 @@ Walks a local folder (or explicit file list) and produces a curated document man
 `.md`, `.txt`, `.doc`, `.docx`; hidden dirs, `node_modules/`, `dist/`, etc. are excluded.
 
 - **When to use:** previewing what onboarding would pick up. For folders with more than ~15 eligible files, prefer
-  `kestral-setup`, which adds manifest approval and enrichment.
+  `kestral-setup`, which adds manifest visibility and enrichment.
 - **Example:** `/kestral:scan-folder ./docs`
 
 ### `scan-tasks` — detect importable tasks

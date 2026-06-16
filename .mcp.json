@@ -1,14 +1,14 @@
 {
   "mcpServers": {
     "Kestral": {
-      "command": "~/.kestral/bin/kestral-mcp",
-      "args": []
+      "type": "http",
+      "url": "https://app.kestral.ai/mcp"
     }
   },
   "mcp_servers": {
     "Kestral": {
-      "command": "~/.kestral/bin/kestral-mcp",
-      "args": []
+      "type": "http",
+      "url": "https://app.kestral.ai/mcp"
     }
   }
 }

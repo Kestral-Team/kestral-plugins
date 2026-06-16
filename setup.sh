@@ -1,23 +1,22 @@
 #!/usr/bin/env bash
 # Kestral plugin one-shot macOS setup script.
 #
-# Installs the Kestral plugin to Claude Code, Claude Desktop, and/or Codex.
+# Installs the Kestral plugin to Claude Code, Claude Cowork, and/or Codex.
 #
 # Usage:
 #   curl -fsSL https://raw.githubusercontent.com/Kestral-Team/kestral-plugins/main/setup.sh | bash
-#   bash setup.sh [--app claude-code|claude-desktop|codex] [--desktop-root <accountId>/<orgId>] [--remote-mcp]
+#   bash setup.sh [--app claude-code|claude-cowork|codex] [--go-mcp]
 #
 # Options:
-#   --app <targets>       Non-interactive target set (comma-separated: claude-code, claude-desktop, codex)
-#   --desktop-root <id>   Select Desktop session root when multiple exist
-#   --remote-mcp          Use Kestral's hosted MCP endpoint (only git required; no local process)
+#   --app <targets>       Non-interactive target set (comma-separated: claude-code, claude-cowork, codex)
+#   --go-mcp              Install the local helper for uploading files from your Mac (default: hosted MCP URL)
 #   -h, --help            Show this help
 #
 # Examples:
 #   bash setup.sh --app claude-code
 #   bash setup.sh --app codex
 #   curl -fsSL https://raw.githubusercontent.com/Kestral-Team/kestral-plugins/main/setup.sh | bash
-#   curl -fsSL https://raw.githubusercontent.com/Kestral-Team/kestral-plugins/main/setup.sh | bash -s -- --remote-mcp
+#   curl -fsSL https://raw.githubusercontent.com/Kestral-Team/kestral-plugins/main/setup.sh | bash -s -- --go-mcp
 
 set -euo pipefail
 
@@ -38,9 +37,8 @@ RUBY_BIN=""
 
 # --- Parsed flags ---
 APP_FLAG=""
-DESKTOP_ROOT_FLAG=""
 EXPLICIT_APP_FLAG=0
-USE_REMOTE_MCP=0
+USE_REMOTE_MCP=1
 
 # --- Detection / selection state ---
 HAS_GIT=0
@@ -54,7 +52,6 @@ DESKTOP_NOT_READY=0
 DETECTED_TARGETS=()
 SELECTED_TARGETS=()
 DESKTOP_ROOTS=()
-DESKTOP_ROOT_MTIMES=()
 
 TARGET_RESULT_CLAUDE=""
 TARGET_RESULT_DESKTOP=""
@@ -81,20 +78,18 @@ Kestral plugin setup (macOS)
 
 Usage:
   curl -fsSL https://raw.githubusercontent.com/Kestral-Team/kestral-plugins/main/setup.sh | bash
-  bash setup.sh [--app claude-code|claude-desktop|codex] [--desktop-root <accountId>/<orgId>] [--remote-mcp]
+  bash setup.sh [--app claude-code|claude-cowork|codex] [--go-mcp]
 
 Options:
-  --app <targets>       Non-interactive target set (comma-separated: claude-code, claude-desktop, codex)
-  --desktop-root <id>   Select Desktop session root when multiple exist
-  --remote-mcp          Use Kestral's hosted MCP endpoint (only git required; no local process)
+  --app <targets>       Non-interactive target set (comma-separated: claude-code, claude-cowork, codex)
+  --go-mcp              Install the local helper for uploading files from your Mac (default: hosted MCP URL)
   -h, --help            Show this help
 
 Examples:
   bash setup.sh --app claude-code
   bash setup.sh --app codex
   bash setup.sh --app claude-code,codex
-  bash setup.sh --app claude-desktop --desktop-root abc123/def456
-  curl -fsSL https://raw.githubusercontent.com/Kestral-Team/kestral-plugins/main/setup.sh | bash -s -- --remote-mcp
+  curl -fsSL https://raw.githubusercontent.com/Kestral-Team/kestral-plugins/main/setup.sh | bash -s -- --go-mcp
 EOF
 }
 
@@ -107,13 +102,8 @@ parse_args() {
         EXPLICIT_APP_FLAG=1
         [ -n "$APP_FLAG" ] || abort "--app requires a value"
         ;;
-      --desktop-root)
-        shift
-        DESKTOP_ROOT_FLAG="${1:-}"
-        [ -n "$DESKTOP_ROOT_FLAG" ] || abort "--desktop-root requires a value"
-        ;;
-      --remote-mcp)
-        USE_REMOTE_MCP=1
+      --go-mcp)
+        USE_REMOTE_MCP=0
         ;;
       -h | --help)
         usage
@@ -568,11 +558,13 @@ _rewrite_plugin_mcp_json_remote() {
   _content=$(printf '%s\n' "{
   \"mcpServers\": {
     \"Kestral\": {
+      \"type\": \"http\",
       \"url\": \"${REMOTE_MCP_URL}\"
     }
   },
   \"mcp_servers\": {
     \"Kestral\": {
+      \"type\": \"http\",
       \"url\": \"${REMOTE_MCP_URL}\"
     }
   }
@@ -604,13 +596,12 @@ _patch_all_installed_mcp_json() {
 
 _enumerate_desktop_roots() {
   DESKTOP_ROOTS=()
-  DESKTOP_ROOT_MTIMES=()
 
   if [ ! -d "$SESSIONS_BASE" ]; then
     return 0
   fi
 
-  local _account _org _org_path _mtime _acc_name
+  local _account _org _acc_name
   for _account in "$SESSIONS_BASE"/*; do
     [ -d "$_account" ] || continue
     _acc_name="$(basename "$_account")"
@@ -619,17 +610,7 @@ _enumerate_desktop_roots() {
     fi
     for _org in "$_account"/*; do
       [ -d "$_org" ] || continue
-      _org_path="$_org"
-      _mtime=0
-      if [ -d "${_org_path}/cowork_plugins" ]; then
-        _mtime="$(stat -f '%m' "${_org_path}/cowork_plugins" 2>/dev/null || echo 0)"
-      elif [ -f "${_org_path}/cowork_settings.json" ]; then
-        _mtime="$(stat -f '%m' "${_org_path}/cowork_settings.json" 2>/dev/null || echo 0)"
-      else
-        _mtime="$(stat -f '%m' "${_org_path}" 2>/dev/null || echo 0)"
-      fi
       DESKTOP_ROOTS+=("${_acc_name}/$(basename "$_org")")
-      DESKTOP_ROOT_MTIMES+=("$_mtime")
     done
   done
 }
@@ -662,12 +643,18 @@ detect_apps() {
 
 _print_detection_summary() {
   if [ "$HAS_CLAUDE_CLI" -eq 1 ]; then
-    printf '    [1] Claude Code (claude CLI found)\n'
+    if [ "$HAS_DESKTOP_READY" -eq 1 ]; then
+      printf '    [1] Claude Code (claude CLI found; Claude Code Desktop also signed in)\n'
+    elif [ "$HAS_DESKTOP_APP" -eq 1 ]; then
+      printf '    [1] Claude Code (claude CLI found; Claude Code Desktop installed)\n'
+    else
+      printf '    [1] Claude Code (claude CLI found)\n'
+    fi
   fi
   if [ "$HAS_DESKTOP_READY" -eq 1 ]; then
-    printf '    [2] Claude Desktop (signed in, %s session root(s))\n' "${#DESKTOP_ROOTS[@]}"
+    printf '    [2] Claude Cowork (signed in, %s account(s))\n' "${#DESKTOP_ROOTS[@]}"
   elif [ "$DESKTOP_NOT_READY" -eq 1 ]; then
-    printf '    [ ] Claude Desktop (installed but not signed in — open it, sign in, re-run)\n'
+    printf '    [ ] Claude Cowork (installed but not signed in — open it, sign in, re-run)\n'
   fi
   if [ "$HAS_CODEX_CLI" -eq 1 ]; then
     printf '    [3] Codex (codex CLI found)\n'
@@ -697,14 +684,14 @@ _parse_app_flag() {
       claude-code)
         _add_target_if_missing "claude-code"
         ;;
-      claude-desktop)
+      claude-cowork | claude-desktop)
         _add_target_if_missing "claude-desktop"
         ;;
       codex)
         _add_target_if_missing "codex"
         ;;
       *)
-        abort "Unknown --app target: $_part (use claude-code, claude-desktop, or codex)"
+        abort "Unknown --app target: $_part (use claude-code, claude-cowork, or codex)"
         ;;
     esac
   done
@@ -734,12 +721,12 @@ select_targets() {
         : # ensure_claude_cli handles --app claude-code with missing CLI
       elif [ "$_t" = "claude-desktop" ]; then
         if [ "$HAS_DESKTOP_APP" -eq 0 ]; then
-          abort_with_hint "Claude Desktop is not installed." \
-            "Install Claude Desktop from https://claude.ai/download, sign in, then re-run."
+          abort_with_hint "Claude Cowork is not installed." \
+            "Install Claude Cowork from https://claude.ai/download, sign in, then re-run."
         fi
         if [ "$HAS_DESKTOP_READY" -eq 0 ]; then
-          abort_with_hint "Claude Desktop is installed but no Cowork session was found." \
-            "Open Claude Desktop, sign in, then re-run this script."
+          abort_with_hint "Claude Cowork is installed but no Cowork session was found." \
+            "Open Claude Cowork, sign in, then re-run this script."
         fi
       fi
     done
@@ -748,7 +735,7 @@ select_targets() {
 
   if [ "${#DETECTED_TARGETS[@]}" -eq 0 ]; then
     abort_with_hint "No supported apps detected." \
-      "Install Claude Code (https://claude.ai/code), Claude Desktop (https://claude.ai/download), or Codex (https://codex.openai.com), then re-run."
+      "Install Claude Code (https://claude.ai/code), Claude Cowork (https://claude.ai/download), or Codex (https://codex.openai.com), then re-run."
   fi
 
   # Default: all detected targets pre-selected
@@ -758,7 +745,7 @@ select_targets() {
     _prompt="${_prompt}[1] Claude Code  "
   fi
   if [ "$HAS_DESKTOP_READY" -eq 1 ]; then
-    _prompt="${_prompt}[2] Claude Desktop  "
+    _prompt="${_prompt}[2] Claude Cowork  "
   fi
   if [ "$HAS_CODEX_CLI" -eq 1 ]; then
     _prompt="${_prompt}[3] Codex  "
@@ -917,25 +904,92 @@ install_or_update_plugin() {
   return 1
 }
 
-print_claude_success() {
-  if [ "$USE_REMOTE_MCP" -eq 1 ]; then
-    cat <<EOF
+_is_cowork_selected() {
+  local _t
+  for _t in "${SELECTED_TARGETS[@]:-}"; do
+    if [ "$_t" = "claude-desktop" ]; then
+      return 0
+    fi
+  done
+  return 1
+}
 
-Claude Code: Kestral plugin is ready (connects to Kestral at ${REMOTE_MCP_URL}).
-  1. Fully quit and reopen Claude Code if it was running (required — running sessions won't reload plugin content).
-  2. Run: claude
-  3. In chat: /kestral:kestral-setup
-EOF
+_is_claude_code_selected() {
+  local _t
+  for _t in "${SELECTED_TARGETS[@]:-}"; do
+    if [ "$_t" = "claude-code" ]; then
+      return 0
+    fi
+  done
+  return 1
+}
+
+_desktop_app_name() {
+  if _is_claude_code_selected && _is_cowork_selected; then
+    printf 'Claude Desktop'
+  elif _is_claude_code_selected; then
+    printf 'Claude Code Desktop'
+  else
+    printf 'Claude Cowork'
+  fi
+}
+
+_prompt_restart_cowork_for_claude_code() {
+  if [ "$HAS_DESKTOP_APP" -eq 0 ]; then
     return 0
   fi
+  if _is_cowork_selected; then
+    return 0
+  fi
+  if ! pgrep -x Claude >/dev/null 2>&1; then
+    return 0
+  fi
+  local _name
+  _name="$(_desktop_app_name)"
+  local _answer=""
+  if read_tty "  ${_name} is also running. Restart it to pick up plugin changes? [Y/n] " _answer; then
+    case "$_answer" in
+      [nN] | [nN][oO])
+        warn "${_name} is running — restart it manually to pick up plugin changes."
+        return 0
+        ;;
+    esac
+    log "Restarting ${_name}..."
+    osascript -e 'tell application "Claude" to quit' 2>/dev/null || true
+    local _wait=0
+    while pgrep -x Claude >/dev/null 2>&1; do
+      sleep 1
+      _wait=$((_wait + 1))
+      if [ "$_wait" -ge 10 ]; then
+        warn "${_name} didn't stop in time — proceeding anyway."
+        return 0
+      fi
+    done
+    ok "${_name} stopped"
+    _reopen_claude_desktop || true
+  else
+    if [ "$HAS_DESKTOP_APP" -eq 1 ] && [ "${DESKTOP_REOPENED:-0}" -ne 1 ]; then
+      warn "${_name} detected — restart it manually to pick up plugin changes."
+    fi
+  fi
+}
 
+print_claude_success() {
+  local _detail=""
+  if [ "$USE_REMOTE_MCP" -eq 1 ]; then
+    _detail=" (connects to Kestral at ${REMOTE_MCP_URL})"
+  fi
   cat <<EOF
 
-Claude Code: Kestral plugin is ready.
-  1. Fully quit and reopen Claude Code if it was running (required — running sessions won't reload plugin content).
+Claude Code: Kestral plugin is ready${_detail}.
+  1. Fully quit and reopen Claude Code if it was running (required to reload plugin content).
   2. Run: claude
   3. In chat: /kestral:kestral-setup
 EOF
+
+  if [ "$HAS_DESKTOP_APP" -eq 1 ] && [ "${DESKTOP_REOPENED:-0}" -ne 1 ] && ! _is_cowork_selected; then
+    printf '  → Also restart Claude Code Desktop if it was running, so it picks up the updated plugin.\n'
+  fi
 }
 
 install_to_claude_code() {
@@ -961,15 +1015,16 @@ install_to_claude_code() {
     return 1
   fi
   _patch_all_installed_mcp_json
+  _prompt_restart_cowork_for_claude_code
   print_claude_success
 }
 
-# --- Claude Desktop path ---
+# --- Claude Cowork path ---
 
 _print_desktop_gui_fallback() {
   cat <<'EOF'
 
-Claude Desktop manual install (GUI fallback):
+Claude Cowork manual install (GUI fallback):
   1. Open the Customize menu and go to the Plugins tab.
   2. In Personal plugins, click +, then select Add marketplace.
   3. Choose Add from a repository (sync a marketplace from a GitHub repository or git URL).
@@ -982,107 +1037,20 @@ Claude Desktop manual install (GUI fallback):
 EOF
 }
 
-_sort_desktop_roots_by_mtime() {
-  local _i _j _tmp_root _tmp_mtime _max_idx
-  local _len="${#DESKTOP_ROOTS[@]}"
-  _i=0
-  while [ "$_i" -lt "$_len" ]; do
-    _max_idx="$_i"
-    _j=$((_i + 1))
-    while [ "$_j" -lt "$_len" ]; do
-      if [ "${DESKTOP_ROOT_MTIMES[$_j]}" -gt "${DESKTOP_ROOT_MTIMES[$_max_idx]}" ]; then
-        _max_idx="$_j"
-      fi
-      _j=$((_j + 1))
-    done
-    if [ "$_max_idx" -ne "$_i" ]; then
-      _tmp_root="${DESKTOP_ROOTS[_i]}"
-      DESKTOP_ROOTS[_i]="${DESKTOP_ROOTS[_max_idx]}"
-      DESKTOP_ROOTS[_max_idx]="$_tmp_root"
-      _tmp_mtime="${DESKTOP_ROOT_MTIMES[_i]}"
-      DESKTOP_ROOT_MTIMES[_i]="${DESKTOP_ROOT_MTIMES[_max_idx]}"
-      DESKTOP_ROOT_MTIMES[_max_idx]="$_tmp_mtime"
-    fi
-    _i=$((_i + 1))
-  done
-}
-
-select_desktop_root() {
-  _sort_desktop_roots_by_mtime
-
-  if [ -n "$DESKTOP_ROOT_FLAG" ]; then
-    local _r
-    for _r in "${DESKTOP_ROOTS[@]}"; do
-      if [ "$_r" = "$DESKTOP_ROOT_FLAG" ]; then
-        DESKTOP_SELECTED_ROOT="$DESKTOP_ROOT_FLAG"
-        verbose "Selected account: $DESKTOP_SELECTED_ROOT"
-        return 0
-      fi
-    done
-    warn "Account not found: $DESKTOP_ROOT_FLAG"
-    printf '  → Available accounts: %s — re-run with --desktop-root <id>\n' "$(printf '%s\n' "${DESKTOP_ROOTS[@]}")" >&2
-    return 1
-  fi
-
-  if [ "${#DESKTOP_ROOTS[@]}" -eq 1 ]; then
-    DESKTOP_SELECTED_ROOT="${DESKTOP_ROOTS[0]}"
-    verbose "Auto-selected account: $DESKTOP_SELECTED_ROOT"
-    return 0
-  fi
-
-  log "Multiple logged-in accounts found:"
-  local _idx=1
-  local _i=0
-  while [ "$_i" -lt "${#DESKTOP_ROOTS[@]}" ]; do
-    local _hint=""
-    if [ "$_i" -eq 0 ]; then
-      _hint=" (most recent)"
-    fi
-    printf '    [%s] %s%s\n' "$_idx" "${DESKTOP_ROOTS[$_i]}" "$_hint"
-    _idx=$((_idx + 1))
-    _i=$((_i + 1))
-  done
-
-  local _choice=""
-  if read_tty "  Which account? [1]: " _choice; then
-    _choice="${_choice:-1}"
-    if ! printf '%s' "$_choice" | grep -qE '^[0-9]+$'; then
-      warn "Invalid selection."
-      return 1
-    fi
-    _i=$((_choice - 1))
-    if [ "$_i" -lt 0 ] || [ "$_i" -ge "${#DESKTOP_ROOTS[@]}" ]; then
-      warn "Invalid selection."
-      return 1
-    fi
-    DESKTOP_SELECTED_ROOT="${DESKTOP_ROOTS[$_i]}"
-    verbose "Selected account: $DESKTOP_SELECTED_ROOT"
-    return 0
-  fi
-
-  warn "Multiple accounts found — couldn't prompt for selection."
-  printf '  → Available accounts:\n' >&2
-  _i=0
-  while [ "$_i" -lt "${#DESKTOP_ROOTS[@]}" ]; do
-    printf '    - %s\n' "${DESKTOP_ROOTS[$_i]}" >&2
-    _i=$((_i + 1))
-  done
-  printf '  → Re-run with: --desktop-root %s\n' "$(printf '%s' "${DESKTOP_ROOTS[0]}")" >&2
-  return 1
-}
-
 _reopen_claude_desktop() {
+  local _name
+  _name="$(_desktop_app_name)"
   if [ ! -d "$CLAUDE_APP" ]; then
-    warn "Claude Desktop not found at $CLAUDE_APP — open it manually after install."
+    warn "${_name} not found at $CLAUDE_APP — open it manually after install."
     return 1
   fi
-  log "Reopening Claude Desktop..."
+  log "Reopening ${_name}..."
   if open "$CLAUDE_APP" >> "$LOGFILE" 2>&1; then
     DESKTOP_REOPENED=1
-    ok "Claude Desktop reopened"
+    ok "${_name} reopened"
     return 0
   fi
-  warn "Couldn't reopen Claude Desktop automatically — open it manually."
+  warn "Couldn't reopen ${_name} automatically — open it manually."
   return 1
 }
 
@@ -1115,29 +1083,31 @@ _finish_codex_restart() {
 
 warn_if_desktop_running() {
   if pgrep -x Claude >/dev/null 2>&1; then
+    local _name
+    _name="$(_desktop_app_name)"
     local _answer=""
-    if read_tty "  Claude Desktop is running. Restart now to load the Kestral plugin? [Y/n] " _answer; then
+    if read_tty "  ${_name} is running. Restart now to load the Kestral plugin? [Y/n] " _answer; then
       case "$_answer" in
         [nN] | [nN][oO])
-          warn "Proceeding while Claude Desktop is running — restart after install to load the Kestral plugin."
+          warn "Proceeding while ${_name} is running — restart after install to load the Kestral plugin."
           return 0
           ;;
       esac
-      log "Restarting Claude Desktop..."
+      log "Restarting ${_name}..."
       osascript -e 'tell application "Claude" to quit' 2>/dev/null || true
       local _wait=0
       while pgrep -x Claude >/dev/null 2>&1; do
         sleep 1
         _wait=$((_wait + 1))
         if [ "$_wait" -ge 10 ]; then
-          warn "Claude Desktop didn't stop in time — proceeding anyway."
+          warn "${_name} didn't stop in time — proceeding anyway."
           return 0
         fi
       done
       DESKTOP_RESTART_PENDING=1
-      ok "Claude Desktop stopped — will reopen after install completes."
+      ok "${_name} stopped — will reopen after install completes."
     else
-      warn "Claude Desktop is running — restart after install to load the Kestral plugin."
+      warn "${_name} is running — restart after install to load the Kestral plugin."
     fi
   fi
 }
@@ -1176,16 +1146,6 @@ _restore_desktop_backups() {
       rm -f "$_f"
     fi
   done
-}
-
-_desktop_install_failed() {
-  warn "Desktop install failed — restoring previous state..."
-  verbose "Restoring JSON backups (suffix: $DESKTOP_BACKUP_SUFFIX)"
-  _restore_desktop_backups
-  _finish_desktop_restart
-  printf '  → Logs: %s\n' "$LOGFILE" >&2
-  _print_desktop_gui_fallback
-  return 1
 }
 
 clone_or_update_marketplace() {
@@ -1279,20 +1239,54 @@ print_desktop_success() {
     _detail=" (helper at ${KESTRAL_MCP_BIN})"
   fi
 
-  printf '\nClaude Desktop: Kestral plugin files are installed%s.\n' "$_detail"
+  local _name
+  _name="$(_desktop_app_name)"
+  printf '\n%s: Kestral plugin files are installed%s.\n' "$_name" "$_detail"
   local _step=1
   if [ "$DESKTOP_REOPENED" -ne 1 ]; then
-    printf '  %d. Fully quit and reopen Claude Desktop (required — running sessions won'\''t see disk edits).\n' "$_step"
+    printf '  %d. Fully quit and reopen %s (required — running sessions won'\''t see disk edits).\n' "$_step" "$_name"
     _step=$((_step + 1))
   fi
   printf '  %d. Start a new task (+ New task — running tasks never reload plugin content).\n' "$_step"
   _step=$((_step + 1))
   printf '  %d. In Cowork, run: /kestral:kestral-setup\n' "$_step"
+
+  if [ "$TARGET_RESULT_CLAUDE" = "installed" ]; then
+    printf '  → Also restart the Claude Code CLI if it was running, so it picks up the updated plugin.\n'
+  fi
+}
+
+_install_desktop_for_root() {
+  DESKTOP_BACKUP_SUFFIX=".kestral-backup-$(date +%s)"
+
+  if ! clone_or_update_marketplace; then
+    return 1
+  fi
+
+  if ! _register_marketplace; then
+    _restore_desktop_backups
+    return 1
+  fi
+  if ! _write_installed_plugin; then
+    _restore_desktop_backups
+    return 1
+  fi
+  if ! _enable_plugin; then
+    _restore_desktop_backups
+    return 1
+  fi
+
+  local _dir _org_dir
+  _dir="$(_desktop_cowork_plugins_dir)"
+  _org_dir="$(_desktop_org_dir)"
+  rm -f "${_dir}/known_marketplaces.json${DESKTOP_BACKUP_SUFFIX}" \
+        "${_dir}/installed_plugins.json${DESKTOP_BACKUP_SUFFIX}" \
+        "${_org_dir}/cowork_settings.json${DESKTOP_BACKUP_SUFFIX}" 2>/dev/null || true
 }
 
 install_to_claude_desktop() {
   if [ "$HAS_GIT" -eq 0 ]; then
-    warn "Claude Desktop requires git. Install via: xcode-select --install or brew install git"
+    warn "Claude Cowork requires git. Install via: xcode-select --install or brew install git"
     _print_desktop_gui_fallback
     return 1
   fi
@@ -1302,38 +1296,35 @@ install_to_claude_desktop() {
     return 1
   fi
 
-  DESKTOP_BACKUP_SUFFIX=".kestral-backup-$(date +%s)"
-
-  select_desktop_root || return 1
   warn_if_desktop_running
 
-  if ! clone_or_update_marketplace; then
+  local _succeeded=0
+  local _root_idx=0
+  local _root_count="${#DESKTOP_ROOTS[@]}"
+
+  while [ "$_root_idx" -lt "$_root_count" ]; do
+    DESKTOP_SELECTED_ROOT="${DESKTOP_ROOTS[$_root_idx]}"
+    verbose "Installing to account ${DESKTOP_SELECTED_ROOT} ($((_root_idx + 1))/${_root_count})"
+
+    if _install_desktop_for_root; then
+      _succeeded=$((_succeeded + 1))
+      verbose "Installed for ${DESKTOP_SELECTED_ROOT}"
+    else
+      warn "Could not install for account ${DESKTOP_SELECTED_ROOT} — continuing with remaining accounts."
+    fi
+
+    _root_idx=$((_root_idx + 1))
+  done
+
+  if [ "$_succeeded" -eq 0 ]; then
+    warn "Desktop install failed for all accounts — restoring previous state..."
+    printf '  → Logs: %s\n' "$LOGFILE" >&2
+    _print_desktop_gui_fallback
     _finish_desktop_restart
     return 1
   fi
 
-  log "Configuring plugin..."
-  if ! _register_marketplace; then
-    _desktop_install_failed
-    return 1
-  fi
-  if ! _write_installed_plugin; then
-    _desktop_install_failed
-    return 1
-  fi
-  if ! _enable_plugin; then
-    _desktop_install_failed
-    return 1
-  fi
-  ok "Plugin configured and enabled"
-
-  local _dir _org_dir
-  _dir="$(_desktop_cowork_plugins_dir)"
-  _org_dir="$(_desktop_org_dir)"
-  rm -f "${_dir}/known_marketplaces.json${DESKTOP_BACKUP_SUFFIX}" \
-        "${_dir}/installed_plugins.json${DESKTOP_BACKUP_SUFFIX}" \
-        "${_org_dir}/cowork_settings.json${DESKTOP_BACKUP_SUFFIX}" 2>/dev/null || true
-
+  ok "Plugin configured for ${_succeeded}/${_root_count} account(s)"
   _finish_desktop_restart
   print_desktop_success
 }
@@ -1578,7 +1569,7 @@ _run_target() {
       fi
       ;;
     claude-desktop)
-      section "Installing Kestral to Claude Desktop"
+      section "Installing Kestral to $(_desktop_app_name)"
       if install_to_claude_desktop; then
         TARGET_RESULT_DESKTOP="installed"
       else
@@ -1612,9 +1603,9 @@ _print_summary() {
   fi
   if [ -n "$TARGET_RESULT_DESKTOP" ]; then
     if [ "$TARGET_RESULT_DESKTOP" = "installed" ]; then
-      ok "Claude Desktop: installed"
+      ok "$(_desktop_app_name): installed"
     else
-      warn "Claude Desktop: failed — use the GUI steps printed above"
+      warn "$(_desktop_app_name): failed — use the GUI steps printed above"
       _exit=1
     fi
   fi
