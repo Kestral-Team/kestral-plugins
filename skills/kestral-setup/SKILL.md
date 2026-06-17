@@ -44,7 +44,8 @@ thread (`/mcp`). If absent → **MCP not connected**. Give the user the matching
 - **Claude Code CLI:** Open settings (gear icon or `/config`), go to **MCP Servers**, add or reconnect the **Kestral**
   server, then run `/kestral:kestral-setup` again.
 - **Cursor:** Open **Settings → MCP Servers**, add or reconnect the **Kestral** MCP server, then retry.
-- **Codex:** Open **Settings → MCP Servers**, add or reconnect the **Kestral** MCP server, then retry.
+- **Codex:** Open **Settings → MCP Servers**, add or reconnect the **Kestral** MCP server, then run `$kestral-setup`
+  in a **new thread**.
 
 Do not block setup if upload tools are missing. Step 7 handles upload attempts gracefully — trying the best available
 tool, offering egress fix instructions on failure, and falling back to `create_document` for text files. Project
@@ -52,10 +53,59 @@ creation, task import, and external doc linking work regardless of upload capabi
 
 ### 1. Authenticate
 
-Call `whoami` to confirm the Kestral MCP connection is active. OAuth opens the browser automatically on first use if
-needed. If it fails, tell the user to reconnect the MCP server in client settings and retry.
+Call `whoami`. If it succeeds, proceed. If it fails (401 / unauthorized), tell the user:
 
-Do not call write MCP tools until authentication succeeds.
+> Kestral isn't authenticated yet. Open your app's MCP settings, find the **Kestral** server, and
+> reconnect or authenticate it — a browser window should open for sign-in. Once you've signed in,
+> ask me to continue.
+>
+> If you haven't set up Kestral MCP yet, visit your workspace's **Integrations** page in the Kestral
+> web app for setup instructions.
+
+On Cursor, retry via `mcp_auth` if available. Do not call other Kestral tools until `whoami` succeeds.
+
+### 1.5. Existing project detection
+
+After `whoami` succeeds, call `query_entities({ type: "projects", query: "all projects", explanation: "Check for existing projects before setup" })`
+to see whether the workspace already has projects.
+
+| Condition | Behavior |
+| --- | --- |
+| No projects | Continue to step 2 (current flow, unchanged). |
+| 1–3 projects | Show each with title, URL, and a brief description when available. |
+| 4+ projects | Show the top 3 by recent activity and mention the total count (e.g. "…and 4 more"). |
+
+When projects exist, offer a choice — do not auto-skip setup:
+
+> I found existing Kestral projects in your workspace:
+>
+> 1. [Project Name](project-url) — brief description when available
+> 2. ...
+>
+> What would you like to do?
+> - **Add more context** to one of these — import new docs or tasks and refresh the Project Brain
+> - **Create a new project** — start fresh with a new workstream
+> - **Just explore what I have** — I'll share the links and help you plan your day
+
+**Routing:**
+
+| User choice | Next step |
+| --- | --- |
+| Add more context to [project] | Enter the **enrich existing project** flow (below). Skip step 2 opener; frame around "what new context should we add?" |
+| Create a new project | Continue to step 2 (current flow, unchanged). |
+| Just explore | Show project links, then skip directly to step 9 (guided journey). Use the selected or most recent project for journey prompts. |
+
+#### Enrich existing project flow
+
+When the user picks an existing project to enrich:
+
+1. Store the selected project's `projectId` and `url` — do **not** call `create_project`.
+2. Open with: "What new context should we add to [Project Name]? Point me at connected tools, files, or describe what changed."
+3. Run steps 3–6 (inventory, infer workstreams, manifest, checkpoint) scoped to **additions only** — new docs, tasks, or links for that project. The manifest may be a single-project "add to existing" view rather than multi-project creation.
+4. In step 7, skip `create_project`. Upload/link documents and create tasks against the existing `projectId`. Call `trigger_brain_build` for that project after new context is attached.
+5. Continue to step 8 (results) and step 9 (guided journey).
+
+If the user cancels during enrich, follow the same cancel behavior as the main flow.
 
 ### 2. Frame broad sources
 
@@ -307,7 +357,13 @@ the user to connect them in Kestral:
 
 If brain generation was enqueued, say:
 
-> Brain is generating — usually 1-2 minutes.
+> Your Project Brain is generating — it takes about 1–2 minutes. Once it's ready, visit your project to see it:
+> [Project Name](project-url)
+>
+> The Project Brain gives your AI agent context about your work — goals, blockers, recent activity, and team
+> dynamics. It updates automatically as you work.
+
+If multiple projects were created or enriched, include a visit prompt for each project with its URL.
 
 If Project Brain is not enabled:
 
@@ -318,19 +374,45 @@ If Project Brain fails:
 
 > Project created. Brain generation couldn't start. Open the project and click Generate to retry.
 
-### 9. Follow-up options
+### 9. Guided onboarding journey
 
-After setup, offer concise next actions without auto-running them:
+After step 8, walk the user through the post-setup journey. Each beat is a **suggestion** — never auto-run the next
+skill. Present the journey in order. The user can skip any beat or stop after any prompt.
 
-> Want me to keep going? I can add more context, help clear blockers, or help map the remaining candidate workstreams.
+#### 9a. Explore Project Brain
 
-When the user chooses:
+> Take a minute to visit your project and explore the Project Brain. It should be ready by now:
+> [Project Name](project-url)
+>
+> When you're back, I can help you plan your day with Kestral.
+
+If the user came from "just explore" (step 1.5) with no new imports, adapt: "Visit your project and explore the Project
+Brain when you're ready" and link each existing project.
+
+#### 9b. Plan My Day
+
+> Ready to see how Kestral can help you start your day? Ask me to **plan your day** — it pulls your daily brief,
+> calendar, and task state into a realistic plan with focus blocks.
+
+#### 9c. End Day reminder
+
+> One more thing — when you wrap up today, ask me for an **end-of-day review**. It reviews what got done,
+> reconciles project state, and sets up tomorrow's priorities.
+
+#### 9d. Start working
+
+> Ready to tackle a task or blocker? Pick one and I'll help you get started. If you set up **Kestral Sync**
+> or assign it to a code agent, progress updates flow back to Kestral automatically — your Project Brain
+> stays current and your team sees outcomes in real time, no extra work needed.
+
+#### Follow-up (when the user asks to keep going)
 
 | User intent | Do this |
 | --- | --- |
-| Add more context | Scan or link the new sources, attach them to the relevant existing project, and rerun `trigger_brain_build`. |
+| Start a task | Help the user pick a task, set it to in progress, and begin working. Mention Kestral Sync for automatic progress updates. |
+| Add more context | Scan or link new sources, attach them to the relevant project, and rerun `trigger_brain_build`. |
 | Help clear blockers | Use Kestral task tools to inspect open project work and help the user pick the next blocker. |
-| Map remaining candidates | Return to the extra candidate workstreams and ask one targeted question if the next split is unclear. |
+| Map remaining candidates | Return to extra candidate workstreams and ask one targeted question if the next split is unclear. |
 
 ## Speed and Context Rules
 

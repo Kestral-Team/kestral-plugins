@@ -28,12 +28,11 @@ work with no new progress, skip.
 
 ## Core Infrastructure
 
-### Auth Check
+### Auth
 
-Before any Kestral MCP write:
-
-1. Call `whoami`
-2. If it fails → inform user, **stop** — do not attempt further calls
+Call `whoami` before any other Kestral MCP call (reads included). If it succeeds, proceed. If it fails, tell the user:
+"Kestral isn't authenticated. Reconnect or authenticate the **Kestral** MCP server in your app's MCP settings — a
+browser should open for sign-in. Then ask me to continue." On Cursor, retry via `mcp_auth` if available. Do not call other Kestral tools until `whoami` succeeds.
 
 All MCP calls require an `explanation` field — use a clear description of the operation.
 
@@ -45,10 +44,8 @@ Find the Kestral task for the current work. Each step is 1–3 seconds except th
    directly — instant.
 2. **Branch→task exact match:** `query_entities({ type: "tasks", branchName: "<current-branch>" })`. Returns the task
    linked to this branch via `update_task({ branchName })`, if any (0 or 1 result).
-3. **My active tasks:**
-   `query_entities({ type: "tasks", assigneeFilter: "me", statusFilter: ["in_progress"],
-   skipTagResolution: true })`.
-   Exactly one match → use it. Multiple → pick the one whose title best matches the branch name.
+3. **My active tasks:** `query_entities({ type: "tasks", assigneeFilter: "me" })` — defaults to open (non-closed)
+   statuses. Exactly one match → use it. Multiple → pick the one whose title best matches the branch name.
 4. **Keyword search:** `query_entities({ type: "tasks", assigneeFilter: "me", keyword: "<branch-slug-as-words>" })`.
    Convert the branch slug to words (e.g. `feat/improve-auth-flow` → `"improve auth flow"`). Trigram fuzzy,
    deterministic.
@@ -65,9 +62,9 @@ If the user provided a task URL, slug, or ID directly, skip the chain and call `
 
 #### Status Discovery
 
-Workspaces have custom statuses. Call `list_statuses` to discover valid `statusKey` values before any status update.
-Examples in this skill use common defaults like `in_progress` and `awaiting_review` — always confirm they exist in the
-workspace first.
+Workspaces have custom statuses — never hardcode status keys. Call `list_statuses` to discover valid `statusKey` values
+before any status update. This skill uses generic terms like "in-progress," "review," and "done" to describe workflow
+stages — map them to whatever keys your workspace defines.
 
 #### Archived Project Guard
 
@@ -134,8 +131,8 @@ Description:
 - **Impact:** [who was affected, severity, duration if known]
 - **Related:** [link to support ticket, alert, or Slack thread if applicable]
 
-If the PR is already merged: create with status `done`, link PR, skip progress comments — the task is a historical
-record.
+If the PR is already merged: create with a completed/done status (use `list_statuses` to find the right key), link PR,
+skip progress comments — the task is a historical record.
 
 ---
 
@@ -147,23 +144,30 @@ When the user picks up a task:
 
 1. Task Lookup (fast chain above)
 2. Conflict Check
-3. **Claim:** `update_task({ assigneeId: <memberId>, statusKey: "in_progress", branchName: "<branch>" })` — registers
-   the branch for deterministic lookup. Returns 409 if the branch is already linked to another task (conflict signal).
-4. **Confirm:** "Claimed KES-42, set to In Progress."
+3. **Claim:** `update_task({ assigneeId: <memberId>, statusKey: "<in-progress key>", branchName: "<branch>" })` —
+   registers the branch for deterministic lookup. Returns 409 if the branch is already linked to another task (conflict
+   signal). Use `list_statuses` to find the correct key for your workspace's in-progress status.
+4. **Confirm:** "Claimed [slug], set to [status name]."
 
 ### Status Update
 
 Call `list_statuses` first, then `update_task` with the appropriate `statusKey`. Only update at meaningful transitions.
-Run the Acceptance Check before setting a task to `done`.
+Run the Acceptance Check before moving a task to a completed/review status.
+
+**PR merge gate:** A task's "done" or "completed" status means the PR is **merged**, not just that implementation is
+finished. If a linked PR is still open, use the workspace's review/pending status instead. The one exception: when no PR
+exists and the user explicitly confirms the work is complete, `done` is valid. Never mark a task complete while its PR
+is unmerged.
 
 ### Acceptance Check
 
-Before marking done:
+Before updating task status after implementation:
 
 1. `entity_lookup` — get acceptance criteria from the task description
 2. `git diff --stat main...HEAD` — see what changed
 3. For each criterion: satisfied? (Yes / No / Partial)
-4. All satisfied → proceed. Gaps → report, ask user.
+4. All satisfied → check PR merge state: use the workspace's review/pending status if PR is open/unmerged; only use the
+   completed/done status if the PR is merged. Gaps → report, ask user.
 
 ---
 
@@ -228,9 +232,10 @@ Post after completing a code review — **whether findings are clean or not**:
 ### Branch/PR Linking
 
 **Atomic PR linking (preferred):**
-`link_pr_to_task({ taskId, prUrl, statusKey: "awaiting_review",
+`link_pr_to_task({ taskId, prUrl, statusKey: "<review-status-key>",
 comment: "PR opened: <title>" })` — links the PR,
-transitions status, and posts a comment in one call instead of three.
+transitions status, and posts a comment in one call instead of three. Use `list_statuses` to find the correct review
+status key for your workspace.
 
 - PR exists → `link_pr_to_task` (auto-assigns if unassigned, posts GitHub PR comment)
 - Branch only (no PR yet) → `comment_task`: `Started work on branch \`branch-name\``
@@ -244,7 +249,7 @@ Complete sync workflow (user asks to sync, or auto-trigger fires):
 2. Diff context: `git log --oneline -10`, `git diff --stat main...HEAD`
 3. Task lookup (fast chain) — `entity_lookup` also returns existing comments
 4. **Dedup:** if the most recent comment covers the same branch/scope with no new progress → skip, confirm "no updates"
-5. Status update (skip if already correct; Acceptance Check before `done`)
+5. Status update (skip if already correct; Acceptance Check before marking complete)
 6. Comment — pick the format: Review Summary after a review, Decision Comment after a spike, Bugfix Comment for a fix,
    otherwise Progress Comment
 7. Branch/PR linking if applicable

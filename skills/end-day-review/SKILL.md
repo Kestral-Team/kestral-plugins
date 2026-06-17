@@ -11,8 +11,10 @@ covered by the User preferences rules.
 
 ## Prerequisites
 
-The `Kestral` MCP server must show as **connected** (`/mcp`). Auth is automatic via OAuth. Calendar access is optional,
-but use it when tomorrow prioritization depends on schedule realism.
+The `Kestral` MCP server must be in this session (`/mcp`). Call `whoami` first — if it fails, ask the user to
+reconnect or authenticate the **Kestral** MCP server in their app's MCP settings (a browser should open for sign-in).
+Do not call other tools until authenticated.
+Calendar access is optional, but use it when tomorrow prioritization depends on schedule realism.
 
 ## Human-readable references
 

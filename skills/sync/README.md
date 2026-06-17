@@ -1,8 +1,8 @@
 # Kestral Sync
 
 Keep your coding agent and [Kestral](https://app.kestral.ai) in sync — automatically. Your agent reads Kestral before
-building (no duplicate or conflicting work), writes plain-language progress as you code, and links PRs to tasks when
-you push.
+building (no duplicate or conflicting work), writes plain-language progress as you code, and links PRs to tasks when you
+push.
 
 - **Before you build:** the agent checks who's working on what, pulls the project brain and customer feedback, and warns
   you about conflicts or overlapping work.
@@ -34,9 +34,9 @@ creation, and phase completion. The explicit `/kestral:sync` invocation is a man
    claude plugin install kestral@kestral-plugins
    ```
 
-2. **Ambient sync:** paste the contents of
-   [`rules/agents-snippet.md`](rules/agents-snippet.md) into your project's `AGENTS.md` or `CLAUDE.md`. This gives the
-   agent the sync triggers — it will read the full skill automatically when needed.
+2. **Ambient sync:** paste the contents of [`rules/agents-snippet.md`](rules/agents-snippet.md) into your project's
+   `AGENTS.md` or `CLAUDE.md`. This gives the agent the sync triggers — it will read the full skill automatically when
+   needed.
 
 3. **Manual sync:** run `/kestral:sync` in the chat whenever you want an immediate sync.
 
@@ -64,7 +64,8 @@ and rule into your project:
    }
    ```
 
-   For local file uploads, use the stdio package instead: `{ "command": "npx", "args": ["-y", "@kestral/kestral-mcp"] }`.
+   After adding the server, your app should prompt you to authenticate — click it to open a browser window for
+   Kestral sign-in and workspace selection. Tokens are managed automatically after that.
 
 2. **Ambient sync (Cursor):** copy [`rules/kestral-sync.mdc`](rules/kestral-sync.mdc) into your project's
    `.cursor/rules/` directory. This always-applied rule gives the agent sync triggers.
@@ -78,24 +79,24 @@ and rule into your project:
 
 ### Other MCP-compatible clients
 
-Any client that speaks MCP can use sync. Connect to `https://app.kestral.ai/mcp` (or the stdio package for local file
-access), then paste the [`rules/agents-snippet.md`](rules/agents-snippet.md) contents into whatever agent instruction
-file your client reads.
+Any client that speaks MCP can use sync. Connect to `https://app.kestral.ai/mcp`, then paste the
+[`rules/agents-snippet.md`](rules/agents-snippet.md) contents into whatever agent instruction file your client reads.
 
 ## What it reads and writes
 
-| Direction | Data | When |
-| --------- | ---- | ---- |
-| **Reads** | Tasks (status, assignee, comments, acceptance criteria) | Every sync — fast lookup chain, conflict check |
-| **Reads** | Projects and Project Brain | Context Pull — before building |
-| **Reads** | Customer feedback | Context Pull — surfaces the *why* behind a task |
-| **Reads** | Workspace members and statuses | Resolving names, discovering valid status keys |
-| **Writes** | Task status transitions | Phase complete, PR opened, PR merged |
-| **Writes** | Plain-language comments | Progress, bugfix, decision, review summary |
-| **Writes** | PR links | On push when a PR exists — atomic with status + comment |
-| **Writes** | New tasks | **Only with your approval** — from branch or bugfix |
+| Direction  | Data                                                    | When                                                    |
+| ---------- | ------------------------------------------------------- | ------------------------------------------------------- |
+| **Reads**  | Tasks (status, assignee, comments, acceptance criteria) | Every sync — fast lookup chain, conflict check          |
+| **Reads**  | Projects and Project Brain                              | Context Pull — before building                          |
+| **Reads**  | Customer feedback                                       | Context Pull — surfaces the *why* behind a task         |
+| **Reads**  | Workspace members and statuses                          | Resolving names, discovering valid status keys          |
+| **Writes** | Task status transitions                                 | Phase complete, PR opened, PR merged                    |
+| **Writes** | Plain-language comments                                 | Progress, bugfix, decision, review summary              |
+| **Writes** | PR links                                                | On push when a PR exists — atomic with status + comment |
+| **Writes** | New tasks                                               | **Only with your approval** — from branch or bugfix     |
 
-Sync never creates tasks without asking. Status and comment writes happen at meaningful transitions, not on every commit.
+Sync never creates tasks without asking. Status and comment writes happen at meaningful transitions, not on every
+commit.
 
 ## Example session
 
@@ -118,10 +119,10 @@ Agent: [calls entity_lookup with slug "KES-42"]
 
 You: push and sync
 
-Agent: [calls link_pr_to_task with statusKey: "awaiting_review",
+Agent: [calls list_statuses, then link_pr_to_task with the review status key,
         comment: "Users can now filter by date range — last 7/30/90 days plus custom."]
        Synced KES-42:
-         Status: In Progress → Awaiting Review
+         Status: In Progress → [review status]
          PR: github.com/org/repo/pull/347 linked
          Comment posted.
 ```

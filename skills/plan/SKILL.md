@@ -10,7 +10,9 @@ it for review, and creates everything in Kestral.
 
 ## Prerequisites
 
-The `Kestral` MCP server must show as **connected** (`/mcp`). Auth is automatic via OAuth (browser opens on first use).
+The `Kestral` MCP server must be in this session (`/mcp`). Call `whoami` first — if it fails, ask the user to
+reconnect or authenticate the **Kestral** MCP server in their app's MCP settings (a browser should open for sign-in).
+Do not call other tools until authenticated.
 
 ## Human-readable references
 
@@ -29,7 +31,8 @@ Keep Kestral IDs internal unless the user asks for them. In user-facing output:
 
 ### 1. Authenticate
 
-OAuth is automatic. On a 401, reconnect the MCP server (see Error handling).
+Call `whoami`. If it fails, ask the user to reconnect or authenticate the **Kestral** MCP server in their app's MCP
+settings and stop. Do not search or draft a plan until `whoami` succeeds.
 
 ### 2. Get the brief
 
@@ -209,7 +212,7 @@ On cancel: "Cancelled. No changes were made in Kestral."
 
 | Failure                  | Message                                                                                   |
 | ------------------------ | ----------------------------------------------------------------------------------------- |
-| 401 / unauthorized       | "Authentication expired. Please reconnect the MCP server to re-authenticate."             |
+| 401 / unauthorized       | "Kestral isn't authenticated. Reconnect or authenticate the **Kestral** MCP server in your app's MCP settings — a browser should open for sign-in. Then ask me to continue." |
 | Project creation failed  | "Could not create the project: `<error>`. Try again or check `/mcp`."                     |
 | Task creation all failed | "Project created: [\<project title\>](\<url\>), but task creation failed. Add tasks manually." |
 | Tag assignment failed    | "Project and tasks created. Could not apply tag `<name>` — apply it manually in Kestral." |

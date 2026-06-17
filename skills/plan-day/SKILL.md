@@ -11,9 +11,11 @@ attention, what fits today, and what should be deferred.
 
 ## Prerequisites
 
-The `Kestral` MCP server must show as **connected** (`/mcp`). Auth is automatic via OAuth. A calendar MCP/app connector
-should also be available for best results; if calendar access is missing, ask the user for fixed commitments before
-finalizing the plan.
+The `Kestral` MCP server must be in this session (`/mcp`). Call `whoami` first — if it fails, ask the user to
+reconnect or authenticate the **Kestral** MCP server in their app's MCP settings (a browser should open for sign-in).
+Do not call other tools until authenticated.
+A calendar MCP/app connector should also be available for best results; if calendar access is missing, ask the user for
+fixed commitments before finalizing the plan.
 
 ## Human-readable references
 
@@ -52,9 +54,10 @@ Default order:
    around it.
 6. Use deeper Kestral research only when cross-project state is ambiguous and the extra latency is justified.
 
-Start data gathering immediately. Run independent reads in parallel whenever the host supports it: daily brief, local
-preferences, calendar, broad task searches, and profile/member lookup do not need to block one another. Do not parallelize
-dependent checks; fetch exact tasks or projects only after the brief or search results identify what needs verification.
+Start data gathering after `whoami` succeeds. Run independent reads in parallel whenever the host supports it: daily
+brief, local preferences, calendar, broad task searches, and profile/member lookup do not need to block one another. Do
+not parallelize dependent checks; fetch exact tasks or projects only after the brief or search results identify what
+needs verification.
 
 Kestral task searches to run when planning needs verification:
 

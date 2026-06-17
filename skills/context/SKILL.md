@@ -11,7 +11,9 @@ auth migration?" without you having to paste anything.
 
 ## Prerequisites
 
-The `Kestral` MCP server must show as **connected** (`/mcp`). Auth is automatic via OAuth (browser opens on first use).
+The `Kestral` MCP server must be in this session (`/mcp`). Call `whoami` first — if it fails, ask the user to
+reconnect or authenticate the **Kestral** MCP server in their app's MCP settings (a browser should open for sign-in).
+Do not call other tools until authenticated.
 
 ## Human-readable references
 
@@ -30,7 +32,8 @@ Keep Kestral IDs internal unless the user asks for them. In user-facing output:
 
 ### 1. Authenticate
 
-OAuth is automatic. On a 401, reconnect the MCP server (see Error handling).
+Call `whoami`. If it fails, ask the user to reconnect or authenticate the **Kestral** MCP server in their app's MCP
+settings and stop. Do not search or load context until `whoami` succeeds.
 
 ### 2. Get the query
 
@@ -158,6 +161,6 @@ messages.
 
 | Failure | Message |
 | --- | --- |
-| 401 / unauthorized | "Authentication expired. Please reconnect the MCP server to re-authenticate." |
+| 401 / unauthorized | "Kestral isn't authenticated. Reconnect or authenticate the **Kestral** MCP server in your app's MCP settings — a browser should open for sign-in. Then ask me to continue." |
 | Document not found | "Selected document not found — it may have been deleted. Skipping." |
 | Search returned error | "Search failed: `<error>`. Try again or check that the MCP server is connected (`/mcp`)." |

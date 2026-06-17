@@ -211,7 +211,7 @@ and adapt project counts, source names, item counts, and URLs to the actual run.
 | Situation | Message principle |
 | --- | --- |
 | Kestral MCP tools not in session (preflight) | See **MCP not connected** block below. |
-| Auth fails / token invalid | Stop before any writes. Tell the user Kestral authentication failed and to reconnect the Kestral MCP server before retrying setup. |
+| Auth fails / token invalid | Stop before any Kestral calls. Tell the user: "Kestral isn't authenticated. Reconnect or authenticate the **Kestral** MCP server in your app's MCP settings — a browser should open for sign-in. Then ask me to continue." |
 | Required core MCP tool is disconnected or missing | Stop before writes only if core tools (`whoami`, `create_project`) are missing. Missing upload tools (`upload_document`, `upload_request_urls`) limit local file handling but do not block project creation, task import, or external doc linking. |
 | Local folder or explicit file path doesn't exist | Do not write anything. Say you could not find `<path>` and ask for another folder, file set, connected tool, or user-provided description. |
 | No usable connected sources or local files remain | Do not write anything. Explain that no importable documents or task signals were found from the selected sources and ask for another source or user-provided buckets. |
@@ -265,22 +265,34 @@ Use when Kestral MCP tools are absent in the session. Pick host-specific bullets
 
 > I can't see any Kestral MCP tools in this session yet, so I can't start setup.
 >
-> **All hosts:** Run `/mcp` (or your app's MCP settings) and confirm a **Kestral** / **kestral** server is connected
+> **All hosts:** Run `/mcp` (or your app's MCP settings) and confirm a **Kestral** server is connected
 > with tools like `whoami` and `create_project`. The setup skill alone is not enough — the MCP server must be
 > running in this thread.
 >
 > **Claude Cowork:**
 > - Open **Customize → Connectors** and confirm **Kestral** is listed and enabled.
-> - If you saw **This plugin includes local MCP servers**, click **Continue** to register the connector.
-> - Fully quit and restart Cowork, then start a **new task** and run `/kestral:kestral-setup` again.
+> - If Kestral is listed as "Not connected", click **Connect** and follow the instructions in the web page.
+> - Fully quit and restart Cowork if the plugin was just installed.
+> - Start a **new task** and run `/kestral-setup` again.
 >
 > **Codex:**
 > - Fully quit and restart Codex after installing the plugin.
-> - In **Settings → MCP Servers**, look for **Kestral** / **kestral** — **not** `node_repl` (that is Codex's JS sandbox).
-> - If only `node_repl` appears, re-run the setup script (`bash setup.sh --app codex`), restart, and open a new thread.
+> - In **Settings → MCP Servers**, look for **Kestral** under "**From plugins**".
+> - Once reconnected, run `$kestral-setup` in a **new thread** (MCP connections are locked at thread start).
 >
 > **Claude Code:**
 > - Run `/mcp` and reconnect the **kestral** server if it shows disconnected.
 > - Fully restart Claude Code if the plugin was just installed.
+> - Once Kestral tools appear, run `/kestral-setup` again.
 >
-> Once Kestral tools appear, run setup again — a browser window will open for OAuth on the first tool call.
+> **Cursor:**
+> - Open **Cursor Settings → Tools & MCPs** and confirm **Kestral** is listed.
+> - If the server shows **Needs authentication**, click **Connect** and follow the OAuth instructions in browser.
+> - If that fails, remove and re-add the server with URL `https://app.kestral.ai/mcp`.
+> - Once the server is authenticated and Kestral tools appear, run `/kestral-setup` again.
+>
+> **VSCode:**
+> - Open the command palette (Cmd+Shift+P) and select **MCP: List Servers**. Confirm **Kestral** is listed.
+> - If the server is not running, select **Kestral** then **Start Server**.
+> - Follow the prompts to authenticate in the browser.
+> - Once the server is **Running** and kestral tools appear, run `/kestral-setup` again.

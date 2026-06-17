@@ -11,8 +11,10 @@ the [plugin README](../README.md).
 | Claude Code / Claude Cowork | `/kestral:<skill>` — e.g. `/kestral:tasks`, `/kestral:sync`. Type `/kestral:` for autocomplete. |
 | Codex                       | `$kestral-<name>` — e.g. `$kestral-tasks`, `$kestral-sync` — or type `@kestral` to target the plugin.   |
 
-All skills require the **Kestral** MCP server to be connected (`/mcp`). Auth is automatic via OAuth — a browser window
-opens on first use; on a 401, reconnect the MCP server.
+All skills require the **Kestral** MCP server in this session. Every skill calls `whoami` first — if it succeeds,
+proceed; if it fails (401), tell the user to reconnect or authenticate the Kestral MCP server in their app's MCP
+settings (a browser window should open for sign-in). Once authenticated, `whoami` returns instantly on subsequent calls.
+See the plugin [README](../README.md#troubleshooting) for platform-specific troubleshooting.
 
 ## User-facing skills
 
@@ -100,8 +102,10 @@ upload. Used by `kestral-setup` when the user provides local files.
 
 - **When to use:** previewing which local files would be included before running setup.
 - **Example:** `/kestral:scan-folder ./docs`
-- **Note:** file upload requires the local MCP binary or presigned-URL upload tools. On remote MCP without these tools,
-  text/markdown files can still be created as inline documents.
+- **Note:** file upload uses presigned URLs and requires network egress to `storage.googleapis.com`. On Claude Cowork,
+  enable **Allow network egress** in **Settings → Capabilities** and add `storage.googleapis.com` and `app.kestral.ai`.
+  On Codex, enable **Allow network access** in **Settings → Configuration**. Text/markdown files can always be created
+  as inline documents without egress.
 
 ### `scan-tasks` — detect importable tasks
 

@@ -15,8 +15,8 @@ installed locally, or the `sync/SKILL.md` from the Kestral plugin.
 ### Starting new work
 
 1. **Fast lookup:** extract slug from branch name → `entity_lookup`; or `query_entities({ branchName })` for exact
-   branch→task match; or `query_entities({ assigneeFilter: "me", statusFilter: ["in_progress"] })` for active tasks. Use
-   `research` only as a last resort (10–30s).
+   branch→task match; or `query_entities({ assigneeFilter: "me" })` filtered to active tasks. Use `research` only as a
+   last resort (10–30s).
 2. If a task is found:
    - **Assigned to someone else + active status** → warn the user (conflict)
    - **Unassigned or backlog** → link to it rather than creating a duplicate
@@ -29,8 +29,10 @@ installed locally, or the `sync/SKILL.md` from the Kestral plugin.
 
 ### After completing work
 
-- Update task status (use `list_statuses` to discover valid keys — never hardcode)
-- Before setting done: run the **Acceptance Check** from the skill (compare diff against task acceptance criteria)
+- Run the **Acceptance Check** from the skill (compare diff against task acceptance criteria)
+- Update task status based on **PR merge state**: use the workspace's review/pending status if any linked PR is
+  open/unmerged; only mark complete/done when the PR is **merged**. Never mark a task complete while its PR is unmerged.
+  Use `list_statuses` to discover valid status keys — never hardcode them.
 - Post a final progress comment
 - Prefer `link_pr_to_task({ statusKey, comment })` for atomic PR link + status + comment in one call
 

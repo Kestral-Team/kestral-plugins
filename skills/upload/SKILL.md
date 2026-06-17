@@ -10,10 +10,21 @@ provided by the caller, and trigger Project Brain generation after project conte
 
 ## Prerequisites
 
-A **Kestral** MCP server must show as **connected** (`/mcp`). Auth is automatic via OAuth (browser opens on first use).
+A **Kestral** MCP server must be in this session (`/mcp`). Call `whoami` first — if it fails, ask the user to
+reconnect or authenticate the **Kestral** MCP server in their app's MCP settings (a browser should open for sign-in).
+Do not call other tools until authenticated.
 
-Local file uploads use the best available strategy from the MCP tool list. Missing upload tools limit local file handling
-but do not block project creation, task import, or external doc linking.
+Local file uploads use presigned URLs (`upload_request_urls` → PUT → `upload_finalize`). This requires network egress
+from the agent sandbox to `storage.googleapis.com`. If uploads fail with a network error, guide the user:
+
+- **Claude Cowork:** **Settings → Capabilities** → enable **"Allow network egress"** → add `storage.googleapis.com`
+  and `app.kestral.ai` as allowed domains.
+- **Codex:** **Settings → Configuration** → enable **"Allow network access"**.
+- **Cursor:** Grant network access when prompted, or add `storage.googleapis.com` to allowed domains.
+
+Missing upload tools or blocked egress do not block project creation, task import, or external doc linking. Text files
+can be uploaded as inline content via `create_document`. Binary files (PDFs, images) require egress or manual upload
+through the Kestral web app.
 
 ## Inputs
 

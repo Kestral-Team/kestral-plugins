@@ -5,26 +5,28 @@
 Keep Kestral in sync with your coding work via the Kestral MCP tools. Use judgment — skip for trivial one-off fixes,
 debugging notes, or exploratory sketches.
 
-For full procedures (comment formats, task creation, acceptance check): invoke the kestral-sync skill
-(`/kestral:sync` in Claude Code, `$kestral-sync` in Codex).
+For full procedures (comment formats, task creation, acceptance check): invoke the kestral-sync skill (`/kestral:sync`
+in Claude Code, `$kestral-sync` in Codex).
 
 ### Workflow
 
 **Starting new work:**
 
 1. Fast lookup: extract slug from branch name → `entity_lookup`; or `query_entities({ branchName })` for exact
-   branch→task match; or `query_entities({ assigneeFilter: "me", statusFilter: ["in_progress"] })` for active tasks.
-   Use `research` only as a last resort (10–30s).
-2. If a task is found and assigned to someone else with active status → warn the user (conflict).
-   If unassigned or backlog → link to it rather than creating a duplicate.
+   branch→task match; or `query_entities({ assigneeFilter: "me" })` filtered to active/in-progress tasks. Use `research`
+   only as a last resort (10–30s).
+2. If a task is found and assigned to someone else with active status → warn the user (conflict). If unassigned or
+   backlog → link to it rather than creating a duplicate.
 3. If no match, proceed — offer to create a task after the work takes shape.
 
-**During implementation:** post a progress comment via `comment_task` after each meaningful phase. Do NOT update on every
-commit or minor edit.
+**During implementation:** post a progress comment via `comment_task` after each meaningful phase. Do NOT update on
+every commit or minor edit.
 
-**After completing work:** update task status (use `list_statuses` to discover valid keys — never hardcode). Before
-setting done, run the Acceptance Check from the skill. Post a final progress comment. Prefer
-`link_pr_to_task({ statusKey, comment })` for atomic PR link + status + comment in one call.
+**After completing work:** run the Acceptance Check from the skill, then update task status based on PR merge state: use
+the workspace's review/pending status if any linked PR is open/unmerged; only mark complete/done when the PR is
+**merged**. Never mark a task complete while its PR is unmerged. Post a final progress comment. Prefer
+`link_pr_to_task({ statusKey, comment })` for atomic PR link + status + comment in one call. Use `list_statuses` to
+discover valid status keys — never hardcode them.
 
 **On branch push** (when a Kestral task is linked):
 
@@ -48,16 +50,16 @@ After resolving a task via `entity_lookup`:
 
 ### MCP Tools Quick Reference
 
-| Action | Tool |
-| --- | --- |
-| Find task by slug or ID | `entity_lookup` |
-| Find task by branch | `query_entities({ branchName })` |
-| Filter tasks by status/keyword | `query_entities` |
-| Deep concept search | `research` (last resort) |
-| Discover status keys | `list_statuses` |
-| Update status / register branch | `update_task` |
-| Post comment | `comment_task` |
-| Link PR (atomic) | `link_pr_to_task` |
-| Create task | `create_tasks` |
-| Check auth | `whoami` |
-| Complex operations | `project_management` |
+| Action                          | Tool                             |
+| ------------------------------- | -------------------------------- |
+| Find task by slug or ID         | `entity_lookup`                  |
+| Find task by branch             | `query_entities({ branchName })` |
+| Filter tasks by status/keyword  | `query_entities`                 |
+| Deep concept search             | `research` (last resort)         |
+| Discover status keys            | `list_statuses`                  |
+| Update status / register branch | `update_task`                    |
+| Post comment                    | `comment_task`                   |
+| Link PR (atomic)                | `link_pr_to_task`                |
+| Create task                     | `create_tasks`                   |
+| Check auth                      | `whoami`                         |
+| Complex operations              | `project_management`             |

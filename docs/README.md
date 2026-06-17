@@ -42,17 +42,6 @@ plugin files under `~/Library/Application Support/Claude/`).
 [View source](https://github.com/Kestral-Team/kestral-plugins/blob/main/setup.sh) or download first:
 `curl -fsSL https://raw.githubusercontent.com/Kestral-Team/kestral-plugins/main/setup.sh -o kestral-setup.sh && less kestral-setup.sh` then `bash kestral-setup.sh`.
 
-### Advanced: local file upload (macOS only)
-
-Use this if you need to upload many files from your computer. Installs a small local helper at
-`~/.kestral/bin/kestral-mcp`:
-
-```bash
-curl -fsSL https://raw.githubusercontent.com/Kestral-Team/kestral-plugins/main/setup.sh | bash -s -- --go-mcp
-```
-
-Requires **git** and **Ruby** (included with macOS).
-
 Pick your app below for manual steps (the same steps the script automates).
 
 ### Claude Code
@@ -119,8 +108,8 @@ In Codex, type `@kestral` to target the plugin, or invoke a bundled skill direct
 
 Run `/kestral:kestral-setup` to start. The skill walks you through four steps:
 
-1. **Authenticate** — on first use, the MCP client opens a browser for OAuth login. Tokens are managed and refreshed
-   automatically.
+1. **Authenticate** — on first use, your app prompts you to authenticate. Sign in through the browser window that
+   opens, select your workspace, and you're connected. Tokens are managed automatically after that.
 
 2. **Describe your work** — it asks what you're working on and checks for connected tools (Slack, Notion, Google Drive,
    Linear, Jira, …). You can point it at wherever your context lives — apps, files, repos, or just describe the goal.
@@ -173,19 +162,14 @@ Protocol (the way Claude Code talks to external tools).
 
 ## Troubleshooting
 
-| Problem                   | Fix                                                                                                                            |
-| ------------------------- | ------------------------------------------------------------------------------------------------------------------------------ |
-| Auth expired or invalid   | Reconnect the `Kestral` MCP server (`/mcp`) to re-authenticate via OAuth.                                                     |
-| Project Brain not enabled | "Project Brain isn't enabled for this workspace" — ask your workspace admin to enable it, then generate from the project page. |
-| MCP won't connect         | Default (remote MCP): re-run the setup script, restart your AI app, and confirm **Kestral** in `/mcp`. **macOS `--go-mcp` only:** re-run with `--go-mcp` so `.mcp.json` gets a `/Users/...` absolute path (not `~/.kestral/...`). Check the helper: `ls ~/.kestral/bin/kestral-mcp`. Re-run `/kestral:kestral-setup` or sign in from [Integrations](https://app.kestral.ai). |
-| Network errors            | Check your connection. If the error persists, run `/kestral:kestral-setup` again.                                                       |
-| Local file upload fails   | File upload requires the local MCP binary (`--go-mcp`) or presigned-URL upload tools. You can also upload files manually from the Kestral project page. |
-| Codex: plugin added but no skills | Restart Codex after install. Enable the plugin under **Plugins** if it is disabled. Upgrade to the latest build from **Kestral Plugins** if you installed an older version. |
-| Codex: plugin not listed          | Repeat the install steps above (Plugins → More → Add more). After restart, confirm **Kestral** appears under **Kestral Plugins**. |
-
-## Re-running `/kestral:kestral-setup`
-
-Each run creates a **fresh project**. There is no update-in-place yet.
+| Problem | Fix |
+| ------- | --- |
+| Auth required / not authenticated | Reconnect or authenticate the **Kestral** MCP server in your app's MCP settings — a browser should open for sign-in. |
+| Project Brain not enabled | Ask your workspace admin to enable it, then generate from the project page. |
+| MCP won't connect | Re-run the setup script, restart your AI app, and confirm **Kestral** appears in your MCP server list. |
+| Local file upload fails | File uploads use presigned URLs and require network egress. On **Claude Cowork**: Settings → Capabilities → enable "Allow network egress" → add `storage.googleapis.com` and `app.kestral.ai`. On **Codex**: Settings → Configuration → enable "Allow network access". You can also upload files manually from the Kestral project page. |
+| Codex: plugin added but no skills | Restart Codex after install. Enable the plugin under **Plugins** if it is disabled. |
+| Network errors | Check your connection. If the error persists, re-run setup. |
 
 ## Links
 
