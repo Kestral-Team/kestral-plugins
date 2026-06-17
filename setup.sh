@@ -30,8 +30,8 @@ CLAUDE_APP="/Applications/Claude.app"
 SESSIONS_BASE="${HOME}/Library/Application Support/Claude/local-agent-mode-sessions"
 KESTRAL_MCP_SERVER_NAME="Kestral"
 KESTRAL_MCP_PLUGIN_BIN_REL="bin/kestral-mcp"
-KESTRAL_MCP_BIN_DIR="${HOME}/.kestral/bin"
-KESTRAL_MCP_BIN="${KESTRAL_MCP_BIN_DIR}/kestral-mcp"
+KESTRAL_MCP_BIN_DIR=""
+KESTRAL_MCP_BIN=""
 GO_MCP_BINARY_INSTALLED=0
 RUBY_BIN=""
 
@@ -70,11 +70,68 @@ LOGFILE="${HOME}/.kestral/setup.log"
 mkdir -p "${HOME}/.kestral"
 : > "$LOGFILE"
 
+# Resolve a spawn-safe absolute path for kestral-mcp (MCP hosts do not expand ~).
+_resolve_kestral_mcp_bin_path() {
+  local _home _dir _bin
+
+  _home="${HOME:-}"
+  if [ -z "$_home" ] || [ "$_home" = "~" ]; then
+    _home="$(eval echo ~"$(id -un 2>/dev/null || true)")"
+  fi
+  if [ -z "$_home" ]; then
+    abort "HOME is not set — cannot resolve kestral-mcp binary path."
+  fi
+
+  case "$_home" in
+    "~" | "~/"*)
+      _home="${HOME}${_home#\~}"
+      ;;
+  esac
+  _home="${_home%/}"
+
+  case "$_home" in
+    /Users/*) ;;
+    *)
+      abort "Expected macOS home under /Users/ — --go-mcp requires macOS."
+      ;;
+  esac
+
+  _dir="${_home}/.kestral/bin"
+  _bin="${_dir}/kestral-mcp"
+
+  if [ -d "$_dir" ]; then
+    local _resolved_dir
+    _resolved_dir="$(cd "$_dir" && pwd -P)" || abort "Could not resolve kestral-mcp bin directory: $_dir"
+    _dir="$_resolved_dir"
+    _bin="${_dir}/kestral-mcp"
+  fi
+
+  case "$_bin" in
+    "~" | "~/"*)
+      abort "Resolved MCP binary path still contains ~ — cannot write MCP config."
+      ;;
+    /Users/*) ;;
+    *)
+      abort "Resolved MCP binary path must be under /Users/ (macOS only)."
+      ;;
+  esac
+
+  printf '%s' "$_bin"
+}
+
+_init_kestral_mcp_bin_paths() {
+  KESTRAL_MCP_BIN="$(_resolve_kestral_mcp_bin_path)"
+  KESTRAL_MCP_BIN_DIR="$(dirname "$KESTRAL_MCP_BIN")"
+}
+
 # --- Usage ---
 
 usage() {
   cat <<EOF
-Kestral plugin setup (macOS)
+Kestral plugin setup
+
+Default install configures remote MCP at app.kestral.ai (macOS and Linux).
+--go-mcp is macOS only (local file-upload helper).
 
 Usage:
   curl -fsSL https://raw.githubusercontent.com/Kestral-Team/kestral-plugins/main/setup.sh | bash
@@ -82,7 +139,7 @@ Usage:
 
 Options:
   --app <targets>       Non-interactive target set (comma-separated: claude-code, claude-cowork, codex)
-  --go-mcp              Install the local helper for uploading files from your Mac (default: hosted MCP URL)
+  --go-mcp              macOS only: install local helper for uploading files from your Mac
   -h, --help            Show this help
 
 Examples:
@@ -224,10 +281,13 @@ read_tty() {
 
 # --- Prerequisites ---
 
-require_macos() {
+require_macos_for_go_mcp() {
+  if [ "$USE_REMOTE_MCP" -eq 1 ]; then
+    return 0
+  fi
   if [ "$(uname -s)" != "Darwin" ]; then
-    abort_with_hint "This script supports macOS only." \
-      "Use the manual install steps in https://github.com/Kestral-Team/kestral-plugins#install"
+    abort_with_hint "--go-mcp (local file upload) requires macOS." \
+      "On Linux, run without --go-mcp to use remote MCP at https://app.kestral.ai/mcp, or follow manual plugin steps in https://github.com/Kestral-Team/kestral-plugins#install"
   fi
 }
 
@@ -250,6 +310,10 @@ ensure_git() {
 
   if ! xcode-select -p >/dev/null 2>&1; then
     log "Xcode Command Line Tools can provide git. Run: xcode-select --install"
+  fi
+
+  if [ "$(uname -s)" != "Darwin" ]; then
+    log "Install git with your package manager (e.g. apt install git, dnf install git)."
   fi
 
   HAS_GIT=0
@@ -517,6 +581,12 @@ require 'json'
 file = ARGV[0]
 cmd = ARGV[1]
 name = ARGV[2]
+if cmd.include?('~')
+  abort "MCP command must not contain ~ (got #{cmd.inspect})"
+end
+unless cmd.start_with?('/Users/')
+  abort "MCP command must be a macOS absolute path (got #{cmd.inspect})"
+end
 data = JSON.parse(File.read(file))
 if data.key?('mcpServers')
   data['mcpServers'] = {} unless data['mcpServers'].is_a?(Hash)
@@ -1625,7 +1695,11 @@ _print_summary() {
 
 main() {
   parse_args "$@"
-  require_macos
+  require_macos_for_go_mcp
+
+  if [ "$USE_REMOTE_MCP" -eq 0 ]; then
+    _init_kestral_mcp_bin_paths
+  fi
 
   if [ "$USE_REMOTE_MCP" -eq 1 ]; then
     section "Checking prerequisites (git)"

@@ -18,14 +18,15 @@ opens on first use; on a 401, reconnect the MCP server.
 
 ### `kestral-setup` — onboard a project
 
-Authenticate and onboard local files and connected-tool context into one or more Kestral projects: scans documents,
-enriches with connected sources (Slack, Notion, Google Drive, Linear, Jira, …), shows a manifest, then uploads
-documents, triggers Project Brain generation, and imports tasks.
+Authenticate and onboard connected-tool context and optional local files into one or more Kestral projects: pulls tasks
+from Linear, Jira, and GitHub, links documents from Notion, Google Drive, and Slack, shows a manifest, then creates
+projects, triggers Project Brain generation, and imports tasks.
 
-- **When to use:** first-time setup, or any time you want to turn a folder of docs into a Kestral project.
-- **Example:** `/kestral:kestral-setup` → asks which folder to scan, shows a manifest, then creates projects.
-- **Note:** each run creates a fresh project — there is no update-in-place. Composes `scan-folder`, `scan-tasks`, and
-  `upload` internally.
+- **When to use:** first-time setup, or any time you want to organize work into a Kestral project.
+- **Example:** `/kestral:kestral-setup` → asks what you're working on, finds connected sources, shows a manifest, then
+  creates projects.
+- **Note:** each run creates a fresh project — there is no update-in-place. Composes `scan-tasks` and `upload`
+  internally; dispatches `scan-folder` only when the user provides local files.
 
 ### `tasks` — search, view, and update tasks
 
@@ -92,14 +93,15 @@ escape hatch.
 
 These are composed by `kestral-setup` but can be invoked directly when you want just one step.
 
-### `scan-folder` — preview a folder scan
+### `scan-folder` — select and inspect local files
 
-Walks a local folder (or explicit file list) and produces a curated document manifest — no upload. Eligible types:
-`.md`, `.txt`, `.doc`, `.docx`; hidden dirs, `node_modules/`, `dist/`, etc. are excluded.
+Selects and inspects local files from a folder or explicit file list and produces a curated document manifest — no
+upload. Used by `kestral-setup` when the user provides local files.
 
-- **When to use:** previewing what onboarding would pick up. For folders with more than ~15 eligible files, prefer
-  `kestral-setup`, which adds manifest visibility and enrichment.
+- **When to use:** previewing which local files would be included before running setup.
 - **Example:** `/kestral:scan-folder ./docs`
+- **Note:** file upload requires the local MCP binary or presigned-URL upload tools. On remote MCP without these tools,
+  text/markdown files can still be created as inline documents.
 
 ### `scan-tasks` — detect importable tasks
 
@@ -111,11 +113,10 @@ completed in the last 30 days, and translates them to the Kestral import schema.
 
 ### `upload` — execute an approved manifest
 
-Creates a Kestral project from a scan manifest: uploads documents via `upload_document`, triggers Project Brain
-generation, and imports tasks if provided by the caller.
+Creates a Kestral project from an approved manifest: attaches documents (using the best available upload strategy),
+triggers Project Brain generation, and imports tasks if provided by the caller.
 
-- **When to use:** you already have an approved manifest (usually from `scan-folder` / `kestral-setup`) and just want
-  the upload step.
+- **When to use:** you already have an approved manifest (usually from `kestral-setup`) and just want the upload step.
 - **Example:** `/kestral:upload`
 
 ## Skill anatomy

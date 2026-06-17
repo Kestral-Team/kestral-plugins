@@ -1,6 +1,6 @@
 ---
 name: kestral-setup
-description: Use when the user explicitly runs Kestral setup, asks to onboard, organize, or import work into Kestral, or wants projects created from files, repos, tasks, documents, or connected tools.
+description: Use when the user explicitly runs Kestral setup, asks to onboard, organize, or import work into Kestral, or wants projects created from connected tools, goals, repos, documents, or local files.
 ---
 
 # Setup
@@ -8,14 +8,14 @@ description: Use when the user explicitly runs Kestral setup, asks to onboard, o
 Authenticate with Kestral, inspect whatever sources the user provides, propose a small active-workstream taxonomy, and
 create one or more Kestral projects with relevant documents, tasks, and Project Brain generation.
 
-Setup is not limited to local folders. It can work from local files, GitHub, Linear, Jira, Notion, Google Drive, Slack,
-and any other connected tool available in the chat. If the user only says they are not organized yet, help them get
-organized by inspecting available sources and proposing a focused starting structure.
+Setup works from connected tools (Linear, Jira, GitHub, Notion, Google Drive, Slack, and others), user-provided goals,
+repositories, and optionally local files. If the user only says they are not organized yet, help them get organized by
+inspecting available sources and proposing a focused starting structure.
 
 ## Prerequisites
 
-**Kestral** must show as **connected** with `upload_document` in the tool list — including Cowork. If missing, reconnect
-in the client; do not send users to another app for local uploads.
+**Kestral** must show as **connected** with tools such as `whoami`, `create_project`, or `query_entities` in this
+session. If missing, reconnect in the client.
 
 ## Human-readable references
 
@@ -36,7 +36,7 @@ Keep Kestral IDs internal unless the user asks for them. In user-facing output:
 
 Run before any Kestral MCP call. Stop on failure; exact messages in `docs/manifest-copy-spec.md`.
 
-**Kestral tools (all hosts)** — Confirm Kestral tools such as `upload_document`, `whoami`, or `query_entities` in this
+**Kestral tools (all hosts)** — Confirm Kestral tools such as `whoami`, `create_project`, or `query_entities` in this
 thread (`/mcp`). If absent → **MCP not connected**. Give the user the matching troubleshooting steps:
 
 - **Claude Code Desktop / Claude Cowork:** Open **Customize → Kestral plugin → Connectors**, click **Install** on
@@ -45,6 +45,10 @@ thread (`/mcp`). If absent → **MCP not connected**. Give the user the matching
   server, then run `/kestral:kestral-setup` again.
 - **Cursor:** Open **Settings → MCP Servers**, add or reconnect the **Kestral** MCP server, then retry.
 - **Codex:** Open **Settings → MCP Servers**, add or reconnect the **Kestral** MCP server, then retry.
+
+Do not block setup if upload tools are missing. Step 7 handles upload attempts gracefully — trying the best available
+tool, offering egress fix instructions on failure, and falling back to `create_document` for text files. Project
+creation, task import, and external doc linking work regardless of upload capability.
 
 ### 1. Authenticate
 
@@ -57,20 +61,20 @@ Do not call write MCP tools until authentication succeeds.
 
 Open with this framing:
 
-> Welcome to Kestral. I can help turn scattered files, tasks, and connected tool data into organized Kestral projects
-> so you and your team can stay on track automatically.
+> Welcome to Kestral. I can help organize your work into Kestral projects so you and your team can stay on track
+> automatically.
 >
-> I can work from local files, GitHub, Linear, Jira, Notion, Google Drive, Slack, and any other connected tool available
-> in this chat. Give me whatever you have: a folder, a repo, a task system, a few links, or just "I'm not organized
-> yet," and I'll propose a starting structure with projects, documents, tasks, and Project Brains.
+> Tell me what you're working on — a goal, a project you want to move over, or point me at where your context lives
+> (Linear, Jira, GitHub, Notion, Google Drive, Slack, files, or anything else). I'll propose a starting structure with
+> projects, tasks, and Project Brains.
 
 Accept any useful source input:
 
-- Local folders or explicit local file paths.
-- Repositories or repo links.
+- User buckets: explicit project names, goals, work areas, teams, or outcomes the user wants to organize around.
 - Connected task systems such as Linear, Jira, GitHub Issues, Asana, ClickUp, or Shortcut.
 - Connected document systems such as Notion, Google Drive, Slack, Confluence, and other linkable sources.
-- User buckets: explicit project names, goals, work areas, teams, or outcomes the user wants to organize around.
+- Repositories or repo links.
+- Files or folders the user mentions — handle them when offered, but do not proactively ask for local paths.
 
 Use lightweight steering prompts when they fit:
 
@@ -95,14 +99,15 @@ Use these source-specific helpers and patterns:
 
 | Source family | Guidance |
 | --- | --- |
-| Local files | Use `scan-folder/SKILL.md` for folders and explicit file lists. Treat files as evidence first: inspect representative document content when possible, keep file paths, sizes, sampled titles, candidate themes, and notable omissions, then decide whether each file should also be uploaded. |
+| User buckets | Treat user-provided project names, goals, work areas, and outcomes as the taxonomy unless the user asks you to infer alternatives. |
 | Task systems | Use `scan-tasks/SKILL.md` for Linear, Jira, GitHub Issues, and similar tools. Prefer open, in-progress, recently updated, high-priority, or recently completed work. |
 | Document systems | Discover Notion, Google Drive, Slack, Confluence, and other linkable sources through available MCP tools. Keep canonical URLs for `link_external_document`; content text is only a fallback snapshot. |
-| User buckets | Treat user-provided project names, goals, work areas, and outcomes as the taxonomy unless the user asks you to infer alternatives. |
 | Repositories | Use repo metadata, issue links, README/docs references, milestones, labels, and recent activity to support task and document signals. |
+| Local files | Only when the user explicitly provides a folder or file paths. Use `scan-folder/SKILL.md` for folders and explicit file lists. Treat files as evidence first: inspect representative document content when possible, keep file paths, sizes, sampled titles, candidate themes, and notable omissions, then decide whether each file should also be uploaded. |
 
 If the user scoped sources, honor that scope. If they only said they are not organized yet, inspect available connected
-task and document sources plus obvious local context from the conversation, then propose a focused starting structure.
+task and document sources, then propose a focused starting structure. Do not proactively scan local folders unless the
+user mentions them.
 
 If a connected source read fails, mark that source skipped and continue with the other sources. If all usable sources are
 missing or unreadable, ask one targeted question that would unblock setup.
@@ -245,7 +250,7 @@ For each selected project:
 
 1. Call `create_project` with the project title, description, and lifecycle status when appropriate. Store `projectId`
    and `url`.
-2. Upload selected local documents with `upload_document`.
+2. Upload selected local documents using the upload strategy detected in preflight (see below).
 3. Link selected external documents with `link_external_document`.
 4. For **pasted inline content** in the manifest or conversation (Slack export text, summaries, notes with no file path
    and no external URL), call `create_document` with `{ title, content, projectId }` — not `upload_document` or
@@ -253,20 +258,12 @@ For each selected project:
 5. Create selected tasks with `create_tasks`.
 6. Trigger `trigger_brain_build` for that project.
 
-For `upload_document`, pass `filePaths` (an array of absolute paths) to upload one or more local files in a single call.
+#### Local document upload
 
-Local uploads:
+Follow the document upload workflow in `upload/SKILL.md` (Steps 1–2 for upload and egress recovery, plus the fallback
+for creating documents from file content when upload isn't possible).
 
-- Use absolute paths only.
-- Do not read file bytes into the agent or pass content in the tool call; `upload_document` streams from disk through
-  MCP/server upload behavior.
-- Exact file support and hard upload limits are enforced by the MCP/server. Skills may select likely document, image,
-  audio, video, and text candidates, but should report MCP upload failures instead of pre-declaring hard limits.
-- Uploadability is separate from inspectability. A document or image can be worth uploading even when its full contents
-  cannot fit in model context or no extraction tool is available.
-- If the MCP rejects a file type or the host needs conversion, skip that file when other documents remain, or ask whether
-  to convert or retry when it is central to the project.
-- Track per-file success and failure.
+Report upload failures per-file; do not pre-declare hard limits. Skip rejected files and continue.
 
 External documents:
 
@@ -365,18 +362,14 @@ Return a compact partial-results summary with:
 
 ## Error and Failure Handling
 
-- Kestral auth or MCP failure stops setup before writes. Tell the user to reconnect the MCP server and retry.
-- Missing `upload_document` stops local-file upload planning until Kestral is reconnected, but other non-local source
-  inspection can still continue before writes.
-- Connected source read failures skip that source and continue with remaining sources.
-- If project creation fails for a proposed project, do not attempt imports for that project. Continue with other selected
-  projects only when their writes are independent and the user-approved scope still makes sense.
-- If project creation succeeds but some imports fail, always return successful project URLs plus a per-source failure
-  summary.
-- If a bulk import is requested, treat failures as item-level or batch-level and continue when safe.
-- Project Brain failures do not invalidate imported work.
-- Pre-write cancellation means no write MCP tools. Mid-run cancellation stops future writes and summarizes completed
-  writes.
+- Auth/MCP failure → stop before writes; reconnect and retry.
+- Upload failure (egress) → give platform-specific egress fix steps; if user can't fix, fall back to `create_document`.
+- No upload tools → text/markdown via `create_document`; binary files skipped with manual-upload message.
+- Source read failure → skip that source, continue with others.
+- Project creation failure → skip imports for that project, continue with others.
+- Partial import failure → always return successful project URLs alongside failures.
+- Brain failures → non-fatal; report and continue.
+- Cancellation → stop future writes; summarize what completed.
 
 ## Error Message Reference
 

@@ -1,35 +1,35 @@
 ---
 name: kestral-scan-folder
-description: Use when kestral-setup or the user asks to scan local folders or explicit file paths as evidence for Kestral project setup.
+description: Use when kestral-setup or the user asks to select and inspect local files or folders as evidence for Kestral project setup.
 ---
 
 # Scan Folder
 
-Walk a local folder or explicit file list and return local evidence that `kestral-setup/SKILL.md` can use to infer one
-or more candidate workstreams. This helper inventories documents, images, media, and likely context files, samples
-representative content where practical, and reports signals without deciding the final project taxonomy on its own.
+Building-block skill dispatched by `kestral-setup` when the user provides local files. Inventories documents, images,
+media, and context files from a folder or explicit file list, samples representative content, and returns evidence
+signals for workstream inference. Not the primary setup entry point.
 
-Selection numbers in this skill are curated preview defaults for a first pass. They are not hard caps: if the user asks
-to import more or all matching local files, return enough metadata for `kestral-setup` to expand the approved import in
-batches.
+Selection numbers are curated preview defaults; expand when the user asks for more.
 
 ## Inputs
 
 The caller provides either:
 
-- A **folder path** to scan recursively, or
+- A **folder path** to scan, or
 - An explicit list of **file paths** (can mix files from different locations)
+
+Prefer explicit file paths when the user names specific files. Use folder scanning when the user points at a directory.
 
 ## Workflow
 
 ### 1. Discover files
 
+If explicit files were given, validate each path exists and is readable.
+
 If a folder path was given, use `Glob` with common local context patterns such as
 `**/*.{pdf,docx,txt,md,markdown,csv,jpg,jpeg,png,webp,heic,heif,mp3,m4a,mp4}` rooted at that folder. These patterns are
 candidate discovery filters, not the source of truth for upload support; MCP/server behavior owns exact support and hard
-limits.
-
-If explicit files were given, validate each path exists and is readable.
+limits. Present results as a selection for the user, not an assumed-complete upload list.
 
 **Always exclude:**
 
@@ -84,9 +84,9 @@ For each **selected** file only, record:
 - `filename` — basename
 - `relativePath` — path relative to the scanned folder root
 - `byteSize` — from scan step
-- `filePath` — absolute path, for later `upload_document`
+- `filePath` — absolute path, for later upload (via `upload_document`, presigned-URL flow, or `create_document`)
 - `signals` — compact labels explaining why this document was selected
-- Do **not** read full file contents here — upload reads at upload time
+- Do **not** read full file contents here — the upload step reads at upload time
 
 ## Output
 

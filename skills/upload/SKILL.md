@@ -12,8 +12,8 @@ provided by the caller, and trigger Project Brain generation after project conte
 
 A **Kestral** MCP server must show as **connected** (`/mcp`). Auth is automatic via OAuth (browser opens on first use).
 
-Local file uploads use `upload_document` on **Kestral** — including Claude Cowork. If `upload_document` is not in the
-tool list, reconnect **Kestral** in the client and retry — do not send the user to another app for uploads.
+Local file uploads use the best available strategy from the MCP tool list. Missing upload tools limit local file handling
+but do not block project creation, task import, or external doc linking.
 
 ## Inputs
 
@@ -52,36 +52,48 @@ Call `create_project` with `{ title, description }`. Store `projectId` and `url`
 
 ### 2. Upload documents
 
-For selected local documents, pass the project ID so each file is attached. Use
-`upload_document({ filePaths, projectId, explanation })` to upload one or more files in a single call.
+Try the best available upload tool. On network/egress failure, help the user fix it and retry.
 
-Single-file call shape:
+**Step 1: Try upload**
 
-```json
-{
-  "filePaths": ["/absolute/path/to/scanned/folder/README.md"],
-  "projectId": "<projectId>",
-  "explanation": "Uploading the selected README into the approved Kestral setup project."
-}
-```
+- `upload_document` available → `upload_document({ filePaths, projectId, explanation })`. Streams from disk; absolute
+  paths only; credential locations rejected. Returns `{ documentId, title, url }` or `{ documents, failed }`.
+- `upload_request_urls` available (max 50 files/request) → derive `contentType` from each file's extension
+  (e.g. `.md` → `text/markdown`, `.pdf` → `application/pdf`) and use `byteSize` from scan-folder as `sizeBytes`:
+  1. `upload_request_urls({ projectId, files: [{ filename, relativePath, contentType, sizeBytes }], explanation })`
+  2. `curl -X PUT -H "Content-Type: <type>" -T "<path>" "<uploadUrl>"` per file
+  3. `upload_finalize({ projectId, uploads: [{ fileUrl, filename, contentType }], explanation })`
+- Neither available → use the fallback below.
 
-`upload_document` streams bytes from disk straight to storage via a presigned URL. Do NOT pass file contents; bytes never
-pass through the agent's model context. Exact file support and hard upload limits are enforced by MCP/server behavior,
-not this skill. The skill may pass likely document, image, audio, video, and text candidates, then report any unsupported
-or oversized files from the upload result without blocking the rest. Use absolute paths only; the server rejects common
-credential locations (`.ssh`, `.aws`, `.kestral`, `.env`, etc.).
+**Step 2: On upload failure (network/egress error)**
 
-Single-file calls return `{ documentId, title, url }`; batch calls may return `{ documents, failed }`. Track per-file
-success/failure in either shape. On 401, tell the user to reconnect the MCP server, then retry.
+Give platform-specific egress fix instructions:
 
-For selected external documents, call `link_external_document` with `{ url, title, projectId, content? }`. Never use
-`create_document` for external docs; it loses source identity and autosync behavior. Track `resolutionStatus` so pending
-links can be reported as partial success.
+- **Claude Cowork:** **Settings → Capabilities** → enable **"Allow network egress"** → add `storage.googleapis.com`
+  and `app.kestral.ai` as allowed domains.
+- **Codex:** **Settings → Configuration** → enable **"Allow network access"**.
+- **Claude Code:** No restrictions — check connectivity.
 
-For **agent-authored inline content** (Slack thread pasted in chat, meeting summary, notes the agent is writing — not a
-file on disk and not an external URL), call `create_document` with `{ title, content, projectId, explanation }`. The
-document is created and attached to the project in one call. Confirm from the response that the document is linked to
-the project.
+After giving instructions, explicitly prompt the user to tell you when they're ready:
+
+> Let me know when you've updated the setting and I'll retry the upload.
+
+Wait for the user's response, then retry the upload. If upload still fails after retry, use the fallback below.
+
+**Fallback — create documents from file content**
+
+If no upload tool is available, or upload fails and cannot be recovered:
+
+Read text/markdown via Read tool → `create_document({ title, content, projectId, explanation })`. Skip binary files
+with a message pointing to manual upload from the Kestral project page.
+
+On 401, tell user to reconnect and retry. Report failures per-file.
+
+**External documents:** `link_external_document({ url, title, projectId, content? })`. Never use `create_document` for
+external docs — it loses provenance and autosync. Track `resolutionStatus` for pending-link reporting.
+
+**Inline content** (pasted text, summaries — not a file or URL): `create_document({ title, content, projectId,
+explanation })`. Confirm the response shows the document is linked to the project.
 
 ### 3. Import tasks
 

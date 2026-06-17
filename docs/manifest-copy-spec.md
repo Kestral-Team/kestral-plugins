@@ -5,21 +5,21 @@ patterns closely while preserving source-specific details and user-provided name
 
 ## Connected-source offer copy
 
-Used by `kestral-setup` (step 2 opener and source discovery). The plugin can organize local files and connected tool
-context into one or more Kestral projects. Tasks come from Linear, Jira, GitHub, and others; **linkable document sources
-are Notion, Google Drive, Slack, and Confluence** (other connectors' URLs aren't recognized by
+Used by `kestral-setup` (step 2 opener and source discovery). The plugin can organize connected tool context and
+optionally local files into one or more Kestral projects. Tasks come from Linear, Jira, GitHub, and others; **linkable
+document sources are Notion, Google Drive, Slack, and Confluence** (other connectors' URLs aren't recognized by
 `link_external_document`). The offer is **reactive, not a per-source yes/no interrogation** — pick the lightest touch
 that fits the conversation.
 
 ### Step 2 opener (frames value + plants the connector seed)
 
 ```
-Welcome to Kestral. I can help turn scattered files, tasks, and connected tool data into organized Kestral projects so
-you and your team can stay on track automatically.
+Welcome to Kestral. I can help organize your work into Kestral projects so you and your team can stay on track
+automatically.
 
-I can work from local files, GitHub, Linear, Jira, Notion, Google Drive, Slack, and any other connected tool available
-in this chat. Give me whatever you have: a folder, a repo, a task system, a few links, or just "I'm not organized yet,"
-and I'll propose a starting structure with projects, documents, tasks, and Project Brains.
+Tell me what you're working on — a goal, a project you want to move over, or point me at where your context lives
+(Linear, Jira, GitHub, Notion, Google Drive, Slack, files, or anything else). I'll propose a starting structure with
+projects, tasks, and Project Brains.
 ```
 
 ### Surfacing connected sources (step 3a)
@@ -30,7 +30,7 @@ Choose one, in priority order:
 | ------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------- |
 | User already named sources ("pull my Linear too")             | Act on exactly those — no offer copy, no re-asking.                                                                            |
 | Scanned content references a connected source                 | Lead with one specific line: "Your README references Linear — want me to pull the linked issues in too?"                       |
-| Sources connected but neither of the above                    | One soft mention, then move on: "You also have Notion and Google Drive connected — say the word if you'd like any pulled in, otherwise I'll keep documents to local files." |
+| Sources connected but neither of the above                    | One soft mention, then move on: "You also have Notion and Google Drive connected — say the word if you'd like any pulled in." |
 | No relevant sources connected                                 | Say nothing about their absence.                                                                                              |
 
 **Rules:** Never loop a yes/no per source. Never block the flow waiting for an answer — the user can request sources now,
@@ -212,9 +212,9 @@ and adapt project counts, source names, item counts, and URLs to the actual run.
 | --- | --- |
 | Kestral MCP tools not in session (preflight) | See **MCP not connected** block below. |
 | Auth fails / token invalid | Stop before any writes. Tell the user Kestral authentication failed and to reconnect the Kestral MCP server before retrying setup. |
-| Required MCP tool is disconnected or missing | Stop before writes. Name the missing Kestral capability and ask the user to reconnect or restart the MCP server before retrying. |
-| Local folder or explicit file path doesn't exist | Do not write anything. Say you could not find `<path>` and ask for another folder, file set, repo, task system, or connected source. |
-| No usable local files or connected sources remain | Do not write anything. Explain that no importable documents or task signals were found from the selected sources and ask for another source or user-provided buckets. |
+| Required core MCP tool is disconnected or missing | Stop before writes only if core tools (`whoami`, `create_project`) are missing. Missing upload tools (`upload_document`, `upload_request_urls`) limit local file handling but do not block project creation, task import, or external doc linking. |
+| Local folder or explicit file path doesn't exist | Do not write anything. Say you could not find `<path>` and ask for another folder, file set, connected tool, or user-provided description. |
+| No usable connected sources or local files remain | Do not write anything. Explain that no importable documents or task signals were found from the selected sources and ask for another source or user-provided buckets. |
 | Task source listing error | Skip `<source>` and continue when other sources remain. Include `<source>` in the skipped-source summary. If no usable sources remain, ask for another source. |
 | Document source listing error | Skip `<source>` and continue when other sources remain. Include `<source>` in the skipped-source summary. If no usable sources remain, ask for another source. |
 | Per-task translation failure | Skip the affected task, name its source when available, and summarize skipped tasks per project/source in the final report. |
@@ -266,7 +266,7 @@ Use when Kestral MCP tools are absent in the session. Pick host-specific bullets
 > I can't see any Kestral MCP tools in this session yet, so I can't start setup.
 >
 > **All hosts:** Run `/mcp` (or your app's MCP settings) and confirm a **Kestral** / **kestral** server is connected
-> with tools like `upload_document` and `whoami`. The setup skill alone is not enough — the MCP bridge must be
+> with tools like `whoami` and `create_project`. The setup skill alone is not enough — the MCP server must be
 > running in this thread.
 >
 > **Claude Cowork:**
