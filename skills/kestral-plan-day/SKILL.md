@@ -12,7 +12,9 @@ attention, what fits today, and what should be deferred.
 ## Prerequisites
 
 The `Kestral` MCP server must be in this session (`/mcp`). Call `whoami` first — if it fails, ask the user to
-reconnect or authenticate the **Kestral** MCP server in their app's MCP settings (a browser should open for sign-in).
+reconnect or authenticate the **Kestral** MCP server in their app's MCP settings. The agent cannot handle OAuth
+directly — authenticate through your app's UI (Cowork: Customize → Connectors; Codex: Settings → MCP Servers →
+Authenticate; Claude Code: `/mcp` → reconnect).
 Do not call other tools until authenticated.
 A calendar MCP/app connector should also be available for best results; if calendar access is missing, ask the user for
 fixed commitments before finalizing the plan.

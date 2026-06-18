@@ -30,9 +30,10 @@ work with no new progress, skip.
 
 ### Auth
 
-Call `whoami` before any other Kestral MCP call (reads included). If it succeeds, proceed. If it fails, tell the user:
-"Kestral isn't authenticated. Reconnect or authenticate the **Kestral** MCP server in your app's MCP settings — a
-browser should open for sign-in. Then ask me to continue." On Cursor, retry via `mcp_auth` if available. Do not call other Kestral tools until `whoami` succeeds.
+Call `whoami` before any other Kestral MCP call (reads included). If it succeeds, proceed. If it fails, guide the user
+to authenticate through their app's UI — the agent cannot handle OAuth directly. Cowork: Customize → Connectors; Codex:
+Settings → MCP Servers → Authenticate; Claude Code: `/mcp` → reconnect; Cursor: Settings → MCP Servers → Authenticate
+(or agent calls `mcp_auth`). Do not call other Kestral tools until `whoami` succeeds.
 
 All MCP calls require an `explanation` field — use a clear description of the operation.
 

@@ -9,18 +9,15 @@ update tasks, pull workspace knowledge into a conversation, or scaffold a new pr
 
 ## Why use it
 
-- **Onboard a project in one command.** Tell the plugin what you're working on. It pulls in tasks from Linear, Jira,
-  and GitHub, links documents from Notion, Google Drive, and Slack, and creates a Kestral project with everything
-  organized — including a Project Brain that gives the agent context about your work. You can also include local files
-  if you have relevant docs.
+- **Onboard a project in one command.** Tell the plugin what you're working on or which connected tools to use. It pulls
+  in tasks from Linear, Jira, and GitHub, links documents from Notion, Google Drive, Slack, and Granola, and creates a
+  Kestral project with everything organized — including a Project Brain. Local files/folders are one source among many.
 - **Bring your connected tools' context with you.** The plugin sees the same MCP connectors loaded in your session and
   offers to enrich the project with them. You stay in control of what's included — nothing is pulled without your say.
 - **Manage tasks without switching tools.** List your open tasks, change status, add comments, and assign work from the
   command line.
 - **Give the agent your workspace context.** Search Kestral for docs, projects, and tasks, then pull them into the
   conversation so the agent can answer questions with real data.
-- **Plan new projects quickly.** Describe a goal, review a draft plan with tasks, and create it in Kestral with one
-  approval.
 
 ## Install
 
@@ -86,23 +83,22 @@ Pick your app below for manual steps (the same steps the script automates).
 5. Run `/kestral-setup` in Codex to connect your workspace.
 
    Codex does **not** use Claude-style `/kestral:…` slash commands for other skills — use `$kestral-setup`,
-   `$kestral-tasks`, `$kestral-context`, or `$kestral-plan`, or type `@kestral` to target the plugin.
+   `$kestral-tasks`, `$kestral-context`, or type `@kestral` to target the plugin.
 
 After installing in Codex, fully quit and restart the app so it reloads the plugin cache. In a new thread, type `$` and
-look for `kestral-setup`, `kestral-tasks`, `kestral-context`, or `kestral-plan`.
+look for `kestral-setup`, `kestral-tasks`, or `kestral-context`.
 
 ## What you can do
 
 | Command            | What it does                                                              | Example                                                                                    |
 | ------------------ | ------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------ |
-| `/kestral:kestral-setup`    | Onboard a project from connected tools, goals, and optional local files. | `/kestral:kestral-setup` → authenticates, finds your work, shows a manifest, creates a Kestral project.     |
+| `/kestral:kestral-setup`    | Set up a Kestral project with a Project Brain from connected tools and goals. | `/kestral:kestral-setup` → authenticates, finds your work, shows a manifest, creates project + brain.     |
 | `/kestral:tasks`   | Search, view, and update tasks in your workspace.                         | `/kestral:tasks show my open tasks in the auth project` → returns a filtered task list.    |
 | `/kestral:context` | Pull docs, projects, and tasks into the chat as context.                  | `/kestral:context auth migration` → finds matching docs and tasks, asks which to load.     |
-| `/kestral:plan`    | Scaffold a new project with seed tasks from a brief.                      | `/kestral:plan migrate OAuth to OIDC` → drafts a project with 8 tasks, waits for approval. |
 
 In Claude Code, type `/kestral:` and use autocomplete to see all available commands.
 In Codex, type `@kestral` to target the plugin, or invoke a bundled skill directly with `$kestral-setup`,
-`$kestral-tasks`, `$kestral-context`, or `$kestral-plan`.
+`$kestral-tasks`, or `$kestral-context`.
 
 ## Getting started
 
@@ -111,17 +107,16 @@ Run `/kestral:kestral-setup` to start. The skill walks you through four steps:
 1. **Authenticate** — on first use, your app prompts you to authenticate. Sign in through the browser window that
    opens, select your workspace, and you're connected. Tokens are managed automatically after that.
 
-2. **Describe your work** — it asks what you're working on and checks for connected tools (Slack, Notion, Google Drive,
-   Linear, Jira, …). You can point it at wherever your context lives — apps, files, repos, or just describe the goal.
-   It won't interrogate you source-by-source — mention what you want and it reacts.
+2. **Set up your project** — explains what you get: a Kestral project with a Project Brain — a living summary for you,
+   your coding agents, and your team. Asks where your context lives — Linear, Jira, Notion, Drive, Granola notes,
+   local files/folders, or a goal you're working toward.
 
 3. **Review the manifest** — a summary of your project: tasks and documents pulled from connected tools, any local files
    you included, and a title/description it inferred. Every item is labelled by source. You can add, remove, or edit
    anything before proceeding.
 
-4. **Create** — creates a Kestral project, attaches documents, triggers Project Brain generation (an AI-generated
-   summary Kestral builds from your context), and imports tasks. You get a link to your new project, plus a few next
-   steps it can help with — adding more context, working blocker tasks, or sharing with your team.
+4. **Create** — creates a Kestral project, imports tasks, attaches documents, and generates a Project Brain. Once the
+   brain is ready, setup surfaces **blockers and next steps** so you can start work right in the chat.
 
 ```
 Recommended setup:
@@ -142,8 +137,8 @@ Say "create these", "only create Auth Migration", "rename Billing Automation to 
 or "import all matching tasks into Auth Migration".
 ```
 
-After onboarding, use `/kestral:tasks` to work with your tasks, `/kestral:context` to pull knowledge into conversations,
-and `/kestral:plan` to create new projects.
+After onboarding, use `/kestral:tasks` to work with your tasks and `/kestral:context` to pull knowledge into
+conversations.
 
 ## Supported document and task sources
 
@@ -152,7 +147,7 @@ and `/kestral:plan` to create new projects.
 | Source               | File types                                | Notes                                                                                    |
 | -------------------- | ----------------------------------------- | ---------------------------------------------------------------------------------------- |
 | MCP document sources | Notion, Google Drive, Slack, Confluence   | Linked into Kestral with source provenance (not copied). Detected automatically when the MCP is loaded. Nothing is pulled in unless you ask for it. |
-| Local files          | `.md`, `.txt`, `.doc`, `.docx`, and more  | Include specific files or point at a folder. Hidden dirs, `node_modules/`, `dist/`, etc. are excluded. |
+| Local files          | `.md`, `.txt`, `.doc`, `.docx`, and more  | Mention a file or folder if you want it included — same as any other source. |
 
 ### Tasks
 

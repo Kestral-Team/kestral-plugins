@@ -5,9 +5,8 @@ description: Use when kestral-setup or the user asks to select and inspect local
 
 # Scan Folder
 
-Building-block skill dispatched by `kestral-setup` when the user provides local files. Inventories documents, images,
-media, and context files from a folder or explicit file list, samples representative content, and returns evidence
-signals for workstream inference. Not the primary setup entry point.
+Building-block skill used by `kestral-setup` when the user provides local files or folder paths. Inventories documents,
+images, media, and context files, samples representative content, and returns evidence signals for workstream inference.
 
 Selection numbers are curated preview defaults; expand when the user asks for more.
 
@@ -18,7 +17,7 @@ The caller provides either:
 - A **folder path** to scan, or
 - An explicit list of **file paths** (can mix files from different locations)
 
-Prefer explicit file paths when the user names specific files. Use folder scanning when the user points at a directory.
+Prefer explicit file paths when the user names specific files. Use folder inventory when the user points at a directory.
 
 ## Workflow
 
@@ -121,8 +120,8 @@ Return a JSON object with this shape:
 
 ## Constraints
 
-- **This skill scans local files only.** Enumerating MCP document sources (Notion, Google Drive, Slack, Confluence) is
-  the `kestral-setup` skill's job (see `kestral-setup/SKILL.md` step 3a) — it has visibility into the conversation's loaded MCP tools.
+- **This skill covers local files only.** MCP document sources (Notion, Google Drive, Slack, Confluence) are handled by
+  `kestral-setup` (step 3) via the conversation's loaded MCP tools.
 - Local documents use provenance source label `local-folder` (stored server-side in metadata).
 - Candidate local context categories include documents, images, audio/video, text, Markdown, and CSV files. Exact upload
   support and hard limits are enforced by MCP/server behavior, not this skill.

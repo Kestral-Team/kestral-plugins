@@ -11,16 +11,81 @@ document sources are Notion, Google Drive, Slack, and Confluence** (other connec
 `link_external_document`). The offer is **reactive, not a per-source yes/no interrogation** — pick the lightest touch
 that fits the conversation.
 
-### Step 2 opener (frames value + plants the connector seed)
+### Step 2 opener (connected sources first; local files optional)
+
+Lead with **what they'll get**, then ask for sources. Use conversational prose, not card grids or form layouts.
+
+**Value framing (required before asking for sources):**
 
 ```
-Welcome to Kestral. I can help organize your work into Kestral projects so you and your team can stay on track
-automatically.
+What you'll get: A Kestral project with a Project Brain — a living, AI-generated summary of your work that:
 
-Tell me what you're working on — a goal, a project you want to move over, or point me at where your context lives
-(Linear, Jira, GitHub, Notion, Google Drive, Slack, files, or anything else). I'll propose a starting structure with
-projects, tasks, and Project Brains.
+- Gives you prioritized context when you start your day
+- Gives your coding agents the same shared understanding (via Kestral MCP)
+- Keeps your team aligned without status meetings — the brain updates as tasks, docs, and progress change
+
+The apps and docs you point me at feed that brain. I'll create a Kestral project, import the most relevant tasks and
+documents, and generate a Project Brain you can work from immediately.
 ```
+
+**Source ask (conversational prose only):**
+
+```
+Welcome to Kestral. I'll help you set up a Kestral project with a Project Brain — a living summary of your work that
+you, your coding agents, and your team can work from immediately. It stays in sync as tasks, docs, and progress change.
+
+Where does your context live? The sources you name become the project's foundation and feed the brain. For example: a
+Linear project, Jira board, Notion or Google Drive docs, Confluence pages, Slack threads, Granola notes, local
+files/folders, or describe a goal.
+
+Example: "Use my Linear Auth project and matching Drive docs" or "I'm launching billing automation — pull Jira and Notion."
+```
+
+### Step 1.5 opener (existing projects)
+
+When the workspace already has projects, run a **prioritized work snapshot** before showing options:
+
+1. `get_daily_brief` — 2–4 bullets on what changed, what's urgent, what needs attention.
+2. `entity_lookup({ type: "project_brain", id })` for top 2–3 projects (from brief priority, else most recently updated).
+   - 2–3 bullets per brain; note if building or missing.
+
+Then render:
+
+```
+I found [N] Kestral projects in your workspace, each with a Project Brain that stays in sync as you and your agents
+work.
+
+Your prioritized work
+
+[2–4 bullets from daily brief]
+
+From your Project Brains
+
+1. [Project Name](url)
+   - [2–3 bullets from brain: goals, blockers, recent changes]
+2. ...
+…and [N] more projects.
+
+You can get started right now:
+- Pick a task from above and start working — I can set it in progress and help here
+- Plan your day — run /kestral:plan-day (or $kestral-plan-day in Codex) for a prioritized plan
+
+Or set up more:
+- Add more context to a project — pull new docs or tasks from connected apps and refresh the brain
+- Create a new project — set up a Kestral project with a brain from Linear, Jira, Notion, Drive, Granola, or other apps
+```
+
+Do not ask for sources until the user picks add-context or create-new.
+
+After explore + plan-day, mention these ongoing skills (do not auto-run):
+
+- Plan day: /kestral:plan-day or $kestral-plan-day
+- Kestral Sync: install ambient rule once (sync/README.md) — then updates on push/phase completion without repeating sync
+- End day review: /kestral:end-day-review or $kestral-end-day-review — reconciles done work and updates task status
+```
+
+**Prefer instead** — lead with the Project Brain value prop, ask in conversational prose, and mention connected tools
+before local files. If the user wants local files, they'll say so.
 
 ### Surfacing connected sources (step 3a)
 
@@ -33,8 +98,8 @@ Choose one, in priority order:
 | Sources connected but neither of the above                    | One soft mention, then move on: "You also have Notion and Google Drive connected — say the word if you'd like any pulled in." |
 | No relevant sources connected                                 | Say nothing about their absence.                                                                                              |
 
-**Rules:** Never loop a yes/no per source. Never block the flow waiting for an answer — the user can request sources now,
-at the manifest checkpoint, or not at all. Whatever they include feeds the same manifest checkpoint below.
+Offer sources reactively — mention what's connected once, then move on. The user can request sources now, at the
+manifest checkpoint, or not at all.
 
 ## Setup manifest format
 
@@ -127,7 +192,7 @@ Phrases the `kestral-setup` skill must recognize at the manifest checkpoint:
 | `use these buckets: <list>`                          | Switch to user-led taxonomy and remap sources                                      |
 | `import more <source> into <project>`                 | Expand import scope for that project/source                                        |
 | `import all matching <tasks/documents>`              | Switch that project/source to bulk import mode                                     |
-| `look at <folder> instead` or `change folder <path>` | Re-scan a new folder and remap the proposed taxonomy                               |
+| `look at <folder> instead` or `change folder <path>` | Switch to a different local folder and remap the proposed taxonomy                               |
 | `ok` / `yes` / `go` / `create these`                   | Proceed to upload                                                                  |
 | `revise`                                               | Edit the manifest before proceeding (same as edit commands below)                  |
 | `cancel` / `no`                                        | Exit cleanly — no Kestral API calls                                                |
@@ -144,65 +209,6 @@ Re-render the manifest after each edit. On permission-aware hosts, proceed to wr
 edits or cancels — do not loop waiting for explicit manifest approval. On hosts without per-tool permission prompts,
 loop until the user replies ok or cancel.
 
-## Plan manifest format
-
-Used by the `plan` skill (`/kestral:plan`). Simpler than the kestral-setup manifest — no documents or file sizes, just a project
-title/description and a numbered task list with priorities.
-
-### New project
-
-```
-Project: Auth OIDC Migration
-Description: Migrate from legacy OAuth 1.0 to OpenID Connect for all auth flows.
-
-Tasks (8):
-  1. [high]    Audit current OAuth endpoints and token formats
-  2. [high]    Set up OIDC provider in staging
-  3. [medium]  Write token migration script
-  4. [medium]  Update login flow to use OIDC
-  5. [medium]  Update API auth middleware
-  6. [medium]  Write migration rollback script
-  7. [low]     Update developer documentation
-  8. [low]     QA full auth flow on staging
-
-Tags: auth, migration
-```
-
-### Adding tasks to an existing project
-
-```
-Adding tasks to: Auth Overhaul (active, 12 existing tasks)
-
-New tasks (5):
-  1. [medium]  Write token migration script
-  2. [medium]  Update login flow to use OIDC
-  3. [medium]  Update API auth middleware
-  4. [low]     Update developer documentation
-  5. [low]     QA full auth flow on staging
-```
-
-### Plan edit grammar
-
-Extends the shared grammar from the **Edit grammar** section above — `ok` and `cancel` work in all plan manifests.
-`title:` and `description:` are only available in the **new-project** flow; the existing-project checkpoint is
-tasks-only so title/description edits are disabled. Additional plan-specific phrases:
-
-| Phrase                                | Effect                                          |
-| ------------------------------------- | ----------------------------------------------- |
-| `add <task title>`                    | Append a task (default priority: medium)        |
-| `add <task title> [high]`             | Append a task with explicit priority            |
-| `remove <number>` or `remove <title>` | Remove a task by number or title match          |
-| `reorder <number> to <position>`      | Move a task to a different position             |
-| `reprioritize <number> <priority>`    | Change a task's priority                        |
-| `tag: <tag1>, <tag2>`                 | Set tags to apply to the project after creation |
-
-Re-render the manifest after each edit. On permission-aware hosts, proceed to writes after rendering unless the user
-edits or cancels — do not loop waiting for explicit manifest approval. On hosts without per-tool permission prompts,
-loop until the user replies ok or cancel.
-
-**Task count limit:** If the user `add`s beyond 15 tasks, warn: "That's a lot of tasks for one project. Consider
-splitting into multiple projects, or I'll create them all."
-
 ## Error message conventions
 
 Every error the `kestral-setup` skill can encounter should follow the same user-facing principles. Use these principles
@@ -211,7 +217,7 @@ and adapt project counts, source names, item counts, and URLs to the actual run.
 | Situation | Message principle |
 | --- | --- |
 | Kestral MCP tools not in session (preflight) | See **MCP not connected** block below. |
-| Auth fails / token invalid | Stop before any Kestral calls. Tell the user: "Kestral isn't authenticated. Reconnect or authenticate the **Kestral** MCP server in your app's MCP settings — a browser should open for sign-in. Then ask me to continue." |
+| Auth fails / token invalid | Stop before any Kestral calls. Guide the user through their host's UI to authenticate (the agent cannot handle OAuth callbacks or generate auth links). **Claude Cowork:** Customize → Kestral → Connectors → Install → Add. **Claude Code CLI:** `/mcp` → reconnect Kestral. **Codex:** Settings → MCP Servers → Kestral → Authenticate, then new thread. **Cursor:** Settings → MCP Servers → Kestral → Authenticate (or agent calls `mcp_auth`). |
 | Required core MCP tool is disconnected or missing | Stop before writes only if core tools (`whoami`, `create_project`) are missing. Missing upload tools (`upload_document`, `upload_request_urls`) limit local file handling but do not block project creation, task import, or external doc linking. |
 | Local folder or explicit file path doesn't exist | Do not write anything. Say you could not find `<path>` and ask for another folder, file set, connected tool, or user-provided description. |
 | No usable connected sources or local files remain | Do not write anything. Explain that no importable documents or task signals were found from the selected sources and ask for another source or user-provided buckets. |
@@ -246,6 +252,32 @@ Example:
 >
 > Brain: Generation started for Project Brain Onboarding. Brain generation could not start for MCP Plugin Reliability
 > (ref `<supportRef>`); open the project and click Generate to retry.
+>
+> **Next:** Once the brain finishes (~30s–2min), say "brain's ready" and I'll pull blockers and next steps so you can
+> pick one and start work here.
+
+### Post-create: Start from Project Brain
+
+After any successful create/enrich with brain triggered, always end with a get-started prompt — do not stop at import
+summary alone.
+
+```
+Your Kestral project is created and the Project Brain is generating — usually ready in 30 seconds to 2 minutes.
+[Project Name](url)
+
+Once it's ready, I'll pull blockers and next steps here so you can pick one and get started. Say "brain's ready" or
+"what should I work on?" — or ask me to check in a moment.
+
+From your Project Brain — here's what to tackle:
+- [blocker or next step]
+- ...
+
+You can start right now: pick one and I can set it in progress and help here.
+Or: run /kestral:plan-day for a full prioritized plan across your projects.
+```
+
+If brain is still building, offer to retry on "brain's ready". If no brain content yet, fall back to open tasks on the
+project and still ask which to start.
 
 ### Pending external links
 

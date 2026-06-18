@@ -12,8 +12,9 @@ auth migration?" without you having to paste anything.
 ## Prerequisites
 
 The `Kestral` MCP server must be in this session (`/mcp`). Call `whoami` first — if it fails, ask the user to
-reconnect or authenticate the **Kestral** MCP server in their app's MCP settings (a browser should open for sign-in).
-Do not call other tools until authenticated.
+reconnect or authenticate the **Kestral** MCP server in their app's MCP settings. The agent cannot handle OAuth
+directly — authenticate through your app's UI (Cowork: Customize → Connectors; Codex: Settings → MCP Servers →
+Authenticate; Claude Code: `/mcp` → reconnect).
 
 ## Human-readable references
 
@@ -32,8 +33,7 @@ Keep Kestral IDs internal unless the user asks for them. In user-facing output:
 
 ### 1. Authenticate
 
-Call `whoami`. If it fails, ask the user to reconnect or authenticate the **Kestral** MCP server in their app's MCP
-settings and stop. Do not search or load context until `whoami` succeeds.
+Call `whoami`. If it fails, guide the user to authenticate through their app's UI (see Prerequisites) and stop.
 
 ### 2. Get the query
 
@@ -161,6 +161,6 @@ messages.
 
 | Failure | Message |
 | --- | --- |
-| 401 / unauthorized | "Kestral isn't authenticated. Reconnect or authenticate the **Kestral** MCP server in your app's MCP settings — a browser should open for sign-in. Then ask me to continue." |
+| 401 / unauthorized | Guide the user to authenticate through their app's UI (see Prerequisites). The agent cannot handle OAuth directly. |
 | Document not found | "Selected document not found — it may have been deleted. Skipping." |
 | Search returned error | "Search failed: `<error>`. Try again or check that the MCP server is connected (`/mcp`)." |

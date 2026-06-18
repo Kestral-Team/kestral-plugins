@@ -1,7 +1,0 @@
-interface:
-  display_name: "Kestral Plan"
-  short_description: "Create a Kestral project from a brief"
-  default_prompt: "Use $kestral-plan to create a Kestral project from this goal."
-
-policy:
-  allow_implicit_invocation: false

@@ -11,16 +11,19 @@ provided by the caller, and trigger Project Brain generation after project conte
 ## Prerequisites
 
 A **Kestral** MCP server must be in this session (`/mcp`). Call `whoami` first — if it fails, ask the user to
-reconnect or authenticate the **Kestral** MCP server in their app's MCP settings (a browser should open for sign-in).
+reconnect or authenticate the **Kestral** MCP server in their app's MCP settings. The agent cannot handle OAuth
+directly — authenticate through your app's UI (Cowork: Customize → Connectors; Codex: Settings → MCP Servers →
+Authenticate; Claude Code: `/mcp` → reconnect).
 Do not call other tools until authenticated.
 
-Local file uploads use presigned URLs (`upload_request_urls` → PUT → `upload_finalize`). This requires network egress
-from the agent sandbox to `storage.googleapis.com`. If uploads fail with a network error, guide the user:
+Local file uploads use Kestral-owned upload URLs (`upload_request_urls` → PUT → response includes the document record).
+There is no separate finalize step. This requires network egress from the agent sandbox to `app.kestral.ai`. If uploads
+fail with a network error, guide the user:
 
-- **Claude Cowork:** **Settings → Capabilities** → enable **"Allow network egress"** → add `storage.googleapis.com`
-  and `app.kestral.ai` as allowed domains.
+- **Claude Cowork:** **Settings → Capabilities** → enable **"Allow network egress"** → add `app.kestral.ai` as an
+  allowed domain.
 - **Codex:** **Settings → Configuration** → enable **"Allow network access"**.
-- **Cursor:** Grant network access when prompted, or add `storage.googleapis.com` to allowed domains.
+- **Cursor:** Grant network access when prompted, or add `app.kestral.ai` to allowed domains.
 
 Missing upload tools or blocked egress do not block project creation, task import, or external doc linking. Text files
 can be uploaded as inline content via `create_document`. Binary files (PDFs, images) require egress or manual upload
@@ -72,16 +75,16 @@ Try the best available upload tool. On network/egress failure, help the user fix
 - `upload_request_urls` available (max 50 files/request) → derive `contentType` from each file's extension
   (e.g. `.md` → `text/markdown`, `.pdf` → `application/pdf`) and use `byteSize` from scan-folder as `sizeBytes`:
   1. `upload_request_urls({ projectId, files: [{ filename, relativePath, contentType, sizeBytes }], explanation })`
-  2. `curl -X PUT -H "Content-Type: <type>" -T "<path>" "<uploadUrl>"` per file
-  3. `upload_finalize({ projectId, uploads: [{ fileUrl, filename, contentType }], explanation })`
+  2. `curl -X PUT -H "Content-Type: <type>" -T "<path>" "<uploadUrl>"` per file — the PUT response returns the
+     completed document record (`{ documents: [{ id, title, sourceUrl }] }`), so there is no separate finalize step.
 - Neither available → use the fallback below.
 
 **Step 2: On upload failure (network/egress error)**
 
 Give platform-specific egress fix instructions:
 
-- **Claude Cowork:** **Settings → Capabilities** → enable **"Allow network egress"** → add `storage.googleapis.com`
-  and `app.kestral.ai` as allowed domains.
+- **Claude Cowork:** **Settings → Capabilities** → enable **"Allow network egress"** → add `app.kestral.ai` as an
+  allowed domain.
 - **Codex:** **Settings → Configuration** → enable **"Allow network access"**.
 - **Claude Code:** No restrictions — check connectivity.
 

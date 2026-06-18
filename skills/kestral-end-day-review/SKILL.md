@@ -12,7 +12,9 @@ covered by the User preferences rules.
 ## Prerequisites
 
 The `Kestral` MCP server must be in this session (`/mcp`). Call `whoami` first — if it fails, ask the user to
-reconnect or authenticate the **Kestral** MCP server in their app's MCP settings (a browser should open for sign-in).
+reconnect or authenticate the **Kestral** MCP server in their app's MCP settings. The agent cannot handle OAuth
+directly — authenticate through your app's UI (Cowork: Customize → Connectors; Codex: Settings → MCP Servers →
+Authenticate; Claude Code: `/mcp` → reconnect).
 Do not call other tools until authenticated.
 Calendar access is optional, but use it when tomorrow prioritization depends on schedule realism.
 
@@ -64,11 +66,16 @@ over generated summaries, and call out stale or unavailable sources.
 
 Kestral searches to run when close-out needs verification:
 
-- `tasks updated today <project name>`
+- Tasks updated today in a project: use `timeFilter: "updated today"` with `projectId` (resolve the project name to an
+  ID first via `entity_lookup` or `query_entities(type: "projects")`). Do not put the project name in the `query` field
+  alongside `projectId` — this causes false zero-result sets from keyword matching on the project name.
 - `urgent open tasks in <project name>`
 - `blocked tasks <project name>`
 - `documents updated today <project name>`
-- project-level `search_content` (type: "knowledge") for current blockers, next steps, and progress
+- For project status, blockers, next steps, and goal progress: use `entity_lookup(type: "project", id: "<projectId>")`
+  or `query_entities(type: "projects", query: "<project name>")` — both return `knowledgeSummary` with blockers, next
+  steps, and goal progress. Reserve `search_content(type: "knowledge", targetType: "project")` for semantic discovery
+  of specific topics across all projects, not for reliable project-scoped status lookup.
 
 Calendar searches should use explicit local-day RFC3339 bounds for tomorrow. If calendar access is missing or empty, do
 not infer a free day; state the gap.
