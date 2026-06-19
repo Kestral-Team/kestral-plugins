@@ -1,22 +1,20 @@
 #!/usr/bin/env bash
-# Kestral plugin one-shot macOS setup script.
+# Kestral plugin one-shot setup script (macOS and Linux).
 #
 # Installs the Kestral plugin to Claude Code, Claude Cowork, and/or Codex.
 #
 # Usage:
 #   curl -fsSL https://raw.githubusercontent.com/Kestral-Team/kestral-plugins/main/setup.sh | bash
-#   bash setup.sh [--app claude-code|claude-cowork|codex] [--go-mcp]
+#   bash setup.sh [--app claude-code|claude-cowork|codex]
 #
 # Options:
 #   --app <targets>       Non-interactive target set (comma-separated: claude-code, claude-cowork, codex)
-#   --go-mcp              Install the local helper for uploading files from your Mac (default: hosted MCP URL)
 #   -h, --help            Show this help
 #
 # Examples:
 #   bash setup.sh --app claude-code
 #   bash setup.sh --app codex
 #   curl -fsSL https://raw.githubusercontent.com/Kestral-Team/kestral-plugins/main/setup.sh | bash
-#   curl -fsSL https://raw.githubusercontent.com/Kestral-Team/kestral-plugins/main/setup.sh | bash -s -- --go-mcp
 
 set -euo pipefail
 
@@ -28,17 +26,11 @@ CODEX_APP="/Applications/Codex.app"
 CODEX_LOCAL_MARKETPLACE_DIR="${HOME}/.kestral/codex-marketplace"
 CLAUDE_APP="/Applications/Claude.app"
 SESSIONS_BASE="${HOME}/Library/Application Support/Claude/local-agent-mode-sessions"
-KESTRAL_MCP_SERVER_NAME="Kestral"
-KESTRAL_MCP_PLUGIN_BIN_REL="bin/kestral-mcp"
-KESTRAL_MCP_BIN_DIR=""
-KESTRAL_MCP_BIN=""
-GO_MCP_BINARY_INSTALLED=0
 RUBY_BIN=""
 
 # --- Parsed flags ---
 APP_FLAG=""
 EXPLICIT_APP_FLAG=0
-USE_REMOTE_MCP=1
 
 # --- Detection / selection state ---
 HAS_GIT=0
@@ -70,83 +62,26 @@ LOGFILE="${HOME}/.kestral/setup.log"
 mkdir -p "${HOME}/.kestral"
 : > "$LOGFILE"
 
-# Resolve a spawn-safe absolute path for kestral-mcp (MCP hosts do not expand ~).
-_resolve_kestral_mcp_bin_path() {
-  local _home _dir _bin
-
-  _home="${HOME:-}"
-  if [ -z "$_home" ] || [ "$_home" = "~" ]; then
-    _home="$(eval echo ~"$(id -un 2>/dev/null || true)")"
-  fi
-  if [ -z "$_home" ]; then
-    abort "HOME is not set — cannot resolve kestral-mcp binary path."
-  fi
-
-  case "$_home" in
-    "~" | "~/"*)
-      _home="${HOME}${_home#\~}"
-      ;;
-  esac
-  _home="${_home%/}"
-
-  case "$_home" in
-    /Users/*) ;;
-    *)
-      abort "Expected macOS home under /Users/ — --go-mcp requires macOS."
-      ;;
-  esac
-
-  _dir="${_home}/.kestral/bin"
-  _bin="${_dir}/kestral-mcp"
-
-  if [ -d "$_dir" ]; then
-    local _resolved_dir
-    _resolved_dir="$(cd "$_dir" && pwd -P)" || abort "Could not resolve kestral-mcp bin directory: $_dir"
-    _dir="$_resolved_dir"
-    _bin="${_dir}/kestral-mcp"
-  fi
-
-  case "$_bin" in
-    "~" | "~/"*)
-      abort "Resolved MCP binary path still contains ~ — cannot write MCP config."
-      ;;
-    /Users/*) ;;
-    *)
-      abort "Resolved MCP binary path must be under /Users/ (macOS only)."
-      ;;
-  esac
-
-  printf '%s' "$_bin"
-}
-
-_init_kestral_mcp_bin_paths() {
-  KESTRAL_MCP_BIN="$(_resolve_kestral_mcp_bin_path)"
-  KESTRAL_MCP_BIN_DIR="$(dirname "$KESTRAL_MCP_BIN")"
-}
-
 # --- Usage ---
 
 usage() {
   cat <<EOF
 Kestral plugin setup
 
-Default install configures remote MCP at app.kestral.ai (macOS and Linux).
---go-mcp is macOS only (local file-upload helper).
+Configures the remote MCP at app.kestral.ai (macOS and Linux).
 
 Usage:
   curl -fsSL https://raw.githubusercontent.com/Kestral-Team/kestral-plugins/main/setup.sh | bash
-  bash setup.sh [--app claude-code|claude-cowork|codex] [--go-mcp]
+  bash setup.sh [--app claude-code|claude-cowork|codex]
 
 Options:
   --app <targets>       Non-interactive target set (comma-separated: claude-code, claude-cowork, codex)
-  --go-mcp              macOS only: install local helper for uploading files from your Mac
   -h, --help            Show this help
 
 Examples:
   bash setup.sh --app claude-code
   bash setup.sh --app codex
   bash setup.sh --app claude-code,codex
-  curl -fsSL https://raw.githubusercontent.com/Kestral-Team/kestral-plugins/main/setup.sh | bash -s -- --go-mcp
 EOF
 }
 
@@ -158,9 +93,6 @@ parse_args() {
         APP_FLAG="${1:-}"
         EXPLICIT_APP_FLAG=1
         [ -n "$APP_FLAG" ] || abort "--app requires a value"
-        ;;
-      --go-mcp)
-        USE_REMOTE_MCP=0
         ;;
       -h | --help)
         usage
@@ -280,16 +212,6 @@ read_tty() {
 }
 
 # --- Prerequisites ---
-
-require_macos_for_go_mcp() {
-  if [ "$USE_REMOTE_MCP" -eq 1 ]; then
-    return 0
-  fi
-  if [ "$(uname -s)" != "Darwin" ]; then
-    abort_with_hint "--go-mcp (local file upload) requires macOS." \
-      "On Linux, run without --go-mcp to use remote MCP at https://app.kestral.ai/mcp, or follow manual plugin steps in https://github.com/Kestral-Team/kestral-plugins#install"
-  fi
-}
 
 ensure_git() {
   if command -v git >/dev/null 2>&1; then
@@ -466,69 +388,6 @@ RUBY
   _json_write_atomic "$_file" "$_result"
 }
 
-_install_go_mcp_binary_from_path() {
-  local _source="$1"
-  mkdir -p "$KESTRAL_MCP_BIN_DIR"
-  install -m 755 "$_source" "$KESTRAL_MCP_BIN"
-}
-
-install_go_mcp_binary_from_plugin_root() {
-  local _plugin_root="${1:-}"
-  local _release_label _zip_url _sums_url _tmp_dir
-
-  if [ -n "$_plugin_root" ] && [ -x "${_plugin_root}/${KESTRAL_MCP_PLUGIN_BIN_REL}" ]; then
-    _install_go_mcp_binary_from_path "${_plugin_root}/${KESTRAL_MCP_PLUGIN_BIN_REL}"
-    ok "Installed kestral-mcp from plugin → $KESTRAL_MCP_BIN"
-    return 0
-  fi
-
-  _release_label="latest"
-  _zip_url="https://github.com/${MARKETPLACE_REPO}/releases/latest/download/kestral-mcp-darwin-universal.zip"
-  _sums_url="https://github.com/${MARKETPLACE_REPO}/releases/latest/download/SHA256SUMS"
-
-  mkdir -p "$KESTRAL_MCP_BIN_DIR"
-  _tmp_dir="$(mktemp -d "${TMPDIR:-/tmp}/kestral-mcp-install.XXXXXX")"
-
-  log "Downloading Kestral helper from ${MARKETPLACE_REPO} (${_release_label})..."
-  if ! curl -fsSL "$_zip_url" -o "${_tmp_dir}/kestral-mcp-darwin-universal.zip"; then
-    rm -rf "$_tmp_dir"
-    abort_with_hint "Failed to download the Kestral helper." \
-      "Check https://github.com/${MARKETPLACE_REPO}/releases includes kestral-mcp-darwin-universal.zip on the latest release."
-  fi
-
-  if curl -fsSL "$_sums_url" -o "${_tmp_dir}/SHA256SUMS" 2>/dev/null; then
-    (
-      cd "$_tmp_dir" || exit 1
-      shasum -a 256 -c SHA256SUMS
-    ) || {
-      rm -rf "$_tmp_dir"
-      abort "Checksum verification failed for the Kestral helper."
-    }
-    verbose "Verified SHA256 checksum for kestral-mcp-darwin-universal.zip"
-  else
-    warn "SHA256SUMS not found for ${_release_label} — skipping checksum verification."
-  fi
-
-  unzip -q -o "${_tmp_dir}/kestral-mcp-darwin-universal.zip" -d "$_tmp_dir"
-  if [ ! -f "${_tmp_dir}/kestral-mcp" ]; then
-    rm -rf "$_tmp_dir"
-    abort "Downloaded archive did not contain kestral-mcp."
-  fi
-
-  _install_go_mcp_binary_from_path "${_tmp_dir}/kestral-mcp"
-  rm -rf "$_tmp_dir"
-  ok "Installed kestral-mcp (${_release_label}) → $KESTRAL_MCP_BIN"
-}
-
-ensure_go_mcp_binary_installed() {
-  local _plugin_root="${1:-}"
-  if [ "$GO_MCP_BINARY_INSTALLED" -eq 1 ]; then
-    return 0
-  fi
-  install_go_mcp_binary_from_plugin_root "$_plugin_root"
-  GO_MCP_BINARY_INSTALLED=1
-}
-
 _claude_marketplace_root() {
   local _candidate
   for _candidate in \
@@ -566,41 +425,6 @@ _restore_plugin_mcp_json_in_clone() {
   if [ -n "$_clone_root" ] && [ -d "${_clone_root}/.git" ]; then
     git -C "$_clone_root" checkout -- .mcp.json 2>/dev/null || true
   fi
-}
-
-_rewrite_plugin_mcp_json() {
-  local _plugin_root="$1"
-  local _mcp_file="${_plugin_root}/.mcp.json"
-  if [ ! -f "$_mcp_file" ]; then
-    return 0
-  fi
-
-  local _result
-  _result="$("$RUBY_BIN" -e "$(cat <<'RUBY'
-require 'json'
-file = ARGV[0]
-cmd = ARGV[1]
-name = ARGV[2]
-if cmd.include?('~')
-  abort "MCP command must not contain ~ (got #{cmd.inspect})"
-end
-unless cmd.start_with?('/Users/')
-  abort "MCP command must be a macOS absolute path (got #{cmd.inspect})"
-end
-data = JSON.parse(File.read(file))
-if data.key?('mcpServers')
-  data['mcpServers'] = {} unless data['mcpServers'].is_a?(Hash)
-  data['mcpServers'][name] = { 'command' => cmd, 'args' => [] }
-end
-if data.key?('mcp_servers')
-  data['mcp_servers'] = {} unless data['mcp_servers'].is_a?(Hash)
-  data['mcp_servers'][name] = { 'command' => cmd, 'args' => [] }
-end
-print JSON.pretty_generate(data) + "\n"
-RUBY
-)" "$_mcp_file" "$KESTRAL_MCP_BIN" "$KESTRAL_MCP_SERVER_NAME")" || return 1
-  _json_write_atomic "$_mcp_file" "$_result"
-  verbose "Rewrote ${_mcp_file} → ${KESTRAL_MCP_BIN}"
 }
 
 _patch_kestral_mcp_json_under() {
@@ -643,22 +467,12 @@ _rewrite_plugin_mcp_json_remote() {
   verbose "Rewrote ${_mcp_file} → ${REMOTE_MCP_URL}"
 }
 
-_mcp_rewrite_fn() {
-  if [ "$USE_REMOTE_MCP" -eq 1 ]; then
-    printf '_rewrite_plugin_mcp_json_remote'
-  else
-    printf '_rewrite_plugin_mcp_json'
-  fi
-}
-
 _patch_all_installed_mcp_json() {
-  local _fn
-  _fn="$(_mcp_rewrite_fn)"
-  _patch_kestral_mcp_json_under "${HOME}/.claude" "$_fn"
-  _patch_kestral_mcp_json_under "${HOME}/.codex" "$_fn"
-  _patch_kestral_mcp_json_under "${HOME}/.kestral" "$_fn"
+  _patch_kestral_mcp_json_under "${HOME}/.claude" "_rewrite_plugin_mcp_json_remote"
+  _patch_kestral_mcp_json_under "${HOME}/.codex" "_rewrite_plugin_mcp_json_remote"
+  _patch_kestral_mcp_json_under "${HOME}/.kestral" "_rewrite_plugin_mcp_json_remote"
   if [ -d "$SESSIONS_BASE" ]; then
-    _patch_kestral_mcp_json_under "$SESSIONS_BASE" "$_fn"
+    _patch_kestral_mcp_json_under "$SESSIONS_BASE" "_rewrite_plugin_mcp_json_remote"
   fi
 }
 
@@ -1045,13 +859,9 @@ _prompt_restart_cowork_for_claude_code() {
 }
 
 print_claude_success() {
-  local _detail=""
-  if [ "$USE_REMOTE_MCP" -eq 1 ]; then
-    _detail=" (connects to Kestral at ${REMOTE_MCP_URL})"
-  fi
   cat <<EOF
 
-Claude Code: Kestral plugin is ready${_detail}.
+Claude Code: Kestral plugin is ready (connects to Kestral at ${REMOTE_MCP_URL}).
   1. Fully quit and reopen Claude Code if it was running (required to reload plugin content).
   2. Run: claude
   3. In chat: /kestral:kestral-setup
@@ -1075,11 +885,6 @@ install_to_claude_code() {
   _restore_plugin_mcp_json_in_clone "$(_claude_marketplace_root 2>/dev/null || true)"
   if ! ensure_marketplace; then
     return 1
-  fi
-  if [ "$USE_REMOTE_MCP" -ne 1 ]; then
-    local _marketplace_root=""
-    _marketplace_root="$(_claude_marketplace_root 2>/dev/null || true)"
-    ensure_go_mcp_binary_installed "$_marketplace_root"
   fi
   if ! install_or_update_plugin; then
     return 1
@@ -1253,12 +1058,7 @@ clone_or_update_marketplace() {
     ok "Kestral marketplace installed"
   fi
 
-  if [ "$USE_REMOTE_MCP" -eq 1 ]; then
-    _rewrite_plugin_mcp_json_remote "$(_desktop_marketplace_clone_dir)"
-  else
-    ensure_go_mcp_binary_installed "$(_desktop_marketplace_clone_dir)"
-    _rewrite_plugin_mcp_json "$(_desktop_marketplace_clone_dir)"
-  fi
+  _rewrite_plugin_mcp_json_remote "$(_desktop_marketplace_clone_dir)"
 }
 
 _register_marketplace() {
@@ -1302,16 +1102,9 @@ _enable_plugin() {
 }
 
 print_desktop_success() {
-  local _detail=""
-  if [ "$USE_REMOTE_MCP" -eq 1 ]; then
-    _detail=" (connects to Kestral at ${REMOTE_MCP_URL})"
-  else
-    _detail=" (helper at ${KESTRAL_MCP_BIN})"
-  fi
-
   local _name
   _name="$(_desktop_app_name)"
-  printf '\n%s: Kestral plugin files are installed%s.\n' "$_name" "$_detail"
+  printf '\n%s: Kestral plugin files are installed (connects to Kestral at %s).\n' "$_name" "$REMOTE_MCP_URL"
   local _step=1
   if [ "$DESKTOP_REOPENED" -ne 1 ]; then
     printf '  %d. Fully quit and reopen %s (required — running sessions won'\''t see disk edits).\n' "$_step" "$_name"
@@ -1361,7 +1154,7 @@ install_to_claude_desktop() {
     return 1
   fi
 
-  if [ "$USE_REMOTE_MCP" -eq 1 ] && ! ensure_ruby; then
+  if ! ensure_ruby; then
     _print_desktop_gui_fallback
     return 1
   fi
@@ -1572,12 +1365,7 @@ install_or_update_codex_plugin() {
 }
 
 print_codex_success() {
-  local _detail=""
-  if [ "$USE_REMOTE_MCP" -eq 1 ]; then
-    _detail=" (connects to Kestral at ${REMOTE_MCP_URL})"
-  fi
-
-  printf '\nCodex: Kestral plugin is ready%s.\n' "$_detail"
+  printf '\nCodex: Kestral plugin is ready (connects to Kestral at %s).\n' "$REMOTE_MCP_URL"
   local _step=1
   if [ "$CODEX_REOPENED" -ne 1 ]; then
     printf '  %d. Fully quit and reopen Codex (required — running sessions won'\''t reload plugin content).\n' "$_step"
@@ -1606,13 +1394,10 @@ install_to_codex() {
 
   local _codex_marketplace_root=""
   _codex_marketplace_root="$(_codex_marketplace_root 2>/dev/null || true)"
-  if [ "$USE_REMOTE_MCP" -ne 1 ]; then
-    ensure_go_mcp_binary_installed "$_codex_marketplace_root"
-  fi
 
   if install_or_update_codex_plugin; then
     if [ -n "$_codex_marketplace_root" ]; then
-      "$(_mcp_rewrite_fn)" "$_codex_marketplace_root"
+      _rewrite_plugin_mcp_json_remote "$_codex_marketplace_root"
     fi
     _patch_all_installed_mcp_json
     _finish_codex_restart
@@ -1693,22 +1478,22 @@ _print_summary() {
   return "$_exit"
 }
 
+cleanup_old_local_mcp() {
+  local _bin_dir="${HOME}/.kestral/bin"
+  if [ -d "$_bin_dir" ]; then
+    log "Removing old local helper (no longer needed — Kestral now connects directly)..."
+    rm -rf "$_bin_dir"
+    ok "Removed ${_bin_dir}"
+  fi
+}
+
 main() {
   parse_args "$@"
-  require_macos_for_go_mcp
 
-  if [ "$USE_REMOTE_MCP" -eq 0 ]; then
-    _init_kestral_mcp_bin_paths
-  fi
+  section "Checking prerequisites (git)"
+  ensure_git
 
-  if [ "$USE_REMOTE_MCP" -eq 1 ]; then
-    section "Checking prerequisites (git)"
-    ensure_git
-  else
-    section "Checking prerequisites (git, Ruby)"
-    ensure_git
-    ensure_ruby
-  fi
+  cleanup_old_local_mcp
 
   section "Detecting installed apps"
   detect_apps

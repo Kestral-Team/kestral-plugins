@@ -80,7 +80,7 @@ Do not ask for sources until the user picks add-context or create-new.
 After explore + plan-day, mention these ongoing skills (do not auto-run):
 
 - Plan day: /kestral:plan-day or $kestral-plan-day
-- Kestral Sync: install ambient rule once (sync/README.md) — then updates on push/phase completion without repeating sync
+- Kestral Sync: install ambient rule once (kestral-sync/README.md) — then updates on push/phase completion without repeating sync
 - End day review: /kestral:end-day-review or $kestral-end-day-review — reconciles done work and updates task status
 ```
 
@@ -114,25 +114,26 @@ supporting context.
 1. Project Brain Onboarding
    Why: Linear project "Project Brain", recent GitHub PRs, and matching setup docs.
    Tasks: 12 selected [linear], 43 more matching.
-   Documents: 8 selected [local, google_drive], 96 more candidates.
+   Files to upload: 5 [local]
+   Documents to link: 3 [google_drive]
    Confidence: high.
 
 2. MCP Plugin Reliability
    Why: GitHub issues and Linear tasks repeatedly reference MCP install failures.
    Tasks: 7 selected [github, linear], 19 more matching.
-   Documents: 4 selected [local], 12 more candidates.
+   Files to upload: 4 [local]
    Confidence: high.
 
 3. Marketing Launch
    Why: Recent docs and tasks mention launch copy, Hacker News, and blog posts.
    Tasks: 5 selected [linear].
-   Documents: 6 selected [notion, google_drive].
+   Documents to link: 6 [notion, google_drive].
    Confidence: medium.
 
 Additional candidates: 3.
 
-Say "create these", "only create Project Brain Onboarding", "rename Marketing Launch to Launch Plan", "use these
-buckets: ...", or "import all matching tasks into Project Brain Onboarding".
+Ready to create these projects? Say "create these" to proceed, or tell me how you'd like them grouped
+differently — I can split, merge, rename projects, or add and remove items before creating anything.
 ```
 
 ### Expanded project detail
@@ -145,19 +146,26 @@ Proposed projects
 1. Billing Automation
    Description: Consolidates active billing workflow work and supporting implementation docs.
    Rationale: Linear project, recent GitHub issues, and matching Drive design docs.
-   Selected tasks:
+   Tasks:
      - Fix invoice retry state [linear, high]
      - Add webhook replay tests [github, medium]
-   Selected documents:
-     - billing-architecture.md [local]
-     - Billing rollout notes [google_drive, linked]
-   Coverage: 2 tasks selected, 43 more matching; 2 docs selected, 96 more candidates.
+   Files to upload:
+     - billing-architecture.md [local, 4.2 KB]
+   Documents to link:
+     - Billing rollout notes [google_drive]
+   Coverage: 2 tasks selected, 43 more matching.
    Confidence: High. Ambiguity: one Slack thread may belong to Support Ops.
+
+Skipped
+- quarterly-review.pptx — unsupported file type (.pptx)
 
 Extra candidates to revisit later
 - Legacy billing cleanup: stale tasks and low recent activity.
 
 This is a curated first pass. I'll import the most relevant context now and leave the rest available to add later.
+
+Ready to create these projects? Say "create these" to proceed, or tell me how you'd like them grouped
+differently — I can split, merge, rename projects, or add and remove items before creating anything.
 ```
 
 ### Rules
@@ -169,7 +177,8 @@ This is a curated first pass. I'll import the most relevant context now and leav
 | **Curated default** | The manifest is a recommended first pass, not a hard import cap. If the user asks for more or all matching context, expand the approved project's import in batches.                                              |
 | **Truncation**     | Documents: if a detailed list is long, show the first 50 then `... and N more`. Tasks: show up to 10 titles, then `... and N more` (task lists are noisier so the display limit is tighter).                       |
 | **Tasks grouping** | Group by source if multiple sources detected. Show priority label only when non-zero (e.g. `[linear, high]`).                                                                                                      |
-| **Dropped**        | List dropped noise files (e.g. `node_modules/`) under a **Dropped** section when relevant.                                                                                                                         |
+| **Document categories** | Separate documents by action: **Files to upload** (local files uploaded as-is), **Documents to link** (external sources), **Documents to summarize** (agent-created summaries). Only show categories that have items — do not render empty sections. |
+| **Skipped**        | Show skipped files with a reason (unsupported file type, excluded directory, outside scan scope, too large) under a **Skipped** section after the project list. Only show when there are skipped items.               |
 
 ## Edit grammar
 
@@ -218,7 +227,7 @@ and adapt project counts, source names, item counts, and URLs to the actual run.
 | --- | --- |
 | Kestral MCP tools not in session (preflight) | See **MCP not connected** block below. |
 | Auth fails / token invalid | Stop before any Kestral calls. Guide the user through their host's UI to authenticate (the agent cannot handle OAuth callbacks or generate auth links). **Claude Cowork:** Customize → Kestral → Connectors → Install → Add. **Claude Code CLI:** `/mcp` → reconnect Kestral. **Codex:** Settings → MCP Servers → Kestral → Authenticate, then new thread. **Cursor:** Settings → MCP Servers → Kestral → Authenticate (or agent calls `mcp_auth`). |
-| Required core MCP tool is disconnected or missing | Stop before writes only if core tools (`whoami`, `create_project`) are missing. Missing upload tools (`upload_document`, `upload_request_urls`) limit local file handling but do not block project creation, task import, or external doc linking. |
+| Required core MCP tool is disconnected or missing | Stop before writes only if core tools (`whoami`, `create_project`) are missing. Missing `upload_request_urls` limits local file handling but does not block project creation, task import, or external doc linking. |
 | Local folder or explicit file path doesn't exist | Do not write anything. Say you could not find `<path>` and ask for another folder, file set, connected tool, or user-provided description. |
 | No usable connected sources or local files remain | Do not write anything. Explain that no importable documents or task signals were found from the selected sources and ask for another source or user-provided buckets. |
 | Task source listing error | Skip `<source>` and continue when other sources remain. Include `<source>` in the skipped-source summary. If no usable sources remain, ask for another source. |

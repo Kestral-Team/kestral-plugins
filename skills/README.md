@@ -28,8 +28,8 @@ offered. If projects already exist, surfaces brain contents and suggests next st
 - **When to use:** first-time setup, or organizing work into a Kestral project with a brain you can work from immediately.
 - **Example:** `/kestral:kestral-setup` → explains what a Kestral project with a brain gives you, asks where context
   lives, shows manifest, creates the project. Existing workspaces: surfaces brain contents + next steps you can take now.
-- **Note:** each run creates a fresh project — there is no update-in-place. Composes `scan-tasks` and `upload`
-  internally; dispatches `scan-folder` only when the user provides local files.
+- **Note:** each run creates a fresh project — there is no update-in-place. Composes `kestral-scan-tasks` and
+  `kestral-upload` internally; dispatches `kestral-scan-folder` only when the user provides local files.
 
 ### `kestral-tasks` — search, view, and update tasks
 

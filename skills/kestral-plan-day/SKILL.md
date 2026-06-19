@@ -16,8 +16,28 @@ reconnect or authenticate the **Kestral** MCP server in their app's MCP settings
 directly — authenticate through your app's UI (Cowork: Customize → Connectors; Codex: Settings → MCP Servers →
 Authenticate; Claude Code: `/mcp` → reconnect).
 Do not call other tools until authenticated.
-A calendar MCP/app connector should also be available for best results; if calendar access is missing, ask the user for
-fixed commitments before finalizing the plan.
+A calendar MCP/app connector should also be available for best results. If calendar access is missing, the behavior
+depends on whether this is the user's first plan-day after a kestral-setup in the same session:
+
+**First plan-day after setup (same session):** The user just finished onboarding and is trying plan-day for the first
+time. Guide them toward connecting a calendar — this is the best moment to set it up:
+
+> Plan-day works best with your calendar — it avoids scheduling over meetings and shows free blocks for focus time.
+>
+> **To connect a calendar** (e.g. Google Calendar): install the calendar plugin or connector in your app's settings
+> (Cowork: Customize → Connectors; Claude Code: `/mcp`; Cursor: Settings → MCP Servers).
+>
+> You can skip this and plan from tasks and your brief alone — calendar is optional.
+
+If they connect it, proceed. If they skip, do not repeat the guidance.
+
+**All other invocations** (standalone, subsequent runs, new sessions): Note briefly and move on — do not push connector
+setup:
+
+> No calendar connected — planning from tasks and your brief. Tell me any fixed commitments so I don't schedule over
+> them.
+
+In both cases, ask for fixed commitments before finalizing the plan when calendar is unavailable.
 
 ## Human-readable references
 

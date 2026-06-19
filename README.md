@@ -42,15 +42,6 @@ curl -fsSL https://raw.githubusercontent.com/Kestral-Team/kestral-plugins/main/s
 directly to Cowork's plugin files under `~/Library/Application Support/Claude/`.
 [View the script source](https://github.com/Kestral-Team/kestral-plugins/blob/main/setup.sh) before running.
 
-### Advanced: local file upload (macOS only)
-
-If you need to upload many files from your computer, pass `--go-mcp` to install a small local helper at
-`~/.kestral/bin/kestral-mcp`:
-
-```bash
-curl -fsSL https://raw.githubusercontent.com/Kestral-Team/kestral-plugins/main/setup.sh | bash -s -- --go-mcp
-```
-
 ### Claude Code (manual)
 
 ```bash
@@ -88,7 +79,7 @@ If the GUI cannot see or delete the entry, remove manually:
 
 ## Version
 
-Current release: **v0.4.24**
+Current release: **v0.4.25**
 
 ## Links
 

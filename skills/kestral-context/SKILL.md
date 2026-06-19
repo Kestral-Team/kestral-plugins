@@ -133,7 +133,7 @@ Present project details:
 For each selected task, call `entity_lookup({ id: "<taskId>", type: "task" })`.
 
 Present task details in the same format as the `/kestral:tasks` drill-down view (see
-`tasks/SKILL.md` step 4).
+`kestral-tasks/SKILL.md` step 4).
 
 ### 6. Summarize
 

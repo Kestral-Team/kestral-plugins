@@ -38,7 +38,7 @@ From the scan step or user edits at the manifest checkpoint:
   - `description` — project description (optional)
   - `documents` — array of selected documents. Local docs include `{ filename, relativePath, byteSize, filePath }`;
     external docs include canonical `url`, `title`, `source`, and optional fallback `content`.
-  - `tasks` — array of `{ title, description?, source, priority?, dueDate? }` from `scan-tasks` or user edits
+  - `tasks` — array of `{ title, description?, source, priority?, dueDate? }` from `kestral-scan-tasks` or user edits
   - `bulkImportRequested` — optional flags by source or item type when the user approved importing more/all matching
     context into this project
 
@@ -66,18 +66,19 @@ Call `create_project` with `{ title, description }`. Store `projectId` and `url`
 
 ### 2. Upload documents
 
-Try the best available upload tool. On network/egress failure, help the user fix it and retry.
+Use `upload_request_urls` + direct PUT (max 50 files per request). On network/egress failure, help the user fix it and
+retry.
 
-**Step 1: Try upload**
+**Step 1: Upload local files**
 
-- `upload_document` available → `upload_document({ filePaths, projectId, explanation })`. Streams from disk; absolute
-  paths only; credential locations rejected. Returns `{ documentId, title, url }` or `{ documents, failed }`.
-- `upload_request_urls` available (max 50 files/request) → derive `contentType` from each file's extension
-  (e.g. `.md` → `text/markdown`, `.pdf` → `application/pdf`) and use `byteSize` from scan-folder as `sizeBytes`:
-  1. `upload_request_urls({ projectId, files: [{ filename, relativePath, contentType, sizeBytes }], explanation })`
-  2. `curl -X PUT -H "Content-Type: <type>" -T "<path>" "<uploadUrl>"` per file — the PUT response returns the
-     completed document record (`{ documents: [{ id, title, sourceUrl }] }`), so there is no separate finalize step.
-- Neither available → use the fallback below.
+Derive `contentType` from each file's extension (e.g. `.md` → `text/markdown`, `.pdf` → `application/pdf`) and use
+`byteSize` from kestral-scan-folder as `sizeBytes`:
+
+1. `upload_request_urls({ projectId, files: [{ filename, relativePath, contentType, sizeBytes }], explanation })`
+2. `curl -X PUT -H "Content-Type: <type>" -T "<path>" "<uploadUrl>"` per file — the PUT response returns the completed
+   document record (`{ documents: [{ id, title, sourceUrl }] }`), so there is no separate finalize step.
+
+If `upload_request_urls` is not available, use the fallback below.
 
 **Step 2: On upload failure (network/egress error)**
 
@@ -96,7 +97,7 @@ Wait for the user's response, then retry the upload. If upload still fails after
 
 **Fallback — create documents from file content**
 
-If no upload tool is available, or upload fails and cannot be recovered:
+If `upload_request_urls` is not available, or upload fails and cannot be recovered:
 
 Read text/markdown via Read tool → `create_document({ title, content, projectId, explanation })`. Skip binary files
 with a message pointing to manual upload from the Kestral project page.

@@ -8,7 +8,7 @@ Keep Kestral in sync with your coding work via the Kestral MCP tools. Use judgme
 debugging notes, or exploratory sketches.
 
 For full procedures (comment formats, task creation, acceptance check): read `.cursor/skills/kestral-sync/SKILL.md` if
-installed locally, or the `sync/SKILL.md` from the Kestral plugin.
+installed locally, or the `kestral-sync/SKILL.md` from the Kestral plugin.
 
 ## Workflow
 

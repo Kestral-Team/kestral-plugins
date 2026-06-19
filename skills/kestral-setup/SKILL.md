@@ -45,8 +45,19 @@ thread (`/mcp`). If absent → **MCP not connected**. Give the user the matching
   in a **new thread**.
 
 Do not block setup if upload tools are missing. Step 7 handles upload attempts gracefully — trying the best available
-tool, offering egress fix instructions on failure, and falling back to `create_document` for text files. Project
-creation, task import, and external doc linking work regardless of upload capability.
+tool, offering egress fix instructions on failure, and falling back to summarization via `create_document` for text
+files. Project creation, task import, and external doc linking work regardless of upload capability.
+
+**Host capability detection:** Check what document tools are available in this session:
+
+- `upload_document` present → local Go bridge; can read and upload files from disk directly
+- `upload_request_urls` present (no `upload_document`) → remote MCP; can upload via presigned URLs if the host has
+  shell/curl access and egress to `app.kestral.ai`
+- Neither present → `create_document` only; can create documents from inline content or agent-authored summaries
+
+Also check whether the agent has filesystem access (Read tool, Shell tool) — hosts like Claude Desktop and Cowork
+typically do not, even when the user shares files via the chat `+` button (the agent gets the content in conversation
+context, not a file path on disk). This affects whether `scan-folder` and file-path-based upload are usable.
 
 ### 1. Authenticate
 
@@ -135,7 +146,7 @@ When the user wants to explore existing projects rather than create or enrich:
 1. If the **prioritized work snapshot** (step 1.5) already ran, do not repeat the full project list — confirm which
    project to focus on, or pick the top project from the brief/brain highlights if the user says "just help me get started."
 2. Otherwise share project links and brain highlights (same pattern as step 1.5).
-3. Suggest visiting the Project Brain link, then **plan your day** — invoke `plan-day/SKILL.md` or tell the user to run
+3. Suggest visiting the Project Brain link, then **plan your day** — invoke `kestral-plan-day/SKILL.md` or tell the user to run
    **`/kestral:plan-day`** (Claude Code / Cowork) or **`$kestral-plan-day`** (Codex). Pull daily brief, calendar, and
    task state for prioritized work; help them pick a task from the plan.
 4. After plan-day (or once they start a task), introduce the **ongoing skills** (suggest, do not auto-run):
@@ -145,7 +156,7 @@ When the user wants to explore existing projects rather than create or enrich:
    > - **Plan day** — `/kestral:plan-day` or `$kestral-plan-day` — morning prioritization from your brief, calendar,
    >   and tasks (what you just ran, or rerun anytime).
    > - **Kestral Sync** — `/kestral:sync` or `$kestral-sync` for a manual sync; for automatic updates, install the
-   >   ambient sync rule once (`sync/README.md` — paste the snippet into `AGENTS.md` or `CLAUDE.md`). After that, progress
+   >   ambient sync rule once (`kestral-sync/README.md` — paste the snippet into `AGENTS.md` or `CLAUDE.md`). After that, progress
    >   comments, status changes, and PR links flow back on push and phase completion — you don't need to keep saying
    >   "kestral sync."
    > - **End day review** — `/kestral:end-day-review` or `$kestral-end-day-review` — when you wrap up, reconciles what
@@ -191,7 +202,21 @@ natively support.
 #### Local files
 
 Setup leads with connected tools and goals. Local files are just another source the user can mention — handle them via
-`scan-folder/SKILL.md` when they do. Use words like "include" or "add" rather than "scan" in user-facing copy.
+`kestral-scan-folder/SKILL.md` when they do. Use words like "include" or "add" rather than "scan" in user-facing copy.
+
+**Two roles for local files:** Files may be (a) context for the agent to understand the user's work and propose projects,
+or (b) documents the user wants uploaded into Kestral for the brain and team. Many files are only the first — rough
+drafts, explorations, scratch notes help the agent understand the work but don't belong in a shared workspace. Default
+to reading files for context. At the manifest checkpoint, surface which files could be uploaded and let the user decide.
+
+**When the host lacks filesystem access** (Claude Desktop, Cowork — detected in preflight), do not ask for file paths.
+If the user shares files via the chat UI (`+` button), work with the content provided. If they want to include local
+files that the agent can't access, explain: "I can't read files from your machine directly. You can share them in chat,
+or upload them at [project URL] after setup."
+
+**Uploaded files are one-time snapshots.** They do not sync back to the local filesystem. If the user edits the local
+file, Kestral won't see the change. For live-synced documents, suggest storing originals in a connected tool (Google
+Drive, Notion) and linking them instead.
 
 #### 2a. Surface what's available
 
@@ -254,10 +279,10 @@ Use these source-specific helpers and patterns:
 | Source family | Guidance |
 | --- | --- |
 | User buckets | Treat user-provided project names, goals, work areas, and outcomes as the taxonomy unless the user asks you to infer alternatives. |
-| Task systems | Use `scan-tasks/SKILL.md` for Linear, Jira, GitHub Issues, and similar tools. Prefer open, in-progress, recently updated, high-priority, or recently completed work. |
+| Task systems | Use `kestral-scan-tasks/SKILL.md` for Linear, Jira, GitHub Issues, and similar tools. Prefer open, in-progress, recently updated, high-priority, or recently completed work. |
 | Document systems | Use `link_external_document` for sources with recognized URLs (Notion, Google Drive, Slack, Confluence). For other document sources like Granola, pull the content via MCP and use `create_document`. |
 | Repositories | Use repo metadata, issue links, README/docs references, milestones, labels, and recent activity to support task and document signals. |
-| Local files | User-initiated. Use `scan-folder/SKILL.md` when the user provides a folder or file paths. Treat files as evidence first: inspect representative content when possible, keep file paths, sizes, sampled titles, candidate themes, and notable omissions, then decide whether each file should also be uploaded. |
+| Local files | User-initiated. Use `kestral-scan-folder/SKILL.md` when the user provides a folder or file paths and the host has filesystem access. Treat files as **context first** — inspect representative content to understand the user's work and inform project proposals. Do not assume every file should be uploaded; surface uploadable files at the manifest checkpoint and let the user decide which belong in the shared workspace. When the host lacks filesystem access, work with content the user shares in conversation. |
 
 If the user scoped sources, honor that scope. If they only said they are not organized yet, inspect available connected
 task and document sources, then propose a focused starting structure.
@@ -273,8 +298,11 @@ Documents are flexible evidence. A document may be:
 
 - A source to inspect so the agent can understand the user's work and propose an organization.
 - A local upload or external link to attach to a Kestral project.
-- **Inline text** pasted in chat (Slack thread, summary, notes) — attach with `create_document` and `projectId`, not the
-  project description field.
+- **Inline text** pasted in chat (Slack thread, summary, notes) — discern the role:
+  (a) substantive evidence the team should reference → attach with `create_document` and `projectId`;
+  (b) context that describes the work scope → weaving into project description and tasks is fine;
+  (c) organization instructions (how to split, naming rules) → follow them without creating a document.
+  Do NOT use `link_external_document` for pasted text — there is no canonical URL to link.
 - Both evidence and project context when it is useful for Project Brain.
 
 For a small document set, inspect enough content to understand the work at a high level before proposing projects. For a
@@ -293,14 +321,32 @@ Taxonomy rules:
 - If task and document signals disagree, anchor on active tasks and note the ambiguity in the manifest.
 - Avoid creating projects for stale, purely historical, or low-evidence themes unless the user explicitly asks.
 
-Project count rules:
+#### Functional domain detection
 
-- Recommend 1-3 projects by default.
-- Allow up to 5 when workstreams are clearly distinct.
-- Prefer 1–3 projects by default; up to 5 when workstreams are clearly distinct. Show extras as candidates to revisit.
-- If the user asks for more than 5 projects, allow it with a warning that starting with fewer usually creates a clearer
-  operating model.
-- If signal is weak, ask one targeted question before creating projects.
+When the user's work spans distinct **functional domains** — such as product development, go-to-market, fundraising,
+operations, customer success, or infrastructure — propose a separate project for each domain, even when they relate to
+the same company, product, or initiative. A single company is not a single project when the work functions are distinct.
+
+**Test:** Would each domain benefit from its own Project Brain with different goals, blockers, and next steps? If yes,
+they should be separate projects. A Product Brain and a Fundraising Brain serve different purposes; combining them
+produces a grab-bag that helps nobody.
+
+This applies regardless of the input source. A single flat list from the user, a single conversation, a single folder,
+or a single task system can feed multiple projects when the work naturally separates into distinct domains.
+
+#### Project count
+
+Let the number of projects reflect the natural shape of the work — do not anchor on a specific count. If 1 project is
+right, propose 1. If 5 are clearly distinct, propose 5. The user can always merge, split, or rename projects at the
+manifest checkpoint (step 6).
+
+Guidelines:
+
+- Start by identifying the distinct workstreams from the evidence. Each workstream with its own goals and success
+  criteria is a candidate project.
+- If signal is weak or the evidence is ambiguous, ask one targeted question before creating projects.
+- Show any lower-confidence candidates as "extra candidates to revisit later" in the manifest rather than forcing them
+  into projects prematurely.
 
 Default import is curated, not capped. Select the most relevant representative tasks and documents for the first pass.
 If the user asks for more or all matching tasks/documents, import more or all in batches within the approved projects.
@@ -314,9 +360,24 @@ Show proposed Kestral projects, not a source dump. Each proposed project include
 - Title and short description.
 - Rationale: task project, label, epic, milestone, board, recent activity, repeated document theme, or user bucket.
 - Selected tasks grouped by source, with priority/status annotations when available.
-- Selected documents from local files and connected tools, with `[local]` or `[<source>]` labels.
+- Documents separated by action — only show categories that have items:
+  - **Files to upload** — local files that will be uploaded to Kestral as-is (when upload tools are available).
+  - **Documents to link** — external docs (Notion, Drive, Slack, Confluence) linked via `link_external_document`.
+  - **Documents to summarize** — content the agent will read and create summary documents from (when upload isn't
+    available, or for pasted/inline content).
 - Coverage counts, such as "12 tasks selected, 43 more matching" or "8 docs selected, 96 more candidates."
 - Confidence and ambiguity notes, such as "High confidence from Linear project and matching Drive docs."
+
+If any source files were **skipped or unsupported**, show them after the project list with the reason:
+
+```md
+Skipped
+- pitch-deck.pptx — unsupported file type (.pptx)
+- design-mockup.fig — unsupported file type (.fig)
+- node_modules/ — excluded directory
+```
+
+Only show the skipped section when there are skipped items. Do not invent hypothetical missing inputs.
 
 Render compactly:
 
@@ -326,14 +387,18 @@ Proposed projects
 1. Billing Automation
    Description: Consolidates active billing workflow work and supporting implementation docs.
    Rationale: Linear project, recent GitHub issues, and matching Drive design docs.
-   Selected tasks:
+   Tasks:
      - Fix invoice retry state [linear, high]
      - Add webhook replay tests [github, medium]
-   Selected documents:
-     - billing-architecture.md [local]
-     - Billing rollout notes [google-drive, linked]
-   Coverage: 12 tasks selected, 43 more matching; 8 docs selected, 96 more candidates.
+   Files to upload:
+     - billing-architecture.md [local, 4.2 KB]
+   Documents to link:
+     - Billing rollout notes [google-drive]
+   Coverage: 12 tasks selected, 43 more matching.
    Confidence: High. Ambiguity: one Slack thread may belong to Support Ops.
+
+Skipped
+- quarterly-review.pptx — unsupported file type (.pptx)
 
 Extra candidates to revisit later
 - Legacy billing cleanup: stale tasks and low recent activity.
@@ -345,12 +410,20 @@ Make clear that the curated manifest is a starting import, not a hard limit:
 
 ### 6. Manifest checkpoint
 
-Render the manifest for visibility, then proceed — do not block on a separate manifest approval when the host already
-prompts for write-tool permission (Claude Code, Claude Cowork, Cursor, Codex with tool permissions enabled).
+After rendering the manifest, prompt the user to approve or adjust. Lead with the default action (create), then note
+they can change how work is grouped into projects:
 
-Then continue to step 7 unless the user sends an edit or cancel command first. Supported commands mirror
-`docs/manifest-copy-spec.md`. If an edit target is ambiguous in a multi-project manifest, ask one focused clarification
-before applying it:
+> Ready to create these projects? Say "create these" to proceed, or tell me how you'd like them grouped differently —
+> I can split, merge, rename projects, or add and remove items before creating anything.
+
+This gives a clear default ("create these") while making adjustment easy. If the user says nothing (or the host
+auto-approves tool calls), proceed to step 7. If they ask to change something, apply the edit and re-render.
+
+Do not block on a separate manifest approval when the host already prompts for write-tool permission (Claude Code,
+Claude Cowork, Cursor, Codex with tool permissions enabled).
+
+Supported commands mirror `docs/manifest-copy-spec.md`. If an edit target is ambiguous in a multi-project manifest, ask
+one focused clarification before applying it:
 
 | Command or intent | Effect |
 | --- | --- |
@@ -400,22 +473,48 @@ For each selected project:
 
 1. Call `create_project` with the project title, description, and lifecycle status when appropriate. Store `projectId`
    and `url`.
-2. Upload selected local documents using the upload strategy detected in preflight (see below).
+2. Upload or create selected documents for **this project** using the strategy below.
 3. Link selected external documents with `link_external_document`.
-4. For **pasted inline content** in the manifest or conversation (Slack export text, summaries, notes with no file path
-   and no external URL), call `create_document` with `{ title, content, projectId }` — not `upload_document` or
-   `project_management`.
-5. Create selected tasks with `create_tasks`.
-6. Trigger `trigger_brain_build` for that project.
+4. Create selected tasks with `create_tasks`.
+5. Trigger `trigger_brain_build` for that project.
 
-#### Local document upload
+When multiple projects are proposed, allocate documents to the project they belong to — do not dump all documents into
+one project. A competitive analysis belongs to the GTM project, not the product project.
 
-Follow the document upload workflow in `upload/SKILL.md` (Steps 1–2 for upload and egress recovery, plus the fallback
-for creating documents from file content when upload isn't possible).
+#### Document handling strategy
+
+Documents come from three sources. Handle each differently:
+
+**Local files the user wants uploaded:**
+
+1. **Try upload first.** Use `upload_document` or `upload_request_urls` per `kestral-upload/SKILL.md`. Supported file
+   types: PDF, DOCX, TXT, Markdown, CSV, images (JPEG/PNG/WebP/HEIC), audio (MP3/M4A), video (MP4).
+2. **If upload fails** (egress blocked, tools unavailable, host limitations), tell the user and offer to summarize
+   instead: "I can't upload this file directly from here. I can read it and create a summary document for the brain."
+3. **When summarizing**, read the file content, produce a focused summary, and call `create_document` with `projectId`.
+   Do not copy file contents verbatim — summarize so the brain gets useful context without raw data dumps. Be
+   transparent: "I created a summary of [filename] — the original file isn't stored in Kestral."
+4. **Binary files the agent can't read** (images, audio, video) when upload isn't available: note them in the results.
+5. **Files that couldn't be uploaded or summarized:** After project creation, mention that these files can be uploaded
+   manually from the project's Documents tab — if they are a supported file type. Before project creation (no URL yet),
+   don't reference a project URL that doesn't exist; instead note the files in the manifest's Skipped section so the
+   user sees them, and mention the manual upload option in the post-creation results (step 8) once the project URL is
+   available.
 
 Report upload failures per-file; do not pre-declare hard limits. Skip rejected files and continue.
 
-External documents:
+**User-shared content** (pasted text, inline notes, conversation context):
+
+Discern intent before choosing a strategy:
+- Rich evidence the team should reference (meeting notes, detailed threads) → `create_document` with `projectId`
+- Work scope and context → incorporate into project description and tasks
+- Organization instructions → follow them to shape the project structure
+
+When content covers multiple domains, allocate to the appropriate project — either as a document per project or
+absorbed into each project's description. Do NOT create one large cross-project synthesis document.
+Do NOT use `link_external_document` for pasted text without a canonical source URL.
+
+**External documents** (Notion, Drive, Slack, Confluence):
 
 - Use `link_external_document` for documents with canonical source URLs. Pass `url`, `title`, `projectId`, and fallback
   `content` when available. Prefer linking over reproducing content via `create_document` — linked docs keep provenance
@@ -542,7 +641,7 @@ and ongoing skills from the snapshot already shown.
 
 #### 9c. Kestral Sync (set up once)
 
-> To keep your project and Project Brain updated as you work, set up **Kestral Sync** once — see `sync/README.md` and
+> To keep your project and Project Brain updated as you work, set up **Kestral Sync** once — see `kestral-sync/README.md` and
 > paste the ambient snippet into your project's `AGENTS.md` or `CLAUDE.md` (Codex/Claude) or install the Cursor rule.
 > After that, progress comments, status changes, and PR links flow back automatically on push and phase completion —
 > you don't need to keep invoking sync. Use **`/kestral:sync`** or **`$kestral-sync`** only when you want a manual
@@ -564,7 +663,7 @@ and ongoing skills from the snapshot already shown.
 | --- | --- |
 | Brain's ready / what should I work on | `entity_lookup` project_brain → surface blockers & next steps → ask which to start |
 | Start a task | Help the user pick a task, set it to in progress, and begin working. Point to plan-day and Sync if not yet introduced. |
-| Set up ongoing sync | Walk through `sync/README.md` ambient install — one-time setup, then automatic updates without repeated sync invocations. |
+| Set up ongoing sync | Walk through `kestral-sync/README.md` ambient install — one-time setup, then automatic updates without repeated sync invocations. |
 | End the day | Suggest `/kestral:end-day-review` or `$kestral-end-day-review` for status reconciliation. |
 | Add more context | Link or attach new sources, attach them to the relevant project, and rerun `trigger_brain_build`. |
 | Help clear blockers | Use Kestral task tools to inspect open project work and help the user pick the next blocker. |

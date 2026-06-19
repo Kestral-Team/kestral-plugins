@@ -83,7 +83,7 @@ For each **selected** file only, record:
 - `filename` — basename
 - `relativePath` — path relative to the scanned folder root
 - `byteSize` — from scan step
-- `filePath` — absolute path, for later upload (via `upload_document`, presigned-URL flow, or `create_document`)
+- `filePath` — absolute path, for later upload (via `upload_request_urls` + PUT, or `create_document` for text files)
 - `signals` — compact labels explaining why this document was selected
 - Do **not** read full file contents here — the upload step reads at upload time
 
