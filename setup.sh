@@ -1,19 +1,23 @@
 #!/usr/bin/env bash
 # Kestral plugin one-shot setup script (macOS and Linux).
 #
-# Installs the Kestral plugin to Claude Code, Claude Cowork, and/or Codex.
+# Installs the Kestral plugin to Claude Code, Claude Cowork, Codex, and/or Cursor.
 #
 # Usage:
 #   curl -fsSL https://raw.githubusercontent.com/Kestral-Team/kestral-plugins/main/setup.sh | bash
-#   bash setup.sh [--app claude-code|claude-cowork|codex]
+#   bash setup.sh [--app claude-code|claude-cowork|codex|cursor] [--enable-cursor] [--full-reinstall]
 #
 # Options:
-#   --app <targets>       Non-interactive target set (comma-separated: claude-code, claude-cowork, codex)
+#   --app <targets>       Non-interactive target set (comma-separated: claude-code, claude-cowork, codex, cursor)
+#   --enable-cursor       Include Cursor in autodetect and interactive install (off by default until marketplace publish)
+#   --full-reinstall      Remove all Kestral plugins, caches, and credentials before reinstalling
 #   -h, --help            Show this help
 #
 # Examples:
 #   bash setup.sh --app claude-code
 #   bash setup.sh --app codex
+#   bash setup.sh --app cursor
+#   bash setup.sh --full-reinstall
 #   curl -fsSL https://raw.githubusercontent.com/Kestral-Team/kestral-plugins/main/setup.sh | bash
 
 set -euo pipefail
@@ -24,6 +28,7 @@ MARKETPLACE_GIT_URL="https://github.com/${MARKETPLACE_REPO}.git"
 PLUGIN_ID="kestral@${MARKETPLACE_NAME}"
 CODEX_APP="/Applications/Codex.app"
 CODEX_LOCAL_MARKETPLACE_DIR="${HOME}/.kestral/codex-marketplace"
+CURSOR_PLUGIN_LOCAL_NAME="kestral"
 CLAUDE_APP="/Applications/Claude.app"
 SESSIONS_BASE="${HOME}/Library/Application Support/Claude/local-agent-mode-sessions"
 RUBY_BIN=""
@@ -31,11 +36,14 @@ RUBY_BIN=""
 # --- Parsed flags ---
 APP_FLAG=""
 EXPLICIT_APP_FLAG=0
+ENABLE_CURSOR=0
+FULL_REINSTALL=0
 
 # --- Detection / selection state ---
 HAS_GIT=0
 HAS_CLAUDE_CLI=0
 HAS_CODEX_CLI=0
+HAS_CURSOR=0
 HAS_DESKTOP_APP=0
 HAS_DESKTOP_READY=0
 DESKTOP_NOT_READY=0
@@ -48,9 +56,11 @@ DESKTOP_ROOTS=()
 TARGET_RESULT_CLAUDE=""
 TARGET_RESULT_DESKTOP=""
 TARGET_RESULT_CODEX=""
+TARGET_RESULT_CURSOR=""
 
 DESKTOP_SELECTED_ROOT=""
 DESKTOP_BACKUP_SUFFIX=""
+DESKTOP_INSTALL_QUIET=0
 DESKTOP_RESTART_PENDING=0
 DESKTOP_REOPENED=0
 CODEX_RESTART_PENDING=0
@@ -72,16 +82,20 @@ Configures the remote MCP at app.kestral.ai (macOS and Linux).
 
 Usage:
   curl -fsSL https://raw.githubusercontent.com/Kestral-Team/kestral-plugins/main/setup.sh | bash
-  bash setup.sh [--app claude-code|claude-cowork|codex]
+  bash setup.sh [--app claude-code|claude-cowork|codex|cursor] [--enable-cursor]
 
 Options:
-  --app <targets>       Non-interactive target set (comma-separated: claude-code, claude-cowork, codex)
+  --app <targets>       Non-interactive target set (comma-separated: claude-code, claude-cowork, codex, cursor)
+  --enable-cursor       Include Cursor in autodetect and interactive install (off by default)
+  --full-reinstall      Remove all Kestral plugins, caches, and credentials before reinstalling
   -h, --help            Show this help
 
 Examples:
   bash setup.sh --app claude-code
   bash setup.sh --app codex
+  bash setup.sh --app cursor
   bash setup.sh --app claude-code,codex
+  bash setup.sh --full-reinstall
 EOF
 }
 
@@ -93,6 +107,12 @@ parse_args() {
         APP_FLAG="${1:-}"
         EXPLICIT_APP_FLAG=1
         [ -n "$APP_FLAG" ] || abort "--app requires a value"
+        ;;
+      --enable-cursor)
+        ENABLE_CURSOR=1
+        ;;
+      --full-reinstall)
+        FULL_REINSTALL=1
         ;;
       -h | --help)
         usage
@@ -133,6 +153,13 @@ _reset_color() {
   if _is_tty; then
     tput sgr0 2>/dev/null || true
   fi
+}
+
+# Copy-paste shell commands (cyan when stdout is a TTY).
+_cmd_line() {
+  _color 6
+  printf '  %s\n' "$*"
+  _reset_color
 }
 
 section() {
@@ -418,12 +445,20 @@ _codex_marketplace_root() {
   return 1
 }
 
-# Restore .mcp.json in a marketplace clone before git pull so the working tree is clean.
-# The file is rewritten again after the update.
+_cursor_plugins_local_dir() {
+  printf '%s' "${HOME}/.cursor/plugins/local"
+}
+
+_cursor_plugin_install_dir() {
+  printf '%s/%s' "$(_cursor_plugins_local_dir)" "$CURSOR_PLUGIN_LOCAL_NAME"
+}
+
+# Restore plugin MCP configs in a marketplace clone before git pull so the working tree is clean.
 _restore_plugin_mcp_json_in_clone() {
   local _clone_root="${1:-}"
   if [ -n "$_clone_root" ] && [ -d "${_clone_root}/.git" ]; then
     git -C "$_clone_root" checkout -- .mcp.json 2>/dev/null || true
+    git -C "$_clone_root" checkout -- .cursor-plugin/mcp.json 2>/dev/null || true
   fi
 }
 
@@ -444,11 +479,7 @@ REMOTE_MCP_URL="https://app.kestral.ai/mcp"
 
 _rewrite_plugin_mcp_json_remote() {
   local _plugin_root="$1"
-  local _mcp_file="${_plugin_root}/.mcp.json"
-  if [ ! -f "$_mcp_file" ]; then
-    return 0
-  fi
-  local _content
+  local _content _mcp_file
   _content=$(printf '%s\n' "{
   \"mcpServers\": {
     \"Kestral\": {
@@ -463,8 +494,12 @@ _rewrite_plugin_mcp_json_remote() {
     }
   }
 }")
-  _json_write_atomic "$_mcp_file" "$_content"
-  verbose "Rewrote ${_mcp_file} → ${REMOTE_MCP_URL}"
+  for _mcp_file in "${_plugin_root}/.mcp.json" "${_plugin_root}/.cursor-plugin/mcp.json"; do
+    if [ -f "$_mcp_file" ]; then
+      _json_write_atomic "$_mcp_file" "$_content"
+      verbose "Rewrote ${_mcp_file} → ${REMOTE_MCP_URL}"
+    fi
+  done
 }
 
 _patch_all_installed_mcp_json() {
@@ -502,6 +537,7 @@ _enumerate_desktop_roots() {
 detect_apps() {
   HAS_CLAUDE_CLI=0
   HAS_CODEX_CLI=0
+  HAS_CURSOR=0
   HAS_DESKTOP_APP=0
   HAS_DESKTOP_READY=0
   DESKTOP_NOT_READY=0
@@ -512,6 +548,10 @@ detect_apps() {
 
   if _codex_bin >/dev/null; then
     HAS_CODEX_CLI=1
+  fi
+
+  if [ -d "${HOME}/.cursor" ] || [ -d "/Applications/Cursor.app" ]; then
+    HAS_CURSOR=1
   fi
 
   if [ -d "$CLAUDE_APP" ]; then
@@ -525,29 +565,6 @@ detect_apps() {
   fi
 }
 
-_print_detection_summary() {
-  if [ "$HAS_CLAUDE_CLI" -eq 1 ]; then
-    if [ "$HAS_DESKTOP_READY" -eq 1 ]; then
-      printf '    [1] Claude Code (claude CLI found; Claude Code Desktop also signed in)\n'
-    elif [ "$HAS_DESKTOP_APP" -eq 1 ]; then
-      printf '    [1] Claude Code (claude CLI found; Claude Code Desktop installed)\n'
-    else
-      printf '    [1] Claude Code (claude CLI found)\n'
-    fi
-  fi
-  if [ "$HAS_DESKTOP_READY" -eq 1 ]; then
-    printf '    [2] Claude Cowork (signed in, %s account(s))\n' "${#DESKTOP_ROOTS[@]}"
-  elif [ "$DESKTOP_NOT_READY" -eq 1 ]; then
-    printf '    [ ] Claude Cowork (installed but not signed in — open it, sign in, re-run)\n'
-  fi
-  if [ "$HAS_CODEX_CLI" -eq 1 ]; then
-    printf '    [3] Codex (codex CLI found)\n'
-  fi
-  if [ "$HAS_CLAUDE_CLI" -eq 0 ] && [ "$HAS_DESKTOP_APP" -eq 0 ] && [ "$HAS_CODEX_CLI" -eq 0 ]; then
-    printf '  (none detected)\n'
-  fi
-}
-
 _add_target_if_missing() {
   local _t="$1"
   local _existing
@@ -557,6 +574,117 @@ _add_target_if_missing() {
     fi
   done
   SELECTED_TARGETS+=("$_t")
+}
+
+_target_display_name() {
+  case "$1" in
+    claude-code)
+      printf '%s' "Claude Code"
+      ;;
+    claude-desktop)
+      printf '%s' "Claude Cowork"
+      ;;
+    codex)
+      printf '%s' "Codex"
+      ;;
+    cursor)
+      printf '%s' "Cursor"
+      ;;
+    *)
+      printf '%s' "$1"
+      ;;
+  esac
+}
+
+_target_detection_blurb() {
+  case "$1" in
+    claude-code)
+      if [ "$HAS_DESKTOP_READY" -eq 1 ]; then
+        printf '%s' "claude CLI found; Claude Code Desktop also signed in"
+      elif [ "$HAS_DESKTOP_APP" -eq 1 ]; then
+        printf '%s' "claude CLI found; Claude Code Desktop installed"
+      else
+        printf '%s' "claude CLI found"
+      fi
+      ;;
+    claude-desktop)
+      printf 'signed in, %s account(s)' "${#DESKTOP_ROOTS[@]}"
+      ;;
+    codex)
+      printf '%s' "codex CLI found"
+      ;;
+    cursor)
+      printf '%s' "Cursor app installed"
+      ;;
+    *)
+      printf '%s' "detected"
+      ;;
+  esac
+}
+
+_populate_detected_targets() {
+  DETECTED_TARGETS=()
+
+  if [ "$HAS_CLAUDE_CLI" -eq 1 ]; then
+    DETECTED_TARGETS+=("claude-code")
+  fi
+  if [ "$HAS_DESKTOP_READY" -eq 1 ]; then
+    DETECTED_TARGETS+=("claude-desktop")
+  fi
+  if [ "$HAS_CODEX_CLI" -eq 1 ]; then
+    DETECTED_TARGETS+=("codex")
+  fi
+  if [ "$HAS_CURSOR" -eq 1 ] && [ "$ENABLE_CURSOR" -eq 1 ]; then
+    DETECTED_TARGETS+=("cursor")
+  fi
+}
+
+_print_detection_summary() {
+  local _idx=0
+  local _target _name _blurb
+
+  for _target in "${DETECTED_TARGETS[@]}"; do
+    _idx=$((_idx + 1))
+    _name="$(_target_display_name "$_target")"
+    _blurb="$(_target_detection_blurb "$_target")"
+    printf '    [%s] %s (%s)\n' "$_idx" "$_name" "$_blurb"
+  done
+
+  if [ "$DESKTOP_NOT_READY" -eq 1 ]; then
+    printf '    [ ] Claude Cowork (installed but not signed in — open it, sign in, re-run)\n'
+  fi
+
+  if [ "${#DETECTED_TARGETS[@]}" -eq 0 ] && [ "$DESKTOP_NOT_READY" -eq 0 ]; then
+    printf '  (none detected)\n'
+  fi
+}
+
+_build_target_selection_prompt() {
+  local _prompt="Install Kestral to: "
+  local _idx=0
+  local _target _name
+
+  for _target in "${DETECTED_TARGETS[@]}"; do
+    _idx=$((_idx + 1))
+    _name="$(_target_display_name "$_target")"
+    _prompt="${_prompt}[${_idx}] ${_name}  "
+  done
+
+  _prompt="${_prompt}— Enter = all, or type numbers (e.g. \"1\"): "
+  printf '%s' "$_prompt"
+}
+
+_select_targets_from_choice() {
+  local _choice="$1"
+  local _digit _index _target
+
+  for _digit in $(printf '%s' "$_choice" | grep -o '[0-9]' || true); do
+    _index=$((_digit))
+    if [ "$_index" -ge 1 ] && [ "$_index" -le "${#DETECTED_TARGETS[@]}" ]; then
+      _target="${DETECTED_TARGETS[$((_index - 1))]}"
+      _add_target_if_missing "$_target"
+    fi
+  done
 }
 
 _parse_app_flag() {
@@ -574,26 +702,19 @@ _parse_app_flag() {
       codex)
         _add_target_if_missing "codex"
         ;;
+      cursor)
+        _add_target_if_missing "cursor"
+        ;;
       *)
-        abort "Unknown --app target: $_part (use claude-code, claude-cowork, or codex)"
+        abort "Unknown --app target: $_part (use claude-code, claude-cowork, codex, or cursor)"
         ;;
     esac
   done
 }
 
 select_targets() {
-  DETECTED_TARGETS=()
   SELECTED_TARGETS=()
-
-  if [ "$HAS_CLAUDE_CLI" -eq 1 ]; then
-    DETECTED_TARGETS+=("claude-code")
-  fi
-  if [ "$HAS_DESKTOP_READY" -eq 1 ]; then
-    DETECTED_TARGETS+=("claude-desktop")
-  fi
-  if [ "$HAS_CODEX_CLI" -eq 1 ]; then
-    DETECTED_TARGETS+=("codex")
-  fi
+  _populate_detected_targets
 
   _print_detection_summary
 
@@ -619,48 +740,20 @@ select_targets() {
 
   if [ "${#DETECTED_TARGETS[@]}" -eq 0 ]; then
     abort_with_hint "No supported apps detected." \
-      "Install Claude Code (https://claude.ai/code), Claude Cowork (https://claude.ai/download), or Codex (https://codex.openai.com), then re-run."
+      "Install Claude Code (https://claude.ai/code), Claude Cowork (https://claude.ai/download), Codex (https://codex.openai.com), or Cursor (https://cursor.com), then re-run."
   fi
 
   # Default: all detected targets pre-selected
   local _choice=""
-  local _prompt="Install Kestral to: "
-  if [ "$HAS_CLAUDE_CLI" -eq 1 ]; then
-    _prompt="${_prompt}[1] Claude Code  "
-  fi
-  if [ "$HAS_DESKTOP_READY" -eq 1 ]; then
-    _prompt="${_prompt}[2] Claude Cowork  "
-  fi
-  if [ "$HAS_CODEX_CLI" -eq 1 ]; then
-    _prompt="${_prompt}[3] Codex  "
-  fi
-  _prompt="${_prompt}— Enter = all, or type numbers (e.g. \"1\"): "
+  local _prompt
+  _prompt="$(_build_target_selection_prompt)"
 
   if read_tty "$_prompt" _choice; then
     _choice="$(printf '%s' "$_choice" | tr -d '[:space:]')"
     if [ -z "$_choice" ]; then
       SELECTED_TARGETS=("${DETECTED_TARGETS[@]}")
     else
-      local _digit
-      for _digit in $(printf '%s' "$_choice" | grep -o '[123]' || true); do
-        case "$_digit" in
-          1)
-            if [ "$HAS_CLAUDE_CLI" -eq 1 ]; then
-              _add_target_if_missing "claude-code"
-            fi
-            ;;
-          2)
-            if [ "$HAS_DESKTOP_READY" -eq 1 ]; then
-              _add_target_if_missing "claude-desktop"
-            fi
-            ;;
-          3)
-            if [ "$HAS_CODEX_CLI" -eq 1 ]; then
-              _add_target_if_missing "codex"
-            fi
-            ;;
-        esac
-      done
+      _select_targets_from_choice "$_choice"
       if [ "${#SELECTED_TARGETS[@]}" -eq 0 ]; then
         abort "No valid targets selected."
       fi
@@ -1026,10 +1119,26 @@ _restore_desktop_backups() {
 clone_or_update_marketplace() {
   local _clone_dir
   _clone_dir="$(_desktop_marketplace_clone_dir)"
+
+  if ! _fetch_marketplace_to_dir "$_clone_dir" "$DESKTOP_INSTALL_QUIET"; then
+    return 1
+  fi
+
+  _finalize_marketplace_clone "$_clone_dir"
+}
+
+_fetch_marketplace_to_dir() {
+  local _clone_dir="$1"
+  local _quiet="${2:-0}"
+
   mkdir -p "$(dirname "$_clone_dir")"
 
   if [ -d "$_clone_dir/.git" ]; then
-    log "Updating Kestral marketplace..."
+    if [ "$_quiet" -eq 1 ]; then
+      verbose "Updating Kestral marketplace at ${_clone_dir}..."
+    else
+      log "Updating Kestral marketplace..."
+    fi
     verbose "git pull --ff-only in $_clone_dir"
     _restore_plugin_mcp_json_in_clone "$_clone_dir"
     if ! git -C "$_clone_dir" diff --quiet 2>/dev/null || ! git -C "$_clone_dir" diff --cached --quiet 2>/dev/null; then
@@ -1047,18 +1156,58 @@ clone_or_update_marketplace() {
       _print_desktop_gui_fallback
       return 1
     fi
-    ok "Kestral marketplace updated"
+    if [ "$_quiet" -eq 1 ]; then
+      verbose "Kestral marketplace updated at ${_clone_dir}"
+    else
+      ok "Kestral marketplace updated"
+    fi
   else
-    log "Installing Kestral marketplace..."
+    if [ "$_quiet" -eq 1 ]; then
+      verbose "Cloning Kestral marketplace to ${_clone_dir}..."
+    else
+      log "Installing Kestral marketplace..."
+    fi
     verbose "git clone $MARKETPLACE_GIT_URL $_clone_dir"
     if ! git clone "$MARKETPLACE_GIT_URL" "$_clone_dir" >> "$LOGFILE" 2>&1; then
-      warn "Failed to download marketplace."
+      if [ "$_quiet" -eq 1 ]; then
+        verbose "Failed to download marketplace to ${_clone_dir}"
+      else
+        warn "Failed to download marketplace."
+      fi
       return 1
     fi
-    ok "Kestral marketplace installed"
+    if [ "$_quiet" -eq 1 ]; then
+      verbose "Kestral marketplace cloned to ${_clone_dir}"
+    else
+      ok "Kestral marketplace installed"
+    fi
   fi
 
-  _rewrite_plugin_mcp_json_remote "$(_desktop_marketplace_clone_dir)"
+  return 0
+}
+
+_finalize_marketplace_clone() {
+  local _clone_dir="$1"
+  _rewrite_plugin_mcp_json_remote "$_clone_dir"
+  _write_plugin_server_json "$_clone_dir"
+}
+
+_copy_marketplace_to_root() {
+  local _source_dir="$1"
+  local _dest_dir
+
+  _dest_dir="$(_desktop_marketplace_clone_dir)"
+  mkdir -p "$(dirname "$_dest_dir")"
+  rm -rf "$_dest_dir"
+  mkdir -p "$_dest_dir"
+
+  if ! cp -R "${_source_dir}/." "$_dest_dir/"; then
+    verbose "Failed to copy marketplace to ${_dest_dir}"
+    return 1
+  fi
+
+  verbose "Copied marketplace to ${_dest_dir}"
+  return 0
 }
 
 _register_marketplace() {
@@ -1101,6 +1250,37 @@ _enable_plugin() {
   verbose "Enabled plugin in cowork_settings.json"
 }
 
+_write_plugin_server_json() {
+  local _plugin_root="$1"
+  local _manifest="${_plugin_root}/.claude-plugin/plugin.json"
+  local _version _content
+
+  if [ -f "$_manifest" ]; then
+    _version="$("$RUBY_BIN" -e 'require "json"; print JSON.parse(File.read(ARGV[0]))["version"]' "$_manifest" 2>/dev/null || true)"
+  fi
+  _version="${_version:-0.0.0}"
+
+  _content=$(printf '%s\n' "{
+  \"\$schema\": \"https://static.modelcontextprotocol.io/schemas/2025-09-29/server.schema.json\",
+  \"name\": \"ai.kestral.app/mcp\",
+  \"title\": \"Kestral MCP Server\",
+  \"description\": \"Connect Claude to your Kestral workspace for tasks, context, and project setup.\",
+  \"repository\": {
+    \"url\": \"https://github.com/${MARKETPLACE_REPO}\",
+    \"source\": \"github\"
+  },
+  \"version\": \"${_version}\",
+  \"remotes\": [
+    {
+      \"type\": \"streamable-http\",
+      \"url\": \"${REMOTE_MCP_URL}\"
+    }
+  ]
+}")
+  _json_write_atomic "${_plugin_root}/server.json" "$_content"
+  verbose "Wrote server.json (${REMOTE_MCP_URL})"
+}
+
 print_desktop_success() {
   local _name
   _name="$(_desktop_app_name)"
@@ -1120,12 +1300,18 @@ print_desktop_success() {
 }
 
 _install_desktop_for_root() {
-  DESKTOP_BACKUP_SUFFIX=".kestral-backup-$(date +%s)"
+  if [ -z "$DESKTOP_BACKUP_SUFFIX" ]; then
+    DESKTOP_BACKUP_SUFFIX=".kestral-backup-${DESKTOP_SELECTED_ROOT//\//-}"
+  fi
 
   if ! clone_or_update_marketplace; then
     return 1
   fi
 
+  _configure_desktop_for_root
+}
+
+_configure_desktop_for_root() {
   if ! _register_marketplace; then
     _restore_desktop_backups
     return 1
@@ -1147,6 +1333,52 @@ _install_desktop_for_root() {
         "${_org_dir}/cowork_settings.json${DESKTOP_BACKUP_SUFFIX}" 2>/dev/null || true
 }
 
+_install_desktop_roots_from_shared() {
+  local _source_dir="$1"
+  local _root_count="$2"
+  local _tmpdir _root _pids _pid _job_root _job_idx _root_idx _succeeded=0
+
+  _tmpdir="$(mktemp -d "${TMPDIR:-/tmp}/kestral-desktop-install.XXXXXX")"
+  _pids=()
+  log "Configuring ${_root_count} Cowork accounts..." >&2
+  verbose "Shared marketplace stage: $_source_dir"
+
+  _root_idx=0
+  for _root in "${DESKTOP_ROOTS[@]}"; do
+    _job_root="$_root"
+    _job_idx="$_root_idx"
+    (
+      DESKTOP_SELECTED_ROOT="$_job_root"
+      DESKTOP_BACKUP_SUFFIX=".kestral-backup-${_job_root//\//-}"
+      if _copy_marketplace_to_root "$_source_dir" && _configure_desktop_for_root; then
+        : > "${_tmpdir}/ok-${_job_idx}"
+      else
+        printf '%s\n' "$_job_root" > "${_tmpdir}/fail-${_job_idx}"
+      fi
+    ) &
+    _pids+=($!)
+    _root_idx=$((_root_idx + 1))
+  done
+
+  for _pid in "${_pids[@]}"; do
+    wait "$_pid" || true
+  done
+
+  _root_idx=0
+  while [ "$_root_idx" -lt "$_root_count" ]; do
+    if [ -f "${_tmpdir}/ok-${_root_idx}" ]; then
+      _succeeded=$((_succeeded + 1))
+      verbose "Installed for ${DESKTOP_ROOTS[$_root_idx]}"
+    else
+      warn "Could not install for account ${DESKTOP_ROOTS[$_root_idx]} — continuing with remaining accounts." >&2
+    fi
+    _root_idx=$((_root_idx + 1))
+  done
+  rm -rf "$_tmpdir"
+
+  printf '%s' "$_succeeded"
+}
+
 install_to_claude_desktop() {
   if [ "$HAS_GIT" -eq 0 ]; then
     warn "Claude Cowork requires git. Install via: xcode-select --install or brew install git"
@@ -1162,22 +1394,43 @@ install_to_claude_desktop() {
   warn_if_desktop_running
 
   local _succeeded=0
-  local _root_idx=0
   local _root_count="${#DESKTOP_ROOTS[@]}"
+  local _stage_dir=""
 
-  while [ "$_root_idx" -lt "$_root_count" ]; do
-    DESKTOP_SELECTED_ROOT="${DESKTOP_ROOTS[$_root_idx]}"
-    verbose "Installing to account ${DESKTOP_SELECTED_ROOT} ($((_root_idx + 1))/${_root_count})"
+  if [ "$_root_count" -gt 1 ]; then
+    _stage_dir="$(mktemp -d "${TMPDIR:-/tmp}/kestral-desktop-marketplace.XXXXXX")"
+    log "Downloading Kestral marketplace..."
+    verbose "Marketplace stage dir: $_stage_dir"
 
-    if _install_desktop_for_root; then
-      _succeeded=$((_succeeded + 1))
-      verbose "Installed for ${DESKTOP_SELECTED_ROOT}"
-    else
-      warn "Could not install for account ${DESKTOP_SELECTED_ROOT} — continuing with remaining accounts."
+    if ! _fetch_marketplace_to_dir "$_stage_dir" 0; then
+      rm -rf "$_stage_dir"
+      warn "Desktop install failed — could not download marketplace."
+      printf '  → Logs: %s\n' "$LOGFILE" >&2
+      _print_desktop_gui_fallback
+      _finish_desktop_restart
+      return 1
     fi
 
-    _root_idx=$((_root_idx + 1))
-  done
+    _finalize_marketplace_clone "$_stage_dir"
+    ok "Kestral marketplace ready"
+
+    _succeeded="$(_install_desktop_roots_from_shared "$_stage_dir" "$_root_count")"
+    rm -rf "$_stage_dir"
+
+    if [ "$_succeeded" -gt 0 ]; then
+      ok "Configured ${_succeeded}/${_root_count} Cowork accounts"
+    fi
+  else
+    DESKTOP_SELECTED_ROOT="${DESKTOP_ROOTS[0]}"
+    verbose "Installing to account ${DESKTOP_SELECTED_ROOT} (1/1)"
+
+    if _install_desktop_for_root; then
+      _succeeded=1
+      verbose "Installed for ${DESKTOP_SELECTED_ROOT}"
+    else
+      warn "Could not install for account ${DESKTOP_SELECTED_ROOT}."
+    fi
+  fi
 
   if [ "$_succeeded" -eq 0 ]; then
     warn "Desktop install failed for all accounts — restoring previous state..."
@@ -1410,6 +1663,152 @@ install_to_codex() {
   return 1
 }
 
+# --- Cursor path ---
+
+_setup_script_plugin_root() {
+  local _src _dir
+  _src="${BASH_SOURCE[0]:-}"
+  [ -n "$_src" ] || return 1
+  _dir="$(cd "$(dirname "$_src")" && pwd)" || return 1
+  if [ -f "${_dir}/.cursor-plugin/plugin.json" ]; then
+    printf '%s' "$_dir"
+    return 0
+  fi
+  return 1
+}
+
+_print_cursor_manual_fallback() {
+  local _install_dir _local_root
+  _install_dir="$(_cursor_plugin_install_dir)"
+  _local_root="$(_setup_script_plugin_root 2>/dev/null || true)"
+
+  printf '\nManual Cursor install:\n'
+
+  if [ -n "$_local_root" ]; then
+    _cmd_line "rm -rf ${_install_dir}"
+    _cmd_line "mkdir -p ${_install_dir}"
+    _cmd_line "cp -R ${_local_root}/. ${_install_dir}/"
+  elif [ -d "${_install_dir}/.git" ]; then
+    printf '  Plugin source already at %s — skip git clone.\n' "$_install_dir"
+    _cmd_line "git -C ${_install_dir} pull --ff-only"
+  else
+    _cmd_line "mkdir -p $(dirname "${_install_dir}")"
+    _cmd_line "git clone ${MARKETPLACE_GIT_URL} ${_install_dir}"
+  fi
+  printf '  Fully quit and restart Cursor.\n'
+}
+
+clone_or_update_cursor_plugin() {
+  local _clone_dir
+  _clone_dir="$(_cursor_plugin_install_dir)"
+  mkdir -p "$(_cursor_plugins_local_dir)"
+
+  if [ -d "$_clone_dir/.git" ]; then
+    log "Updating Kestral plugin source for Cursor..."
+    verbose "git pull --ff-only in $_clone_dir"
+    _restore_plugin_mcp_json_in_clone "$_clone_dir"
+    if ! git -C "$_clone_dir" diff --quiet 2>/dev/null || ! git -C "$_clone_dir" diff --cached --quiet 2>/dev/null; then
+      warn "Plugin source has local modifications — can't update automatically."
+      verbose "Dirty working tree in $_clone_dir"
+      printf '  → Delete the folder and re-run, or use the manual steps below:\n' >&2
+      verbose "Remedy: rm -rf \"$_clone_dir\" && re-run"
+      _print_cursor_manual_fallback
+      return 1
+    fi
+    if ! git -C "$_clone_dir" pull --ff-only >> "$LOGFILE" 2>&1; then
+      warn "Couldn't update plugin source (history may have diverged)."
+      verbose "git pull --ff-only failed in $_clone_dir"
+      printf '  → Delete the folder and re-run, or use the manual steps below:\n' >&2
+      _print_cursor_manual_fallback
+      return 1
+    fi
+    ok "Kestral plugin source updated"
+  elif [ -e "$_clone_dir" ]; then
+    warn "Plugin source path exists but is not a git repository: $_clone_dir"
+    printf '  → Remove it and re-run: rm -rf "%s"\n' "$_clone_dir" >&2
+    _print_cursor_manual_fallback
+    return 1
+  else
+    log "Downloading Kestral plugin source for Cursor..."
+    verbose "git clone $MARKETPLACE_GIT_URL $_clone_dir"
+    if ! git clone "$MARKETPLACE_GIT_URL" "$_clone_dir" >> "$LOGFILE" 2>&1; then
+      warn "Failed to download plugin source."
+      return 1
+    fi
+    ok "Kestral plugin source installed"
+  fi
+
+  _rewrite_plugin_mcp_json_remote "$_clone_dir"
+}
+
+_validate_cursor_plugin_source() {
+  local _clone_dir="$1"
+  if [ ! -f "${_clone_dir}/.cursor-plugin/plugin.json" ]; then
+    warn "Cursor plugin manifest not found at ${_clone_dir}/.cursor-plugin/plugin.json"
+    return 1
+  fi
+  return 0
+}
+
+_copy_cursor_local_plugin() {
+  local _source="$1"
+  local _dest
+  _dest="$(_cursor_plugin_install_dir)"
+  mkdir -p "$(_cursor_plugins_local_dir)"
+  rm -rf "$_dest"
+  mkdir -p "$_dest"
+
+  if ! cp -R "${_source}/." "$_dest/"; then
+    return 1
+  fi
+  ok "Installed Cursor plugin → $_dest"
+}
+
+print_cursor_success() {
+  printf '\nCursor: Kestral plugin is ready (connects to Kestral at %s).\n' "$REMOTE_MCP_URL"
+  printf '  1. Fully quit and restart Cursor (required — running sessions won'\''t reload plugin content).\n'
+  printf '  2. Open Settings → Tools & MCPs. If Kestral shows Needs authentication, click Connect.\n'
+  printf '  3. In agent chat, try "plan my day", "end of day review", or push a branch linked to a Kestral task.\n'
+}
+
+install_to_cursor() {
+  local _plugin_root _local_root _install_dir
+  _install_dir="$(_cursor_plugin_install_dir)"
+
+  _local_root="$(_setup_script_plugin_root 2>/dev/null || true)"
+
+  if [ -n "$_local_root" ]; then
+    log "Installing local Kestral plugin source (${_local_root})"
+    if ! _copy_cursor_local_plugin "$_local_root"; then
+      _print_cursor_manual_fallback
+      return 1
+    fi
+    _plugin_root="$_install_dir"
+    _rewrite_plugin_mcp_json_remote "$_plugin_root"
+  else
+    if [ "$HAS_GIT" -eq 0 ]; then
+      warn "Cursor plugin install requires git."
+      _print_cursor_manual_fallback
+      return 1
+    fi
+
+    if ! clone_or_update_cursor_plugin; then
+      _print_cursor_manual_fallback
+      return 1
+    fi
+
+    _plugin_root="$_install_dir"
+
+    if ! _validate_cursor_plugin_source "$_plugin_root"; then
+      _print_cursor_manual_fallback
+      return 1
+    fi
+  fi
+
+  print_cursor_success
+  return 0
+}
+
 # --- Main target loop ---
 
 _run_target() {
@@ -1437,6 +1836,14 @@ _run_target() {
         TARGET_RESULT_CODEX="installed"
       else
         TARGET_RESULT_CODEX="FAILED"
+      fi
+      ;;
+    cursor)
+      section "Installing Kestral to Cursor"
+      if install_to_cursor; then
+        TARGET_RESULT_CURSOR="installed"
+      else
+        TARGET_RESULT_CURSOR="FAILED"
       fi
       ;;
     *)
@@ -1472,6 +1879,14 @@ _print_summary() {
       _exit=1
     fi
   fi
+  if [ -n "$TARGET_RESULT_CURSOR" ]; then
+    if [ "$TARGET_RESULT_CURSOR" = "installed" ]; then
+      ok "Cursor: installed"
+    else
+      warn "Cursor: failed — see instructions above"
+      _exit=1
+    fi
+  fi
   if [ "$_exit" -ne 0 ]; then
     printf '\n  Full logs: %s\n' "$LOGFILE"
   fi
@@ -1487,8 +1902,308 @@ cleanup_old_local_mcp() {
   fi
 }
 
+# --- Full reinstall: remove all Kestral plugins, caches, and credentials ---
+
+_rm_if_exists() {
+  local _path="$1"
+  if [ -e "$_path" ]; then
+    rm -rf "$_path"
+    ok "Removed $_path"
+  fi
+}
+
+_strip_kestral_from_json() {
+  local _file="$1"
+  local _mode="$2"
+
+  [ -f "$_file" ] || return 0
+  grep -q -i kestral "$_file" 2>/dev/null || return 0
+  [ -n "$RUBY_BIN" ] || return 1
+
+  local _result
+  _result="$("$RUBY_BIN" -e "$(cat <<'RUBY'
+require 'json'
+file = ARGV[0]
+mode = ARGV[1]
+data = JSON.parse(File.read(file))
+
+case mode
+when 'settings'
+  if data['permissions'] && data['permissions']['allow']
+    data['permissions']['allow'] = data['permissions']['allow'].reject { |p| p.downcase.include?('kestral') }
+  end
+  ['mcpServers', 'installedPlugins', 'enabledPlugins', 'extraKnownMarketplaces'].each do |key|
+    next unless data[key].is_a?(Hash)
+    data[key].reject! { |k, _| k.downcase.include?('kestral') }
+  end
+when 'known_marketplaces'
+  data.reject! { |k, _| k.to_s.downcase.include?('kestral') }
+when 'installed_plugins'
+  if data['plugins'].is_a?(Hash)
+    data['plugins'].reject! { |k, _| k.to_s.downcase.include?('kestral') }
+  end
+when 'claude_json'
+  ['pluginUsage', 'mcpServers', 'enabledPlugins', 'installedPlugins', 'extraKnownMarketplaces'].each do |key|
+    next unless data[key].is_a?(Hash)
+    data[key].reject! { |k, _| k.to_s.downcase.include?('kestral') }
+  end
+when 'auth_cache'
+  data.reject! do |k, _|
+    key = k.to_s.downcase
+    key.include?('kestral') || key.include?('app.kestral.ai') || key.include?('ai.kestral.app')
+  end
+end
+
+print JSON.pretty_generate(data) + "\n"
+RUBY
+)" "$_file" "$_mode")" || return 1
+
+  if [ -n "$_result" ]; then
+    _json_write_atomic "$_file" "$_result"
+    return 0
+  fi
+  return 1
+}
+
+_warn_kestral_manual_remote_mcp() {
+  local _base _file
+
+  for _base in \
+    "$SESSIONS_BASE" \
+    "${HOME}/Library/Application Support/Claude/claude-code-sessions"; do
+    [ -d "$_base" ] || continue
+    while IFS= read -r _file; do
+      if grep -q 'app\.kestral\.ai/mcp' "$_file" 2>/dev/null; then
+        warn "A manually added Kestral remote MCP connector may still appear in Claude Desktop."
+        printf '  → Remove it in Claude Desktop: Customize → Connectors → Kestral → disconnect/remove.\n'
+        printf '  → Per-task Cowork snapshots are left unchanged so prior task history is not rewritten.\n'
+        return 0
+      fi
+    done < <(find "$_base" -mindepth 3 -maxdepth 3 -name 'local_*.json' 2>/dev/null)
+  done
+}
+
+_clean_claude_desktop_configs() {
+  local _path _file _base _cleaned=0
+
+  if [ -d "$SESSIONS_BASE" ]; then
+  while IFS= read -r _path; do
+    rm -rf "$_path"
+    verbose "Removed marketplace clone: $_path"
+    _cleaned=1
+  done < <(find "$SESSIONS_BASE" -path '*/cowork_plugins/marketplaces/kestral-plugins' -type d 2>/dev/null)
+
+  while IFS= read -r _path; do
+    rm -rf "$_path"
+    verbose "Removed inline plugin data: $_path"
+    _cleaned=1
+  done < <(find "$SESSIONS_BASE" -path '*/.claude/plugins/data/kestral-*' -type d 2>/dev/null)
+
+  while IFS= read -r _file; do
+    if _strip_kestral_from_json "$_file" "known_marketplaces"; then
+      verbose "Stripped Kestral from $_file"
+      _cleaned=1
+    fi
+  done < <(find "$SESSIONS_BASE" -path '*/cowork_plugins/known_marketplaces.json' 2>/dev/null)
+
+  while IFS= read -r _file; do
+    if _strip_kestral_from_json "$_file" "installed_plugins"; then
+      verbose "Stripped Kestral from $_file"
+      _cleaned=1
+    fi
+  done < <(find "$SESSIONS_BASE" -path '*/cowork_plugins/installed_plugins.json' 2>/dev/null)
+
+  while IFS= read -r _file; do
+    if _strip_kestral_from_json "$_file" "settings"; then
+      verbose "Stripped Kestral from $_file"
+      _cleaned=1
+    fi
+  done < <(find "$SESSIONS_BASE" -path '*/cowork_settings.json' 2>/dev/null)
+
+  while IFS= read -r _file; do
+    if _strip_kestral_from_json "$_file" "claude_json"; then
+      verbose "Stripped Kestral from $_file"
+      _cleaned=1
+    fi
+  done < <(find "$SESSIONS_BASE" -path '*/.claude/.claude.json' 2>/dev/null)
+
+  while IFS= read -r _file; do
+    if _strip_kestral_from_json "$_file" "auth_cache"; then
+      verbose "Stripped Kestral from $_file"
+      _cleaned=1
+    fi
+  done < <(find "$SESSIONS_BASE" -path '*/.claude/mcp-needs-auth-cache.json' 2>/dev/null)
+
+  while IFS= read -r _file; do
+    rm -f "$_file"
+    verbose "Removed Cowork MCP config: $_file"
+    _cleaned=1
+  done < <(find "$SESSIONS_BASE" \( -path '*kestral-plugins*' -o -path '*kestral@kestral-plugins*' \) -name '.mcp.json' 2>/dev/null)
+  fi
+
+  _warn_kestral_manual_remote_mcp
+
+  if [ "$_cleaned" -eq 1 ]; then
+    ok "Cleared Kestral from Claude Desktop Cowork configs"
+  fi
+}
+
+_clean_claude_plugins() {
+  section "Removing Kestral from Claude Code / Cowork"
+
+  _rm_if_exists "${HOME}/.claude/plugins/cache/kestral-plugins"
+  _rm_if_exists "${HOME}/.claude/plugins/marketplaces/kestral-plugins"
+  _rm_if_exists "${HOME}/.claude/plugins/data/kestral-inline"
+  _rm_if_exists "${HOME}/.claude/plugins/data/kestral-kestral-plugins"
+
+  local _settings="${HOME}/.claude/settings.json"
+  if [ -f "$_settings" ] && grep -q -i "kestral" "$_settings" 2>/dev/null; then
+    if [ -n "$RUBY_BIN" ]; then
+      if _strip_kestral_from_json "$_settings" "settings"; then
+        ok "Removed Kestral entries from ${_settings}"
+      fi
+    else
+      warn "Ruby not available — manually remove Kestral entries from ${_settings}"
+    fi
+  fi
+
+  _clean_claude_code_auth_cache
+  _clean_claude_desktop_configs
+}
+
+_clean_claude_code_auth_cache() {
+  local _cache="${HOME}/.claude/mcp-needs-auth-cache.json"
+
+  [ -f "$_cache" ] || return 0
+  grep -q -i "kestral\|app\.kestral\.ai\|ai\.kestral\.app" "$_cache" 2>/dev/null || return 0
+  [ -n "$RUBY_BIN" ] || return 0
+
+  if _strip_kestral_from_json "$_cache" "auth_cache"; then
+    ok "Removed Kestral entries from ${_cache}"
+  fi
+}
+
+_clean_codex_plugins() {
+  section "Removing Kestral from Codex"
+
+  _rm_if_exists "${HOME}/.codex/plugins/cache/kestral-plugins"
+  _rm_if_exists "${HOME}/.codex/.tmp/marketplaces/kestral-plugins"
+  _rm_if_exists "${HOME}/.kestral/codex-marketplace"
+
+  local _config="${HOME}/.codex/config.toml"
+  if [ -f "$_config" ] && grep -q -i "kestral" "$_config" 2>/dev/null; then
+    if [ -n "$RUBY_BIN" ]; then
+      local _result
+      _result="$("$RUBY_BIN" -e "$(cat <<'RUBY'
+lines = File.readlines(ARGV[0])
+output = []
+skip = false
+lines.each do |line|
+  if line =~ /^\[.*kestral.*\]/i
+    skip = true
+    next
+  end
+  if skip
+    if line =~ /^\[/
+      skip = false
+    else
+      next
+    end
+  end
+  output << line
+end
+# Remove trailing blank lines left by stripped sections
+output.pop while output.last&.strip&.empty?
+print output.join
+RUBY
+)" "$_config")" || true
+      if [ -n "$_result" ]; then
+        printf '%s\n' "$_result" > "$_config"
+        ok "Stripped Kestral sections from ${_config}"
+      fi
+    else
+      warn "Ruby not available — manually remove Kestral sections from ${_config}"
+    fi
+  fi
+
+  if [ "$(uname -s)" = "Darwin" ]; then
+    local _deleted=0
+    while IFS= read -r _acct; do
+      if security delete-generic-password -s "Codex MCP Credentials" -a "$_acct" 2>/dev/null; then
+        _deleted=$((_deleted + 1))
+      fi
+    done < <(security dump-keychain 2>/dev/null | grep -A 5 "Codex MCP Credentials" | grep "acct" | grep -i "kestral" | sed 's/.*<blob>="//;s/"//' 2>/dev/null || true)
+    if [ "$_deleted" -gt 0 ]; then
+      ok "Removed ${_deleted} Kestral credential(s) from macOS Keychain"
+    fi
+  fi
+}
+
+_clean_cursor_plugins() {
+  section "Removing Kestral from Cursor"
+
+  _rm_if_exists "${HOME}/.cursor/plugins/local/${CURSOR_PLUGIN_LOCAL_NAME}"
+  _rm_if_exists "${HOME}/.cursor/plugins/cache/kestral-plugins"
+  _rm_if_exists "${HOME}/.kestral/cursor-marketplace"
+
+  local _mkt_dir="${HOME}/.cursor/plugins/marketplaces/github.com/kestral-team/kestral-plugins"
+  _rm_if_exists "$_mkt_dir"
+  local _mkt_parent="${HOME}/.cursor/plugins/marketplaces/github.com/kestral-team"
+  if [ -d "$_mkt_parent" ] && [ -z "$(ls -A "$_mkt_parent" 2>/dev/null)" ]; then
+    rmdir "$_mkt_parent" 2>/dev/null || true
+  fi
+
+  if [ "$(uname -s)" = "Darwin" ]; then
+    local _oauth_dir="${HOME}/Library/Application Support/Cursor/User/globalStorage/mcp-oauth-attempts"
+    local _oauth_dir2="${HOME}/Library/Application Support/Cursor/User/globalStorage/anysphere.cursor-mcp/mcp-oauth-attempts"
+    local _f _dir
+    for _dir in "$_oauth_dir" "$_oauth_dir2"; do
+      if [ -d "$_dir" ]; then
+        while IFS= read -r _f; do
+          rm -f "$_f"
+          verbose "Removed OAuth attempt: $_f"
+        done < <(grep -rl -i "kestral" "$_dir" 2>/dev/null || true)
+      fi
+    done
+    ok "Cleared Kestral OAuth credentials from Cursor"
+  fi
+}
+
+_clean_local_mcp_tokens() {
+  section "Removing local MCP auth tokens"
+
+  _rm_if_exists "${HOME}/.config/kestral"
+  _rm_if_exists "${HOME}/.kestral/bin"
+}
+
+_full_reinstall_clean() {
+  section "Full reinstall: removing all Kestral plugins, caches, and credentials"
+
+  local _answer=""
+  if read_tty "  This will remove all Kestral plugin data and credentials. Continue? [Y/n] " _answer; then
+    case "$_answer" in
+      [nN] | [nN][oO])
+        abort "Full reinstall cancelled."
+        ;;
+    esac
+  fi
+
+  ensure_ruby 2>/dev/null || true
+
+  _clean_local_mcp_tokens
+  _clean_claude_plugins
+  _clean_codex_plugins
+  _clean_cursor_plugins
+
+  ok "All Kestral plugin data removed. Proceeding with fresh install..."
+}
+
 main() {
   parse_args "$@"
+
+  if [ "$FULL_REINSTALL" -eq 1 ]; then
+    _full_reinstall_clean
+  fi
 
   section "Checking prerequisites (git)"
   ensure_git

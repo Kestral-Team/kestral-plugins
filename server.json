@@ -1,0 +1,17 @@
+{
+  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-09-29/server.schema.json",
+  "name": "ai.kestral.app/mcp",
+  "title": "Kestral MCP Server",
+  "description": "Connect Claude to your Kestral workspace for tasks, context, and project setup.",
+  "repository": {
+    "url": "https://github.com/Kestral-Team/kestral-plugins",
+    "source": "github"
+  },
+  "version": "0.4.26",
+  "remotes": [
+    {
+      "type": "streamable-http",
+      "url": "https://app.kestral.ai/mcp"
+    }
+  ]
+}

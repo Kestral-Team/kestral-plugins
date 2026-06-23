@@ -43,14 +43,16 @@ Find the Kestral task for the current work. Each step is 1–3 seconds except th
 
 1. **Slug in branch name:** if the branch contains a slug (e.g. `kes-42-fix-auth`), call `entity_lookup` with the slug
    directly — instant.
-2. **Branch→task exact match:** `query_entities({ type: "tasks", branchName: "<current-branch>" })`. Returns the task
-   linked to this branch via `update_task({ branchName })`, if any (0 or 1 result).
-3. **My active tasks:** `query_entities({ type: "tasks", assigneeFilter: "me" })` — defaults to open (non-closed)
-   statuses. Exactly one match → use it. Multiple → pick the one whose title best matches the branch name.
-4. **Keyword search:** `query_entities({ type: "tasks", assigneeFilter: "me", keyword: "<branch-slug-as-words>" })`.
-   Convert the branch slug to words (e.g. `feat/improve-auth-flow` → `"improve auth flow"`). Trigram fuzzy,
-   deterministic.
-5. **`research`** — **last resort only** (10–30 seconds). Frame as the user-facing problem, include branch name.
+2. **Branch→task exact match:** `execute_operation("find_task_by_branch", { branchName: "<current-branch>" })`. Returns
+   the task linked to this branch, if any (0 or 1 result).
+3. **My active tasks:** `execute_operation("list_my_active_tasks", {})` — tasks assigned to me in todo or in_progress.
+   Exactly one match → use it. Multiple → pick the one whose title best matches the branch name.
+4. **Keyword search:**
+   `execute_operation("search_my_tasks_by_keyword", { keyword: "<branch-slug-as-words>", statusFilter: ["todo", "in_progress"] })`.
+   Convert the branch slug to words (e.g. `feat/improve-auth-flow` → `"improve auth flow"`). Scoped to my tasks — do not
+   use `search_tasks` with `assigneeFilter`; that param is dropped at validation.
+5. **`execute_operation("deep_research", { query })`** — **last resort only** (10–30 seconds). Frame as the user-facing
+   problem, include branch name.
 
 After resolution:
 
@@ -90,18 +92,23 @@ already been done and propose a scope adjustment.
 
 Before building, pull project context so the agent knows *why* the task exists:
 
-1. **Identify project:** task → `entity_lookup` → `projectId`. Or `query_entities` (type: "projects"); ask if ambiguous.
+1. **Identify project:** task → `entity_lookup` → `projectId`. Or `execute_operation("search_projects", { query })`; ask
+   if ambiguous.
 2. **Pull project brain:** `entity_lookup({ id: "<projectId>", type: "project_brain" })`.
    - Check `brainGenerationStatus` in the response: if `queued` or `running`, tell the user "Brain is building (~30s)"
      instead of "no brain found."
-   - If no brain exists, mention `trigger_brain_build` as an option.
-3. **Pull related tasks:** `query_entities` (type: "tasks") scoped to the project.
-4. **Pull customer feedback:** `query_entities` (type: "feedback") or `search_content` scoped to the project — surfaces
-   the user-facing *why*.
-5. **Summarize** — present a brief digest; do not dump the full brain output.
+   - If no brain exists, mention `execute_operation("trigger_brain_build", { projectId })` as an option.
+3. **Pull related tasks:**
+   `execute_operation("list_tasks_by_status", { statusFilter: ["todo", "in_progress"], projectId })`, or
+   `execute_operation("search_tasks", { query: "<topic from task or project>" })` when a semantic topic fits better.
+4. **One-call alternative:** `execute_operation("get_implementation_context", { taskId })` — returns task + brain +
+   related in a single call.
+5. **Pull customer feedback:** `execute_operation("search_feedback", { query })` — frame the query around the task or
+   project topic to surface the user-facing *why*.
+6. **Summarize** — present a brief digest; do not dump the full brain output.
 
-**Session start option:** `get_daily_brief` returns a personal summary of what changed across all your projects — useful
-at the start of a session.
+**Session start option:** `execute_operation("get_daily_brief", {})` returns a personal summary of what changed across
+all your projects — useful at the start of a session.
 
 ---
 
@@ -112,12 +119,14 @@ at the start of a session.
 When the user wants a task for the current branch (no existing task found):
 
 1. **Gather context:** `git branch --show-current`, `git log --oneline -20`, `git diff --stat main...HEAD`
-2. **Find project:** `query_entities` (type: "projects") with branch/commit keywords; ask if ambiguous.
-3. **Create:** `create_tasks` — title from branch + commits, description as plain-language markdown (Summary, What was
-   built, Why it matters), `source: "mcp"`.
-4. **Register branch:** `update_task({ branchName: "<branch>" })` — enables step 2 of the lookup chain for all future
-   lookups.
-5. **Link PR** (if one exists): `link_pr_to_task`.
+2. **Find project:** `execute_operation("search_projects", { query })` with branch/commit keywords; ask if ambiguous.
+3. **Create:**
+   `execute_operation("create_task", { projectId, title, description, checkDuplicates: true, source: "mcp" })` — title
+   from branch + commits, description as plain-language markdown (Summary, What was built, Why it matters). If blocked
+   as a duplicate, present the existing task instead of creating.
+4. **Register branch:** `execute_operation("register_branch_on_task", { taskId, branchName })` — enables step 2 of the
+   lookup chain for all future lookups.
+5. **Link PR** (if one exists): `execute_operation("link_pr_to_task", { taskId, prUrl })`.
 6. **Confirm:** present the task URL.
 
 ### From Bugfix
@@ -145,15 +154,17 @@ When the user picks up a task:
 
 1. Task Lookup (fast chain above)
 2. Conflict Check
-3. **Claim:** `update_task({ assigneeId: <memberId>, statusKey: "<in-progress key>", branchName: "<branch>" })` —
-   registers the branch for deterministic lookup. Returns 409 if the branch is already linked to another task (conflict
-   signal). Use `list_statuses` to find the correct key for your workspace's in-progress status.
-4. **Confirm:** "Claimed [slug], set to [status name]."
+3. Derive and confirm the branch name (slug + title, lowercase hyphenated) — ask the user before registering it on the
+   task or creating the git branch.
+4. **Claim:** `execute_operation("claim_task_and_branch", { taskId, branchName })` — uses the confirmed name from step
+   3; single call replaces assign + status + branch + comment. Returns 409 if the branch is already linked to another
+   task (conflict signal).
+5. **Confirm:** "Claimed [slug], set to [status name]."
 
 ### Status Update
 
-Call `list_statuses` first, then `update_task` with the appropriate `statusKey`. Only update at meaningful transitions.
-Run the Acceptance Check before moving a task to a completed/review status.
+Call `list_statuses` first, then `execute_operation("update_task_status", { taskId, statusKey })`. Only update at
+meaningful transitions. Run the Acceptance Check before moving a task to a completed/review status.
 
 **PR merge gate:** A task's "done" or "completed" status means the PR is **merged**, not just that implementation is
 finished. If a linked PR is still open, use the workspace's review/pending status instead. The one exception: when no PR
@@ -174,9 +185,10 @@ Before updating task status after implementation:
 
 ## Comments
 
-All comments are posted via `comment_task`. Follow the writing style rule: **conversational outcomes** ("Users can now
-filter by date range"), not implementation jargon ("Added filterByDateRange param"). No file paths or function names.
-2–4 lines max.
+Comments are posted via `execute_operation("post_progress_comment", { taskId, content })` for progress updates, or
+`execute_operation("add_task_comment", { taskId, content })` for other comment types. Follow the writing style rule:
+**conversational outcomes** ("Users can now filter by date range"), not implementation jargon ("Added filterByDateRange
+param"). No file paths or function names. 2–4 lines max.
 
 ### Progress Comment
 
@@ -232,14 +244,14 @@ Post after completing a code review — **whether findings are clean or not**:
 
 ### Branch/PR Linking
 
-**Atomic PR linking (preferred):**
-`link_pr_to_task({ taskId, prUrl, statusKey: "<review-status-key>",
-comment: "PR opened: <title>" })` — links the PR,
-transitions status, and posts a comment in one call instead of three. Use `list_statuses` to find the correct review
-status key for your workspace.
+**Compound PR linking (preferred):**
+`execute_operation("complete_task_with_review", { taskId, prUrl, comment: "PR opened: <title>" })` — links the PR, sets
+status to `awaiting_review`, and posts a comment in one call.
 
-- PR exists → `link_pr_to_task` (auto-assigns if unassigned, posts GitHub PR comment)
-- Branch only (no PR yet) → `comment_task`: `Started work on branch \`branch-name\``
+- PR exists → `execute_operation("link_pr_to_task", { taskId, prUrl })` (auto-assigns if unassigned, posts GitHub PR
+  comment)
+- Branch only (no PR yet) → `execute_operation("add_task_comment", { taskId, content })`:
+  `Started work on branch \`branch-name\``
 - Post each link **once per session**
 
 ### Full Sync
@@ -261,5 +273,5 @@ Complete sync workflow (user asks to sync, or auto-trigger fires):
 ## Complex Operations
 
 For multi-step or multi-entity operations (bulk updates, project archiving, subtask hierarchy, tag management, task
-prioritization), use the `project_management` tool with a natural-language request. It routes to an AI agent that
-handles the right sequence of actions (10–30 seconds).
+prioritization), use `execute_operation("manage_project", { request })` with a natural-language request. It routes to an
+AI agent that handles the right sequence of actions (10–30 seconds).

@@ -22,16 +22,24 @@ update tasks, pull workspace knowledge into a conversation, or scaffold a new pr
 ## Install
 
 **Recommended:** one command connects to Kestral at `https://app.kestral.ai/mcp` and installs to detected apps
-(Claude Code and/or Codex on macOS and Linux; Claude Cowork is macOS only):
+(Claude Code and/or Codex on macOS and Linux; Claude Cowork is macOS only; Cursor via `--app cursor`):
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/Kestral-Team/kestral-plugins/main/setup.sh | bash
 ```
 
-Pick targets non-interactively (e.g. Codex only):
+Pick targets non-interactively (e.g. Codex or Cursor only):
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/Kestral-Team/kestral-plugins/main/setup.sh | bash -s -- --app codex
+curl -fsSL https://raw.githubusercontent.com/Kestral-Team/kestral-plugins/main/setup.sh | bash -s -- --app cursor
+```
+
+Need a clean reset before reinstalling? Add `--full-reinstall` to remove Kestral plugin files, cached plugin data, and
+saved sign-in state before the fresh install:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/Kestral-Team/kestral-plugins/main/setup.sh | bash -s -- --full-reinstall
 ```
 
 The script checks prerequisites and registers the marketplace. On macOS it can also install to Claude Cowork (writes
@@ -87,6 +95,23 @@ Pick your app below for manual steps (the same steps the script automates).
 
 After installing in Codex, fully quit and restart the app so it reloads the plugin cache. In a new thread, type `$` and
 look for `kestral-setup`, `kestral-tasks`, or `kestral-context`.
+
+### Cursor
+
+**Recommended:** one command installs the full bundle (MCP, plan-day, end-day-review skills, and ambient sync rule):
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/Kestral-Team/kestral-plugins/main/setup.sh | bash -s -- --app cursor
+```
+
+Then fully quit and restart Cursor. Open **Settings → Tools & MCPs** and click **Connect** on **Kestral** if authentication
+is required. In agent chat, try **plan my day**, **end of day review**, or push a branch linked to a Kestral task.
+
+**Team admins:** add marketplace `Kestral-Team/kestral-plugins` at [cursor.com/dashboard](https://cursor.com/dashboard) →
+Settings → Plugins.
+
+**MCP only (no skills):** use **Settings → Tools & MCPs → Add MCP Server** with URL `https://app.kestral.ai/mcp`, or the
+one-click install link from the Kestral Integrations page.
 
 ## What you can do
 
@@ -164,6 +189,9 @@ Protocol (the way Claude Code talks to external tools).
 | MCP won't connect | Re-run the setup script, restart your AI app, and confirm **Kestral** appears in your MCP server list. |
 | Local file upload fails | File uploads use presigned URLs and require network egress. On **Claude Cowork**: Settings → Capabilities → enable "Allow network egress" → add `storage.googleapis.com` and `app.kestral.ai`. On **Codex**: Settings → Configuration → enable "Allow network access". You can also upload files manually from the Kestral project page. |
 | Codex: plugin added but no skills | Restart Codex after install. Enable the plugin under **Plugins** if it is disabled. |
+| Cursor: plugin installed but MCP needs auth | Open **Settings → Tools & MCPs**, click **Connect** on **Kestral**, and sign in through your browser. |
+| Cursor: skills not appearing | Fully quit and restart Cursor after install. Confirm the Kestral plugin is enabled under **Plugins**. |
+| Reinstall still uses old plugin content | Run setup with `--full-reinstall`, then fully quit and restart your AI app before starting a new chat or thread. |
 | Network errors | Check your connection. If the error persists, re-run setup. |
 
 ## Links

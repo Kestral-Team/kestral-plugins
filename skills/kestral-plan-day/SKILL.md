@@ -5,19 +5,18 @@ description: Use when the user asks to plan today, start the workday, prioritize
 
 # Plan Day
 
-Create a daily operating plan from Kestral's current daily brief, relevant project/task state, and the user's calendar for
-today plus the next two business days. The plan should make brief context actionable: what changed, what needs
+Create a daily operating plan from Kestral's current daily brief, relevant project/task state, and the user's calendar
+for today plus the next two business days. The plan should make brief context actionable: what changed, what needs
 attention, what fits today, and what should be deferred.
 
 ## Prerequisites
 
-The `Kestral` MCP server must be in this session (`/mcp`). Call `whoami` first — if it fails, ask the user to
-reconnect or authenticate the **Kestral** MCP server in their app's MCP settings. The agent cannot handle OAuth
-directly — authenticate through your app's UI (Cowork: Customize → Connectors; Codex: Settings → MCP Servers →
-Authenticate; Claude Code: `/mcp` → reconnect).
-Do not call other tools until authenticated.
-A calendar MCP/app connector should also be available for best results. If calendar access is missing, the behavior
-depends on whether this is the user's first plan-day after a kestral-setup in the same session:
+The `Kestral` MCP server must be in this session (`/mcp`). Call `whoami` first — if it fails, ask the user to reconnect
+or authenticate the **Kestral** MCP server in their app's MCP settings. The agent cannot handle OAuth directly —
+authenticate through your app's UI (Cowork: Customize → Connectors; Codex: Settings → MCP Servers → Authenticate; Claude
+Code: `/mcp` → reconnect). Do not call other tools until authenticated. A calendar MCP/app connector should also be
+available for best results. If calendar access is missing, the behavior depends on whether this is the user's first
+plan-day after a kestral-setup in the same session:
 
 **First plan-day after setup (same session):** The user just finished onboarding and is trying plan-day for the first
 time. Guide them toward connecting a calendar — this is the best moment to set it up:
@@ -44,8 +43,8 @@ In both cases, ask for fixed commitments before finalizing the plan when calenda
 Keep Kestral IDs internal unless the user asks for them. In user-facing output:
 
 - Tasks: show `slug - title` when a slug is available, linked with `url` when the host can render links.
-- Projects, documents, feedback, customers, tags, statuses, and other Kestral entities: show the readable name/title/label
-  first, linked with `url` when the host can render links.
+- Projects, documents, feedback, customers, tags, statuses, and other Kestral entities: show the readable
+  name/title/label first, linked with `url` when the host can render links.
 - People and actors: show display names; if unresolved, write `Unknown member (id: <rawId>)`.
 - Unknown non-member entities: write `Unknown <entity type> (id: <rawId>)`.
 - Approval tables and write-back plans must put the human-readable label first. Raw URLs, machine IDs, source IDs, and
@@ -65,7 +64,7 @@ Expected invocations include:
 
 Default order:
 
-1. Fetch the Kestral daily brief with `get_daily_brief`.
+1. Fetch the Kestral daily brief with `execute_operation("get_daily_brief", {})`.
 2. Read `.kestral/preferences.md` by checking the current workspace folder and then parent folders. Use the first match
    as the source for durable user planning preferences, not as a task or project source of truth.
 3. Read calendar events for today and the next two business days using the available calendar MCP/app connector. Include
@@ -89,9 +88,9 @@ Kestral task searches to run when planning needs verification:
 - `tasks due today or in the next two business days`
 
 Calendar event searches should use explicit local-day RFC3339 bounds from start-of-day today through end-of-day of the
-second business day after today, skipping weekends. If today is a weekend, still include today plus the next two weekdays.
-If only free/busy access is available, use busy windows but state that event details are unavailable. Do not create or
-update calendar events unless the user explicitly asks.
+second business day after today, skipping weekends. If today is a weekend, still include today plus the next two
+weekdays. If only free/busy access is available, use busy windows but state that event details are unavailable. Do not
+create or update calendar events unless the user explicitly asks.
 
 ## User preferences
 
@@ -102,17 +101,17 @@ from the current workspace folder and using the first match.
   preference write is proposed.
 - Apply relevant saved preferences when drafting the plan, such as preferred focus hours, meeting buffers, planning
   style, recurring must-check projects, communication cadence, and work the user consistently wants avoided.
-- Capture durable preference signals from the user's constraints, corrections, repeated edits, and stated likes/dislikes.
-  Do not require the user to explicitly say "remember", "note", "save", or "prefer".
+- Capture durable preference signals from the user's constraints, corrections, repeated edits, and stated
+  likes/dislikes. Do not require the user to explicitly say "remember", "note", "save", or "prefer".
 - Do not treat one-day constraints as durable preferences. Save only stable work-style, planning, scheduling, or
   write-back preferences that are likely to apply across future plan-day runs.
 - Update `.kestral/preferences.md` silently when a durable preference is clear. This is local memory maintenance, not a
   Kestral write-back.
 - Ask before writing preferences only when the signal is ambiguous, appears one-off, conflicts with existing memory, or
   may include sensitive personal or meeting-specific content.
-- If the user explicitly asks to update preferences, update `.kestral/preferences.md` in the same turn before finalizing.
-  Preference-memory writes are local workspace memory maintenance, not Kestral write-backs; do not skip them because the
-  user declined or redirected Kestral write-back for the day plan.
+- If the user explicitly asks to update preferences, update `.kestral/preferences.md` in the same turn before
+  finalizing. Preference-memory writes are local workspace memory maintenance, not Kestral write-backs; do not skip them
+  because the user declined or redirected Kestral write-back for the day plan.
 - Create `.kestral/` and `preferences.md` in the current workspace folder if no parent preference file exists and a
   preference write is needed. Keep the file short, in Markdown, and update existing bullets instead of appending
   duplicates.
@@ -120,7 +119,9 @@ from the current workspace folder and using the first match.
 
 ## Workflow
 
-Use the same task rendering posture throughout: verify only decision-relevant tasks, keep raw IDs internal, and name tasks as `slug - title` when a slug exists. For projects, documents, and other entities, use readable names/titles plus URLs when useful.
+Use the same task rendering posture throughout: verify only decision-relevant tasks, keep raw IDs internal, and name
+tasks as `slug - title` when a slug exists. For projects, documents, and other entities, use readable names/titles plus
+URLs when useful.
 
 ### 0. Gather first
 
@@ -145,10 +146,10 @@ Summarize the most important inputs before asking the user to plan:
 Keep this short enough to scan. Default to a terse operating picture: critical blockers, today's usable windows, and the
 top tasks that could change the plan.
 
-Resolve contradictions selectively. Verify live state for tasks or projects only when they are blockers, launch-critical,
-assigned to the user, due soon, or central to the proposed must-win. Do not deep-inspect every referenced task just
-because it appears in the brief. When generated Project Brain knowledge conflicts with live task/project fields, label the
-generated knowledge as stale and prefer the live record for planning.
+Resolve contradictions selectively. Verify live state for tasks or projects only when they are blockers,
+launch-critical, assigned to the user, due soon, or central to the proposed must-win. Do not deep-inspect every
+referenced task just because it appears in the brief. When generated Project Brain knowledge conflicts with live
+task/project fields, label the generated knowledge as stale and prefer the live record for planning.
 
 ### 2. Ask constraints before planning
 
@@ -235,21 +236,27 @@ Use this structure unless the user asks for something else:
 
 ```markdown
 ## Morning Readout
+
 [brief, blockers, decisions, urgent/stale work, calendar pressure]
 
 ## Constraints
+
 [known constraints and assumptions]
 
 ## Plan
+
 1. [time block or priority] - [outcome]
 2. ...
 
 ## Quick Wins
+
 - ...
 
 ## Defer
+
 - ...
 
 ## Write-Back
+
 [ask whether to save/link the final plan]
 ```

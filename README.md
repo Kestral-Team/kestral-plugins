@@ -38,6 +38,13 @@ curl -fsSL https://raw.githubusercontent.com/Kestral-Team/kestral-plugins/main/s
 curl -fsSL https://raw.githubusercontent.com/Kestral-Team/kestral-plugins/main/setup.sh | bash -s -- --app codex
 ```
 
+For a clean reset, add `--full-reinstall` to remove Kestral plugin files, cached plugin data, and saved sign-in state
+before reinstalling:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/Kestral-Team/kestral-plugins/main/setup.sh | bash -s -- --full-reinstall
+```
+
 **Note:** The script registers the Kestral marketplace via the `claude`/`codex` CLI, and for Claude Desktop writes
 directly to Cowork's plugin files under `~/Library/Application Support/Claude/`.
 [View the script source](https://github.com/Kestral-Team/kestral-plugins/blob/main/setup.sh) before running.
@@ -54,6 +61,20 @@ directly to Cowork's plugin files under `~/Library/Application Support/Claude/`.
 ```bash
 codex plugin marketplace add Kestral-Team/kestral-plugins
 ```
+
+### Cursor
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/Kestral-Team/kestral-plugins/main/setup.sh | bash -s -- --app cursor
+```
+
+Fully quit and restart Cursor. Open **Settings → Tools & MCPs** and click **Connect** on **Kestral** if authentication is
+required.
+
+Team admins can add marketplace `Kestral-Team/kestral-plugins` at [cursor.com/dashboard](https://cursor.com/dashboard) →
+Settings → Plugins.
+
+The Cursor plugin bundles task sync, plan-day, and end-day-review skills plus the hosted MCP connection.
 
 ## Uninstall
 
@@ -79,7 +100,7 @@ If the GUI cannot see or delete the entry, remove manually:
 
 ## Version
 
-Current release: **v0.4.25**
+Current release: **v0.4.26**
 
 ## Links
 

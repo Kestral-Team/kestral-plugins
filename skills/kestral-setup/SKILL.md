@@ -11,7 +11,7 @@ and generates brains they can work from immediately. Local files only when the u
 
 ## Prerequisites
 
-**Kestral** must show as **connected** with tools such as `whoami`, `create_project`, or `query_entities` in this
+**Kestral** must show as **connected** with tools such as `whoami`, `execute_operation`, or `entity_lookup` in this
 session. If missing, reconnect in the client.
 
 ## Human-readable references
@@ -19,8 +19,8 @@ session. If missing, reconnect in the client.
 Keep Kestral IDs internal unless the user asks for them. In user-facing output:
 
 - Tasks: show `slug - title` when a slug is available, linked with `url` when the host can render links.
-- Projects, documents, feedback, customers, tags, statuses, and other Kestral entities: show the readable name/title/label
-  first, linked with `url` when the host can render links.
+- Projects, documents, feedback, customers, tags, statuses, and other Kestral entities: show the readable
+  name/title/label first, linked with `url` when the host can render links.
 - People and actors: show display names; if unresolved, write `Unknown member (id: <rawId>)`.
 - Unknown non-member entities: write `Unknown <entity type> (id: <rawId>)`.
 - Approval tables and write-back plans must put the human-readable label first. Raw URLs, machine IDs, source IDs, and
@@ -33,7 +33,7 @@ Keep Kestral IDs internal unless the user asks for them. In user-facing output:
 
 Run before any Kestral MCP call. Stop on failure; exact messages in `docs/manifest-copy-spec.md`.
 
-**Kestral tools (all hosts)** — Confirm Kestral tools such as `whoami`, `create_project`, or `query_entities` in this
+**Kestral tools (all hosts)** — Confirm Kestral tools such as `whoami`, `execute_operation`, or `entity_lookup` in this
 thread (`/mcp`). If absent → **MCP not connected**. Give the user the matching troubleshooting steps:
 
 - **Claude Code Desktop / Claude Cowork:** Open **Customize → Kestral plugin → Connectors**, click **Install** on
@@ -41,17 +41,17 @@ thread (`/mcp`). If absent → **MCP not connected**. Give the user the matching
 - **Claude Code CLI:** Open settings (gear icon or `/config`), go to **MCP Servers**, add or reconnect the **Kestral**
   server, then run `/kestral:kestral-setup` again.
 - **Cursor:** Open **Settings → MCP Servers**, add or reconnect the **Kestral** MCP server, then retry.
-- **Codex:** Open **Settings → MCP Servers**, add or reconnect the **Kestral** MCP server, then run `$kestral-setup`
-  in a **new thread**.
+- **Codex:** Open **Settings → MCP Servers**, add or reconnect the **Kestral** MCP server, then run `$kestral-setup` in
+  a **new thread**.
 
 Do not block setup if upload tools are missing. Step 7 handles upload attempts gracefully — trying the best available
 tool, offering egress fix instructions on failure, and falling back to summarization via `create_document` for text
 files. Project creation, task import, and external doc linking work regardless of upload capability.
 
-**Host capability detection:** Check what document tools are available in this session:
+**Host capability detection:** Check what document upload operations are available in this session:
 
 - `upload_document` present → local Go bridge; can read and upload files from disk directly
-- `upload_request_urls` present (no `upload_document`) → remote MCP; can upload via presigned URLs if the host has
+- `upload_request_urls` available via `execute_operation` → remote MCP; can upload via presigned URLs if the host has
   shell/curl access and egress to `app.kestral.ai`
 - Neither present → `create_document` only; can create documents from inline content or agent-authored summaries
 
@@ -64,13 +64,13 @@ context, not a file path on disk). This affects whether `scan-folder` and file-p
 Call `whoami`. If it succeeds, proceed. If it fails (401 / unauthorized), guide the user through their host's UI to
 authenticate — the agent cannot handle OAuth callbacks or generate auth links directly:
 
-- **Claude Code Desktop / Claude Cowork:** Open **Customize → Kestral** (under Personal plugins) **→ Connectors**,
-  click **Install** on Kestral, then click **Add**. A browser opens for sign-in.
+- **Claude Code Desktop / Claude Cowork:** Open **Customize → Kestral** (under Personal plugins) **→ Connectors**, click
+  **Install** on Kestral, then click **Add**. A browser opens for sign-in.
 - **Claude Code CLI:** Run `/mcp`, find **Kestral**, and reconnect it. Follow the browser prompt to sign in.
 - **Codex:** Open **Settings → MCP Servers**, find **Kestral**, click **Authenticate**. Sign in via the browser that
   opens. Run `$kestral-setup` in a **new thread** after authenticating.
-- **Cursor:** Open **Settings → MCP Servers**, find **Kestral**, click **Authenticate** or **Connect**. If `mcp_auth`
-  is available, the agent can call it to trigger the browser flow.
+- **Cursor:** Open **Settings → MCP Servers**, find **Kestral**, click **Authenticate** or **Connect**. If `mcp_auth` is
+  available, the agent can call it to trigger the browser flow.
 
 > Once you've signed in, ask me to continue.
 
@@ -78,12 +78,12 @@ Do not call other Kestral tools until `whoami` succeeds.
 
 ### 1.5. Existing project detection
 
-After `whoami` succeeds, call `query_entities({ type: "projects", query: "all projects", explanation: "Check for existing projects before setup" })`
-to see whether the workspace already has projects.
+After `whoami` succeeds, call `execute_operation("search_projects", { query: "all projects" })` to see whether the
+workspace already has projects.
 
-| Condition | Behavior |
-| --- | --- |
-| No projects | Continue to step 2 (connected-sources opener). |
+| Condition   | Behavior                                                                              |
+| ----------- | ------------------------------------------------------------------------------------- |
+| No projects | Continue to step 2 (connected-sources opener).                                        |
 | 1+ projects | Run the **prioritized work snapshot** (below), then show the three next-step options. |
 
 #### Prioritized work snapshot (when projects exist)
@@ -93,11 +93,11 @@ Before asking what the user wants to do, give them a **prioritized look at their
 
 Run in parallel when the host supports it:
 
-1. **`get_daily_brief`** — personal summary of what changed across projects (urgent items, blockers, stale work, project
-   mentions). If the brief is generating, say so briefly and continue with project brains.
+1. **`execute_operation("get_daily_brief", {})`** — personal summary of what changed across projects (urgent items,
+   blockers, stale work, project mentions). If the brief is generating, say so briefly and continue with project brains.
 2. **`entity_lookup({ type: "project_brain", id: "<projectId>" })`** for the **top 2–3 projects** to highlight:
    - Prefer projects named or prioritized in the daily brief.
-   - Otherwise pick the most recently updated projects from the `query_entities` project list.
+   - Otherwise pick the most recently updated projects from the `search_projects` result list.
    - Keep each brain digest to **2–3 bullets** (goals, blockers, recent changes) — do not dump full brain text.
    - If `brainGenerationStatus` is `queued` or `running`, say the brain is building (~1–2 min).
    - If no brain exists, note it and link the project URL — do not block the flow.
@@ -115,50 +115,52 @@ Render compactly, then show the three options:
 >
 > 1. [Project Name](project-url)
 >    - *[2–3 bullets from brain: goals, blockers, recent changes — or "Brain building…" / "No brain yet"]*
-> 2. ...
-> …and [N] more projects. *(when 4+ total)*
+> 2. ... …and [N] more projects. *(when 4+ total)*
 >
 > **You can get started right now:**
+>
 > - **Pick a task from above** and start working — I can set it in progress and help here
-> - **Plan your day** — run `/kestral:plan-day` (or `$kestral-plan-day` in Codex) for a prioritized plan across all
->   your projects
+> - **Plan your day** — run `/kestral:plan-day` (or `$kestral-plan-day` in Codex) for a prioritized plan across all your
+>   projects
 >
 > **Or set up more:**
+>
 > - **Add more context** to a project — pull new docs or tasks from connected apps and refresh the brain
-> - **Create a new project** — set up a Kestral project with a brain from Linear, Jira, Notion, Drive, Granola, or
->   other connected apps
+> - **Create a new project** — set up a Kestral project with a brain from Linear, Jira, Notion, Drive, Granola, or other
+>   connected apps
 
 Do not ask for sources or a manifest until the user picks **Add more context** or **Create a new project**.
 
 **Routing:**
 
-| User choice | Next step |
-| --- | --- |
-| Pick a task / start working | Help them start (set task in progress, outline steps). Introduce Sync + plan-day + end-day if not yet mentioned. |
-| Plan my day / explore | Enter the **explore and work** flow (below). |
+| User choice                   | Next step                                                                                                              |
+| ----------------------------- | ---------------------------------------------------------------------------------------------------------------------- |
+| Pick a task / start working   | Help them start (set task in progress, outline steps). Introduce Sync + plan-day + end-day if not yet mentioned.       |
+| Plan my day / explore         | Enter the **explore and work** flow (below).                                                                           |
 | Add more context to [project] | Enter the **enrich existing project** flow (below). Skip step 2 opener; frame around "what new context should we add?" |
-| Create a new project | Continue to step 2 (connected-sources opener). Frame as setting up a new Kestral project with a brain. |
+| Create a new project          | Continue to step 2 (connected-sources opener). Frame as setting up a new Kestral project with a brain.                 |
 
 #### Explore and work flow
 
 When the user wants to explore existing projects rather than create or enrich:
 
 1. If the **prioritized work snapshot** (step 1.5) already ran, do not repeat the full project list — confirm which
-   project to focus on, or pick the top project from the brief/brain highlights if the user says "just help me get started."
+   project to focus on, or pick the top project from the brief/brain highlights if the user says "just help me get
+   started."
 2. Otherwise share project links and brain highlights (same pattern as step 1.5).
-3. Suggest visiting the Project Brain link, then **plan your day** — invoke `kestral-plan-day/SKILL.md` or tell the user to run
-   **`/kestral:plan-day`** (Claude Code / Cowork) or **`$kestral-plan-day`** (Codex). Pull daily brief, calendar, and
-   task state for prioritized work; help them pick a task from the plan.
+3. Suggest visiting the Project Brain link, then **plan your day** — invoke `kestral-plan-day/SKILL.md` or tell the user
+   to run **`/kestral:plan-day`** (Claude Code / Cowork) or **`$kestral-plan-day`** (Codex). Pull daily brief, calendar,
+   and task state for prioritized work; help them pick a task from the plan.
 4. After plan-day (or once they start a task), introduce the **ongoing skills** (suggest, do not auto-run):
 
    > **Skills that keep your project in sync** (you only set these up once):
    >
-   > - **Plan day** — `/kestral:plan-day` or `$kestral-plan-day` — morning prioritization from your brief, calendar,
-   >   and tasks (what you just ran, or rerun anytime).
+   > - **Plan day** — `/kestral:plan-day` or `$kestral-plan-day` — morning prioritization from your brief, calendar, and
+   >   tasks (what you just ran, or rerun anytime).
    > - **Kestral Sync** — `/kestral:sync` or `$kestral-sync` for a manual sync; for automatic updates, install the
-   >   ambient sync rule once (`kestral-sync/README.md` — paste the snippet into `AGENTS.md` or `CLAUDE.md`). After that, progress
-   >   comments, status changes, and PR links flow back on push and phase completion — you don't need to keep saying
-   >   "kestral sync."
+   >   ambient sync rule once (`kestral-sync/README.md` — paste the snippet into `AGENTS.md` or `CLAUDE.md`). After
+   >   that, progress comments, status changes, and PR links flow back on push and phase completion — you don't need to
+   >   keep saying "kestral sync."
    > - **End day review** — `/kestral:end-day-review` or `$kestral-end-day-review` — when you wrap up, reconciles what
    >   got done, updates task status in the project, and sets tomorrow's priorities.
 
@@ -168,11 +170,14 @@ When the user wants to explore existing projects rather than create or enrich:
 
 When the user picks an existing project to enrich:
 
-1. Store the selected project's `projectId` and `url` — do **not** call `create_project`.
+1. Store the selected project's `projectId` and `url` — do **not** call the `create_project` operation.
 2. Open with: "What new context should we add to [Project Name]? Point me at connected apps — Linear, Jira, Notion,
    Drive, Granola notes, local files/folders — or describe what changed."
-3. Run steps 3–6 (inventory, infer workstreams, manifest, checkpoint) scoped to **additions only** — new docs, tasks, or links for that project. The manifest may be a single-project "add to existing" view rather than multi-project creation.
-4. In step 7, skip `create_project`. Upload/link documents and create tasks against the existing `projectId`. Call `trigger_brain_build` for that project after new context is attached.
+3. Run steps 3–6 (inventory, infer workstreams, manifest, checkpoint) scoped to **additions only** — new docs, tasks, or
+   links for that project. The manifest may be a single-project "add to existing" view rather than multi-project
+   creation.
+4. In step 7, skip the `create_project` operation. Upload/link documents and create tasks against the existing
+   `projectId`. Call `execute_operation("trigger_brain_build", { projectId })` after new context is attached.
 5. Continue to step 8 (results) and step 9 (guided journey).
 
 If the user cancels during enrich, follow the same cancel behavior as the main flow.
@@ -204,10 +209,11 @@ natively support.
 Setup leads with connected tools and goals. Local files are just another source the user can mention — handle them via
 `kestral-scan-folder/SKILL.md` when they do. Use words like "include" or "add" rather than "scan" in user-facing copy.
 
-**Two roles for local files:** Files may be (a) context for the agent to understand the user's work and propose projects,
-or (b) documents the user wants uploaded into Kestral for the brain and team. Many files are only the first — rough
-drafts, explorations, scratch notes help the agent understand the work but don't belong in a shared workspace. Default
-to reading files for context. At the manifest checkpoint, surface which files could be uploaded and let the user decide.
+**Two roles for local files:** Files may be (a) context for the agent to understand the user's work and propose
+projects, or (b) documents the user wants uploaded into Kestral for the brain and team. Many files are only the first —
+rough drafts, explorations, scratch notes help the agent understand the work but don't belong in a shared workspace.
+Default to reading files for context. At the manifest checkpoint, surface which files could be uploaded and let the user
+decide.
 
 **When the host lacks filesystem access** (Claude Desktop, Cowork — detected in preflight), do not ask for file paths.
 If the user shares files via the chat UI (`+` button), work with the content provided. If they want to include local
@@ -221,8 +227,8 @@ Drive, Notion) and linking them instead.
 #### 2a. Surface what's available
 
 After auth (and any existing-project routing), inspect what source tools are loaded in this session — task systems
-(Linear, Jira, GitHub Issues, Asana, …), document systems (Notion, Google Drive, Confluence, Slack), Granola, and
-other MCP connectors. Use that inventory to tailor the opener; do not interrogate the user source-by-source.
+(Linear, Jira, GitHub Issues, Asana, …), document systems (Notion, Google Drive, Confluence, Slack), Granola, and other
+MCP connectors. Use that inventory to tailor the opener; do not interrogate the user source-by-source.
 
 Open with this framing (adapt connector names to what's actually loaded). Lead with **what they'll get**, then ask for
 sources:
@@ -276,19 +282,19 @@ task or document bodies into main context when metadata, paths, URLs, or IDs are
 
 Use these source-specific helpers and patterns:
 
-| Source family | Guidance |
-| --- | --- |
-| User buckets | Treat user-provided project names, goals, work areas, and outcomes as the taxonomy unless the user asks you to infer alternatives. |
-| Task systems | Use `kestral-scan-tasks/SKILL.md` for Linear, Jira, GitHub Issues, and similar tools. Prefer open, in-progress, recently updated, high-priority, or recently completed work. |
-| Document systems | Use `link_external_document` for sources with recognized URLs (Notion, Google Drive, Slack, Confluence). For other document sources like Granola, pull the content via MCP and use `create_document`. |
-| Repositories | Use repo metadata, issue links, README/docs references, milestones, labels, and recent activity to support task and document signals. |
-| Local files | User-initiated. Use `kestral-scan-folder/SKILL.md` when the user provides a folder or file paths and the host has filesystem access. Treat files as **context first** — inspect representative content to understand the user's work and inform project proposals. Do not assume every file should be uploaded; surface uploadable files at the manifest checkpoint and let the user decide which belong in the shared workspace. When the host lacks filesystem access, work with content the user shares in conversation. |
+| Source family    | Guidance                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
+| ---------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| User buckets     | Treat user-provided project names, goals, work areas, and outcomes as the taxonomy unless the user asks you to infer alternatives.                                                                                                                                                                                                                                                                                                                                                                                          |
+| Task systems     | Use `kestral-scan-tasks/SKILL.md` for Linear, Jira, GitHub Issues, and similar tools. Prefer open, in-progress, recently updated, high-priority, or recently completed work.                                                                                                                                                                                                                                                                                                                                                |
+| Document systems | Use `execute_operation("link_external_document", ...)` for sources with recognized URLs (Notion, Google Drive, Slack, Confluence). For other document sources like Granola, pull the content via MCP and use `execute_operation("create_document", ...)`.                                                                                                                                                                                                                                                                   |
+| Repositories     | Use repo metadata, issue links, README/docs references, milestones, labels, and recent activity to support task and document signals.                                                                                                                                                                                                                                                                                                                                                                                       |
+| Local files      | User-initiated. Use `kestral-scan-folder/SKILL.md` when the user provides a folder or file paths and the host has filesystem access. Treat files as **context first** — inspect representative content to understand the user's work and inform project proposals. Do not assume every file should be uploaded; surface uploadable files at the manifest checkpoint and let the user decide which belong in the shared workspace. When the host lacks filesystem access, work with content the user shares in conversation. |
 
 If the user scoped sources, honor that scope. If they only said they are not organized yet, inspect available connected
 task and document sources, then propose a focused starting structure.
 
-If a connected source read fails, mark that source skipped and continue with the other sources. If all usable sources are
-missing or unreadable, ask one targeted question that would unblock setup.
+If a connected source read fails, mark that source skipped and continue with the other sources. If all usable sources
+are missing or unreadable, ask one targeted question that would unblock setup.
 
 ### 4. Infer active workstreams
 
@@ -298,11 +304,10 @@ Documents are flexible evidence. A document may be:
 
 - A source to inspect so the agent can understand the user's work and propose an organization.
 - A local upload or external link to attach to a Kestral project.
-- **Inline text** pasted in chat (Slack thread, summary, notes) — discern the role:
-  (a) substantive evidence the team should reference → attach with `create_document` and `projectId`;
-  (b) context that describes the work scope → weaving into project description and tasks is fine;
-  (c) organization instructions (how to split, naming rules) → follow them without creating a document.
-  Do NOT use `link_external_document` for pasted text — there is no canonical URL to link.
+- **Inline text** pasted in chat (Slack thread, summary, notes) — discern the role: (a) substantive evidence the team
+  should reference → attach with `create_document` and `projectId`; (b) context that describes the work scope → weaving
+  into project description and tasks is fine; (c) organization instructions (how to split, naming rules) → follow them
+  without creating a document. Do NOT use `link_external_document` for pasted text — there is no canonical URL to link.
 - Both evidence and project context when it is useful for Project Brain.
 
 For a small document set, inspect enough content to understand the work at a high level before proposing projects. For a
@@ -353,7 +358,8 @@ If the user asks for more or all matching tasks/documents, import more or all in
 
 ### 5. Render a multi-project manifest
 
-Use readable labels throughout the manifest: document names, source labels, task titles, and priority labels. External task IDs are provenance/debug details only; do not show them unless the user asks.
+Use readable labels throughout the manifest: document names, source labels, task titles, and priority labels. External
+task IDs are provenance/debug details only; do not show them unless the user asks.
 
 Show proposed Kestral projects, not a source dump. Each proposed project includes:
 
@@ -372,6 +378,7 @@ If any source files were **skipped or unsupported**, show them after the project
 
 ```md
 Skipped
+
 - pitch-deck.pptx — unsupported file type (.pptx)
 - design-mockup.fig — unsupported file type (.fig)
 - node_modules/ — excluded directory
@@ -384,23 +391,20 @@ Render compactly:
 ```md
 Proposed projects
 
-1. Billing Automation
-   Description: Consolidates active billing workflow work and supporting implementation docs.
-   Rationale: Linear project, recent GitHub issues, and matching Drive design docs.
-   Tasks:
-     - Fix invoice retry state [linear, high]
-     - Add webhook replay tests [github, medium]
-   Files to upload:
-     - billing-architecture.md [local, 4.2 KB]
-   Documents to link:
-     - Billing rollout notes [google-drive]
-   Coverage: 12 tasks selected, 43 more matching.
-   Confidence: High. Ambiguity: one Slack thread may belong to Support Ops.
+1. Billing Automation Description: Consolidates active billing workflow work and supporting implementation docs.
+   Rationale: Linear project, recent GitHub issues, and matching Drive design docs. Tasks:
+   - Fix invoice retry state [linear, high]
+   - Add webhook replay tests [github, medium] Files to upload:
+   - billing-architecture.md [local, 4.2 KB] Documents to link:
+   - Billing rollout notes [google-drive] Coverage: 12 tasks selected, 43 more matching. Confidence: High. Ambiguity:
+     one Slack thread may belong to Support Ops.
 
 Skipped
+
 - quarterly-review.pptx — unsupported file type (.pptx)
 
 Extra candidates to revisit later
+
 - Legacy billing cleanup: stale tasks and low recent activity.
 ```
 
@@ -413,8 +417,8 @@ Make clear that the curated manifest is a starting import, not a hard limit:
 After rendering the manifest, prompt the user to approve or adjust. Lead with the default action (create), then note
 they can change how work is grouped into projects:
 
-> Ready to create these projects? Say "create these" to proceed, or tell me how you'd like them grouped differently —
-> I can split, merge, rename projects, or add and remove items before creating anything.
+> Ready to create these projects? Say "create these" to proceed, or tell me how you'd like them grouped differently — I
+> can split, merge, rename projects, or add and remove items before creating anything.
 
 This gives a clear default ("create these") while making adjustment easy. If the user says nothing (or the host
 auto-approves tool calls), proceed to step 7. If they ask to change something, apply the edit and re-render.
@@ -425,27 +429,27 @@ Claude Cowork, Cursor, Codex with tool permissions enabled).
 Supported commands mirror `docs/manifest-copy-spec.md`. If an edit target is ambiguous in a multi-project manifest, ask
 one focused clarification before applying it:
 
-| Command or intent | Effect |
-| --- | --- |
-| `ok` / `yes` / `go` / `create these` | Proceed to create selected projects and import selected context |
-| `revise` | Edit the manifest before proceeding (same as edit commands below) |
-| `remove <file>` | Remove a specific local file from the selected document list |
-| `add <path>` | Validate the path, stat its byte size, and add it to the selected local documents |
-| `remove <source> documents` | Remove all selected documents from a source, such as Notion or Google Drive |
-| `skip tasks` | Remove selected tasks from this run so no tasks are imported |
-| `title: <new>` / `change title <new>` | Override a proposed project title; ask if the target project is unclear |
-| `description: <new>` / `change description <new>` | Override a proposed project description; ask if the target project is unclear |
-| `only create <project>` | Deselect other proposed projects |
-| `skip <project>` | Remove a proposed project from this run |
-| `rename <project> to <new title>` | Update a proposed project title |
-| `split <project>` | Ask one focused follow-up and split into clearer workstreams |
-| `merge <project A> and <project B>` | Combine proposed projects and their selected context |
-| `move <item> to <project>` | Move a selected task or document between proposed projects |
-| `use these buckets: <list>` | Switch to user-led taxonomy and remap sources |
-| `import more <source> into <project>` | Expand import scope for that project/source |
-| `import all matching <tasks/documents>` | Switch that project/source to bulk import mode |
-| `look at <folder> instead` / `change folder <path>` | Switch to a different local folder and remap the proposed taxonomy |
-| `cancel` / `no` / `stop` | Exit cleanly without Kestral write calls |
+| Command or intent                                   | Effect                                                                            |
+| --------------------------------------------------- | --------------------------------------------------------------------------------- |
+| `ok` / `yes` / `go` / `create these`                | Proceed to create selected projects and import selected context                   |
+| `revise`                                            | Edit the manifest before proceeding (same as edit commands below)                 |
+| `remove <file>`                                     | Remove a specific local file from the selected document list                      |
+| `add <path>`                                        | Validate the path, stat its byte size, and add it to the selected local documents |
+| `remove <source> documents`                         | Remove all selected documents from a source, such as Notion or Google Drive       |
+| `skip tasks`                                        | Remove selected tasks from this run so no tasks are imported                      |
+| `title: <new>` / `change title <new>`               | Override a proposed project title; ask if the target project is unclear           |
+| `description: <new>` / `change description <new>`   | Override a proposed project description; ask if the target project is unclear     |
+| `only create <project>`                             | Deselect other proposed projects                                                  |
+| `skip <project>`                                    | Remove a proposed project from this run                                           |
+| `rename <project> to <new title>`                   | Update a proposed project title                                                   |
+| `split <project>`                                   | Ask one focused follow-up and split into clearer workstreams                      |
+| `merge <project A> and <project B>`                 | Combine proposed projects and their selected context                              |
+| `move <item> to <project>`                          | Move a selected task or document between proposed projects                        |
+| `use these buckets: <list>`                         | Switch to user-led taxonomy and remap sources                                     |
+| `import more <source> into <project>`               | Expand import scope for that project/source                                       |
+| `import all matching <tasks/documents>`             | Switch that project/source to bulk import mode                                    |
+| `look at <folder> instead` / `change folder <path>` | Switch to a different local folder and remap the proposed taxonomy                |
+| `cancel` / `no` / `stop`                            | Exit cleanly without Kestral write calls                                          |
 
 Re-render the manifest after edits. The host's tool-permission prompt is the approval gate for normal curated setup.
 
@@ -466,17 +470,17 @@ For large writes, confirm scope in one concise message, such as:
 ### 7. Apply selected projects and imports
 
 Apply each selected project after the manifest checkpoint (or after explicit ok for no-permission hosts). Use parallel
-write calls only where writes are independent and the host allows it; otherwise proceed sequentially with compact progress
-updates. Always preserve successful project URLs.
+write calls only where writes are independent and the host allows it; otherwise proceed sequentially with compact
+progress updates. Always preserve successful project URLs.
 
 For each selected project:
 
-1. Call `create_project` with the project title, description, and lifecycle status when appropriate. Store `projectId`
-   and `url`.
+1. Call `execute_operation("create_project", { title, description })` with lifecycle status when appropriate. Store
+   `projectId` and `url`.
 2. Upload or create selected documents for **this project** using the strategy below.
-3. Link selected external documents with `link_external_document`.
-4. Create selected tasks with `create_tasks`.
-5. Trigger `trigger_brain_build` for that project.
+3. Link selected external documents with `execute_operation("link_external_document", { url, title, projectId })`.
+4. Create selected tasks with `execute_operation("create_tasks_batch", { projectId, tasks })`.
+5. Trigger `execute_operation("trigger_brain_build", { projectId })` for that project.
 
 When multiple projects are proposed, allocate documents to the project they belong to — do not dump all documents into
 one project. A competitive analysis belongs to the GTM project, not the product project.
@@ -487,13 +491,15 @@ Documents come from three sources. Handle each differently:
 
 **Local files the user wants uploaded:**
 
-1. **Try upload first.** Use `upload_document` or `upload_request_urls` per `kestral-upload/SKILL.md`. Supported file
-   types: PDF, DOCX, TXT, Markdown, CSV, images (JPEG/PNG/WebP/HEIC), audio (MP3/M4A), video (MP4).
+1. **Try upload first.** Use `upload_document` or `execute_operation("upload_request_urls", ...)` per
+   `kestral-upload/SKILL.md`. Supported file types: PDF, DOCX, TXT, Markdown, CSV, images (JPEG/PNG/WebP/HEIC), audio
+   (MP3/M4A), video (MP4).
 2. **If upload fails** (egress blocked, tools unavailable, host limitations), tell the user and offer to summarize
    instead: "I can't upload this file directly from here. I can read it and create a summary document for the brain."
-3. **When summarizing**, read the file content, produce a focused summary, and call `create_document` with `projectId`.
-   Do not copy file contents verbatim — summarize so the brain gets useful context without raw data dumps. Be
-   transparent: "I created a summary of [filename] — the original file isn't stored in Kestral."
+3. **When summarizing**, read the file content, produce a focused summary, and call
+   `execute_operation("create_document", { title, content, projectId })`. Do not copy file contents verbatim — summarize
+   so the brain gets useful context without raw data dumps. Be transparent: "I created a summary of [filename] — the
+   original file isn't stored in Kestral."
 4. **Binary files the agent can't read** (images, audio, video) when upload isn't available: note them in the results.
 5. **Files that couldn't be uploaded or summarized:** After project creation, mention that these files can be uploaded
    manually from the project's Documents tab — if they are a supported file type. Before project creation (no URL yet),
@@ -506,31 +512,33 @@ Report upload failures per-file; do not pre-declare hard limits. Skip rejected f
 **User-shared content** (pasted text, inline notes, conversation context):
 
 Discern intent before choosing a strategy:
-- Rich evidence the team should reference (meeting notes, detailed threads) → `create_document` with `projectId`
+
+- Rich evidence the team should reference (meeting notes, detailed threads) →
+  `execute_operation("create_document", { title, content, projectId })`
 - Work scope and context → incorporate into project description and tasks
 - Organization instructions → follow them to shape the project structure
 
-When content covers multiple domains, allocate to the appropriate project — either as a document per project or
-absorbed into each project's description. Do NOT create one large cross-project synthesis document.
-Do NOT use `link_external_document` for pasted text without a canonical source URL.
+When content covers multiple domains, allocate to the appropriate project — either as a document per project or absorbed
+into each project's description. Do NOT create one large cross-project synthesis document. Do NOT use
+`link_external_document` for pasted text — there is no canonical URL to link.
 
 **External documents** (Notion, Drive, Slack, Confluence):
 
-- Use `link_external_document` for documents with canonical source URLs. Pass `url`, `title`, `projectId`, and fallback
-  `content` when available. Prefer linking over reproducing content via `create_document` — linked docs keep provenance
-  and support autosync.
+- Use `execute_operation("link_external_document", { url, title, projectId, content? })` for documents with canonical
+  source URLs. Prefer linking over reproducing content via `create_document` — linked docs keep provenance and support
+  autosync.
 - Track `resolutionStatus`. A `pending` result is partial success: the snapshot is linked, but the matching Kestral
   integration should be connected for live autosync.
 
 Tasks:
 
-- Use `create_tasks` with the selected task records for the project.
+- Use `execute_operation("create_tasks_batch", { projectId, tasks })` with the selected task records.
 - Preserve source labels in task descriptions or metadata when available.
 - For bulk task imports, batch by source and project, summarize progress, and continue on item-level failures when safe.
 
 Project Brain:
 
-- Call `trigger_brain_build` per project after documents and tasks are attached.
+- Call `execute_operation("trigger_brain_build", { projectId })` per project after documents and tasks are attached.
 - Brain failures do not invalidate project creation or imported context.
 
 ### 8. Present results
@@ -551,8 +559,8 @@ Always return successful project URLs when any project creation succeeded, even 
 If one or more linked docs returned `resolutionStatus: "pending"`, add one line naming the distinct sources and pointing
 the user to connect them in Kestral:
 
-> I linked your Notion and Google Drive docs from saved snapshots. Connect those integrations in Kestral
-> (**Workspace Settings → Integrations**) and they'll autosync to the latest version.
+> I linked your Notion and Google Drive docs from saved snapshots. Connect those integrations in Kestral (**Workspace
+> Settings → Integrations**) and they'll autosync to the latest version.
 
 If brain generation was enqueued, say:
 
@@ -586,27 +594,29 @@ auto-run writes without approval, but **do** proactively offer to pull the brain
    > - *[blocker or next step 2]*
    > - ...
    >
-   > **You can start right now:** pick one and I can set it **in progress** and help you work it here.
-   > **Or:** run `/kestral:plan-day` for a full prioritized plan across your projects.
+   > **You can start right now:** pick one and I can set it **in progress** and help you work it here. **Or:** run
+   > `/kestral:plan-day` for a full prioritized plan across your projects.
 
 3. If the brain is empty or still building and the project has imported tasks, fall back to open/high-priority tasks via
-   `query_entities` scoped to the project — still ask which to start on.
+   `execute_operation("list_tasks_by_status", { statusFilter: ["todo", "in_progress"], projectId })` — still ask which
+   to start on.
 4. After the user picks work, help them start (set task in progress, outline first steps).
 
    **GitHub integration nudge (coding tasks only):** If the task the user picked is code-related (mentions code, a repo,
-   a branch, PR, implementation, engineering, etc.), call `kestral_integration_status({ service: "github" })`. If
-   `connected` is false, suggest connecting it — the response includes a workspace-scoped `deepLink` URL:
+   a branch, PR, implementation, engineering, etc.), call `execute_operation("list_integrations", {})` and check the
+   GitHub entry. If `connected` is false, suggest connecting it — the response includes a workspace-scoped `deepLink`
+   URL:
 
-   > **Connect GitHub** so **Kestral Sync** can link PRs to this task and post progress as you push — your Project
-   > Brain and team stay current automatically as you code: [Connect GitHub](deepLink-from-response)
+   > **Connect GitHub** so **Kestral Sync** can link PRs to this task and post progress as you push — your Project Brain
+   > and team stay current automatically as you code: [Connect GitHub](deepLink-from-response)
    >
    > You can still work without it — Sync will post progress comments, but PR linking needs the GitHub integration.
 
-   If GitHub is already connected, skip the nudge entirely. Then mention Sync briefly (set up once) and continue to
-   step 9 for plan-day / end-day skills if not yet introduced.
+   If GitHub is already connected, skip the nudge entirely. Then mention Sync briefly (set up once) and continue to step
+   9 for plan-day / end-day skills if not yet introduced.
 
-If multiple projects were created or enriched, run this flow for the primary project first (or ask which project to focus
-on), then offer the others.
+If multiple projects were created or enriched, run this flow for the primary project first (or ask which project to
+focus on), then offer the others.
 
 If Project Brain is not enabled:
 
@@ -641,11 +651,11 @@ and ongoing skills from the snapshot already shown.
 
 #### 9c. Kestral Sync (set up once)
 
-> To keep your project and Project Brain updated as you work, set up **Kestral Sync** once — see `kestral-sync/README.md` and
-> paste the ambient snippet into your project's `AGENTS.md` or `CLAUDE.md` (Codex/Claude) or install the Cursor rule.
-> After that, progress comments, status changes, and PR links flow back automatically on push and phase completion —
-> you don't need to keep invoking sync. Use **`/kestral:sync`** or **`$kestral-sync`** only when you want a manual
-> "sync now."
+> To keep your project and Project Brain updated as you work, set up **Kestral Sync** once — see
+> `kestral-sync/README.md` and paste the ambient snippet into your project's `AGENTS.md` or `CLAUDE.md` (Codex/Claude)
+> or install the Cursor rule. After that, progress comments, status changes, and PR links flow back automatically on
+> push and phase completion — you don't need to keep invoking sync. Use **`/kestral:sync`** or **`$kestral-sync`** only
+> when you want a manual "sync now."
 
 #### 9d. End day review
 
@@ -659,15 +669,15 @@ and ongoing skills from the snapshot already shown.
 
 #### Follow-up (when the user asks to keep going)
 
-| User intent | Do this |
-| --- | --- |
-| Brain's ready / what should I work on | `entity_lookup` project_brain → surface blockers & next steps → ask which to start |
-| Start a task | Help the user pick a task, set it to in progress, and begin working. Point to plan-day and Sync if not yet introduced. |
-| Set up ongoing sync | Walk through `kestral-sync/README.md` ambient install — one-time setup, then automatic updates without repeated sync invocations. |
-| End the day | Suggest `/kestral:end-day-review` or `$kestral-end-day-review` for status reconciliation. |
-| Add more context | Link or attach new sources, attach them to the relevant project, and rerun `trigger_brain_build`. |
-| Help clear blockers | Use Kestral task tools to inspect open project work and help the user pick the next blocker. |
-| Map remaining candidates | Return to extra candidate workstreams and ask one targeted question if the next split is unclear. |
+| User intent                           | Do this                                                                                                                           |
+| ------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------- |
+| Brain's ready / what should I work on | `entity_lookup` project_brain → surface blockers & next steps → ask which to start                                                |
+| Start a task                          | Help the user pick a task, set it to in progress, and begin working. Point to plan-day and Sync if not yet introduced.            |
+| Set up ongoing sync                   | Walk through `kestral-sync/README.md` ambient install — one-time setup, then automatic updates without repeated sync invocations. |
+| End the day                           | Suggest `/kestral:end-day-review` or `$kestral-end-day-review` for status reconciliation.                                         |
+| Add more context                      | Link or attach new sources, attach them to the relevant project, and rerun `trigger_brain_build`.                                 |
+| Help clear blockers                   | Use Kestral task tools to inspect open project work and help the user pick the next blocker.                                      |
+| Map remaining candidates              | Return to extra candidate workstreams and ask one targeted question if the next split is unclear.                                 |
 
 ## Speed and Context Rules
 

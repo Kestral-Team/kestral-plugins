@@ -7,16 +7,18 @@ alwaysApply: true
 Keep Kestral in sync with your coding work via the Kestral MCP tools. Use judgment — skip for trivial one-off fixes,
 debugging notes, or exploratory sketches.
 
-For full procedures (comment formats, task creation, acceptance check): read `.cursor/skills/kestral-sync/SKILL.md` if
-installed locally, or the `kestral-sync/SKILL.md` from the Kestral plugin.
+For full procedures (comment formats, task creation, acceptance check): read the installed Kestral plugin's
+`kestral-sync` skill. If you also have a project-local copy at `.cursor/skills/kestral-sync/SKILL.md`, prefer the plugin
+skill when the Kestral plugin is installed.
 
 ## Workflow
 
 ### Starting new work
 
-1. **Fast lookup:** extract slug from branch name → `entity_lookup`; or `query_entities({ branchName })` for exact
-   branch→task match; or `query_entities({ assigneeFilter: "me" })` filtered to active tasks. Use `research` only as a
-   last resort (10–30s).
+1. **Fast lookup:** extract slug from branch name → `entity_lookup`; or
+   `execute_operation("find_task_by_branch", { branchName })` for exact branch→task match; or
+   `execute_operation("list_my_active_tasks", {})` filtered to active tasks. Use
+   `execute_operation("deep_research", { query })` only as a last resort (10–30s).
 2. If a task is found:
    - **Assigned to someone else + active status** → warn the user (conflict)
    - **Unassigned or backlog** → link to it rather than creating a duplicate
@@ -24,7 +26,8 @@ installed locally, or the `kestral-sync/SKILL.md` from the Kestral plugin.
 
 ### During implementation
 
-- After each meaningful phase: post a progress comment via `comment_task`
+- After each meaningful phase: post a progress comment via
+  `execute_operation("post_progress_comment", { taskId, content })`
 - Do NOT update on every commit or minor edit
 
 ### After completing work
@@ -34,15 +37,21 @@ installed locally, or the `kestral-sync/SKILL.md` from the Kestral plugin.
   open/unmerged; only mark complete/done when the PR is **merged**. Never mark a task complete while its PR is unmerged.
   Use `list_statuses` to discover valid status keys — never hardcode them.
 - Post a final progress comment
-- Prefer `link_pr_to_task({ statusKey, comment })` for atomic PR link + status + comment in one call
+- Prefer `execute_operation("complete_task_with_review", { taskId, prUrl, comment })` for atomic PR link + status +
+  comment in one call
 
 ### On branch push
 
 After every `git push` where a Kestral task is linked:
 
-1. **First push:** `update_task` (status if still todo, plus `branchName` for deterministic future lookup) +
-   `comment_task` (Progress Comment with branch name and what was implemented) + `link_pr_to_task` if a PR exists
-2. **Subsequent pushes:** `comment_task` only if meaningful new progress since the last comment
+1. **First push:** `execute_operation("update_task_status", { taskId, statusKey })` (if still todo) +
+   `execute_operation("register_branch_on_task", { taskId, branchName })` +
+   `execute_operation("post_progress_comment", { taskId, content })` +
+   `execute_operation("link_pr_to_task", { taskId, prUrl })` if a PR exists. Or use
+   `execute_operation("claim_task_and_branch", { taskId, branchName })` to combine assign + status + branch + comment in
+   one call.
+2. **Subsequent pushes:** `execute_operation("post_progress_comment", ...)` only if meaningful new progress since the
+   last comment
 3. If no PR exists yet, post a branch comment: `Started work on branch \`branch-name\``
 
 ### Other processes (review, bugfix, spike)
@@ -63,16 +72,22 @@ After resolving a task via `entity_lookup`:
 
 ## MCP Tools Quick Reference
 
-| Action                                 | Tool                                           |
-| -------------------------------------- | ---------------------------------------------- |
-| Find task by slug or ID                | `entity_lookup`                                |
-| Find task by branch                    | `query_entities({ branchName })`               |
-| Filter tasks by status/keyword         | `query_entities` (much faster than `research`) |
-| Deep concept search                    | `research` (last resort, 10–30s)               |
-| Discover status keys                   | `list_statuses`                                |
-| Update status / register branch        | `update_task`                                  |
-| Post comment                           | `comment_task`                                 |
-| Link PR (atomic with status + comment) | `link_pr_to_task`                              |
-| Create task                            | `create_tasks`                                 |
-| Check auth                             | `whoami`                                       |
-| Complex multi-step operations          | `project_management`                           |
+| Action                    | Tool                                                                          |
+| ------------------------- | ----------------------------------------------------------------------------- |
+| Check auth                | `whoami` (primary)                                                            |
+| Get task details          | `entity_lookup` (primary)                                                     |
+| Discover status keys      | `list_statuses` (primary)                                                     |
+| Find task by branch       | `execute_operation("find_task_by_branch", { branchName })`                    |
+| Keyword search (my tasks) | `execute_operation("search_my_tasks_by_keyword", { keyword, statusFilter? })` |
+| Semantic task search      | `execute_operation("search_tasks", { query })`                                |
+| List my active tasks      | `execute_operation("list_my_active_tasks", {})`                               |
+| Filter tasks by status    | `execute_operation("list_tasks_by_status", { statusFilter, projectId? })`     |
+| Deep concept search       | `execute_operation("deep_research", { query })` (last resort)                 |
+| Update status             | `execute_operation("update_task_status", { taskId, statusKey })`              |
+| Register branch           | `execute_operation("register_branch_on_task", { taskId, branchName })`        |
+| Post comment              | `execute_operation("post_progress_comment", { taskId, content })`             |
+| Link PR                   | `execute_operation("link_pr_to_task", { taskId, prUrl })`                     |
+| Create task               | `execute_operation("create_task", { projectId, title, ... })`                 |
+| Claim + start work        | `execute_operation("claim_task_and_branch", { taskId, branchName })`          |
+| Complete with PR          | `execute_operation("complete_task_with_review", { taskId, prUrl, comment })`  |
+| Complex operations        | `execute_operation("manage_project", { request })`                            |

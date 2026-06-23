@@ -5,24 +5,24 @@ description: Use when the user explicitly asks to search Kestral workspace conte
 
 # Context
 
-Search your Kestral workspace and pull relevant documents, projects, and tasks into the conversation.
-This gives the agent real workspace knowledge so it can answer questions like "what's the latest on the
-auth migration?" without you having to paste anything.
+Search your Kestral workspace and pull relevant documents, projects, and tasks into the conversation. This gives the
+agent real workspace knowledge so it can answer questions like "what's the latest on the auth migration?" without you
+having to paste anything.
 
 ## Prerequisites
 
-The `Kestral` MCP server must be in this session (`/mcp`). Call `whoami` first — if it fails, ask the user to
-reconnect or authenticate the **Kestral** MCP server in their app's MCP settings. The agent cannot handle OAuth
-directly — authenticate through your app's UI (Cowork: Customize → Connectors; Codex: Settings → MCP Servers →
-Authenticate; Claude Code: `/mcp` → reconnect).
+The `Kestral` MCP server must be in this session (`/mcp`). Call `whoami` first — if it fails, ask the user to reconnect
+or authenticate the **Kestral** MCP server in their app's MCP settings. The agent cannot handle OAuth directly —
+authenticate through your app's UI (Cowork: Customize → Connectors; Codex: Settings → MCP Servers → Authenticate; Claude
+Code: `/mcp` → reconnect).
 
 ## Human-readable references
 
 Keep Kestral IDs internal unless the user asks for them. In user-facing output:
 
 - Tasks: show `slug - title` when a slug is available, linked with `url` when the host can render links.
-- Projects, documents, feedback, customers, tags, statuses, and other Kestral entities: show the readable name/title/label
-  first, linked with `url` when the host can render links.
+- Projects, documents, feedback, customers, tags, statuses, and other Kestral entities: show the readable
+  name/title/label first, linked with `url` when the host can render links.
 - People and actors: show display names; if unresolved, write `Unknown member (id: <rawId>)`.
 - Unknown non-member entities: write `Unknown <entity type> (id: <rawId>)`.
 - Approval tables and write-back plans must put the human-readable label first. Raw URLs, machine IDs, source IDs, and
@@ -47,11 +47,13 @@ If the prompt is empty, ask: "What topic should I search for in your Kestral wor
 
 ### 3. Search across entity types
 
-Run three searches in parallel using the user's query:
+Run searches in parallel using the user's query:
 
-1. `search_content({ type: "documents", query: "<topic>" })`
-2. `query_entities({ type: "projects", query: "<topic>" })`
-3. `query_entities({ type: "tasks", query: "<topic>" })`
+1. `execute_operation("find_documents", { query: "<topic>" })`
+2. `execute_operation("search_projects", { query: "<topic>" })`
+3. `execute_operation("search_tasks", { query: "<topic>" })`
+4. If the query mentions customers, feedback, pain points, or what users say →
+   `execute_operation("search_feedback", { query: "<topic>" })`
 
 ### 4. Present the context manifest
 
@@ -74,6 +76,10 @@ Found in Kestral for "auth migration":
     7. AUTH-14 - Write migration rollback script          (todo, medium)
     8. AUTH-15 - QA auth flow on staging                  (todo, low)
 
+  Feedback (2):
+    9. "SSO setup took 3 attempts before it worked"       (pain point, Acme Corp)
+   10. "Love the new login flow, much faster"             (positive, Beta Co)
+
 Which items should I pull into context? (numbers, "all", "docs only", or "skip")
 ```
 
@@ -83,11 +89,13 @@ Which items should I pull into context? (numbers, "all", "docs only", or "skip")
 - Show document type and approximate size (from search result metadata) when available.
 - Show project lifecycle status and task count.
 - Show task status and priority.
+- Show feedback sentiment/theme and source customer/company when available.
 - For tasks, show `slug - title` when available; otherwise show the task title.
-- For projects and documents, show the readable name/title and URL when available; do not show raw Kestral IDs as handles.
-- If a category has zero results, omit it from the display.
-- If all three searches return zero results: "I didn't find anything in Kestral matching that topic.
-  Try different keywords or check that the relevant project/docs exist."
+- For projects and documents, show the readable name/title and URL when available; do not show raw Kestral IDs as
+  handles.
+- If a category has zero results, omit it from the display (Feedback only appears when step 3 ran `search_feedback`).
+- If all searches return zero results: "I didn't find anything in Kestral matching that topic. Try different keywords or
+  check that the relevant project/docs exist."
 
 ### 5. Pull selected content
 
@@ -95,12 +103,12 @@ Based on the user's selection:
 
 #### Documents
 
-For each selected document, call `get_document_content({ workContextId: "<id>" })`.
+For each selected document, call `execute_operation("get_document_content", { workContextId: "<id>" })`.
 
 - Default read: up to 50,000 characters (the tool's default `length`).
-- The response includes `isTruncated` (boolean) and `nextOffset` (number or null). If `isTruncated`
-  is `true`, call again with `offset` set to `nextOffset`. Repeat until `isTruncated` is `false` or
-  total loaded content exceeds **200 KB** — then stop and note the truncation.
+- The response includes `isTruncated` (boolean) and `nextOffset` (number or null). If `isTruncated` is `true`, call
+  again with `offset` set to `nextOffset`. Repeat until `isTruncated` is `false` or total loaded content exceeds **200
+  KB** — then stop and note the truncation.
 - Present each document's content in the chat with a clear header:
 
 ```
@@ -132,35 +140,48 @@ Present project details:
 
 For each selected task, call `entity_lookup({ id: "<taskId>", type: "task" })`.
 
-Present task details in the same format as the `/kestral:tasks` drill-down view (see
-`kestral-tasks/SKILL.md` step 4).
+Present task details in the same format as the `/kestral:tasks` drill-down view (see `kestral-tasks/SKILL.md` step 4).
+
+#### Feedback
+
+Feedback items are already loaded from step 3's `search_feedback` results. Present each selected item:
+
+```
+─── Feedback: "SSO setup took 3 attempts before it worked" ───
+
+  Source:     Acme Corp
+  Sentiment:  pain point
+  Theme:      authentication friction
+  Created:    2026-06-15
+
+───────────────────────────────────────────────────────────────
+```
+
+Show source (customer/company), sentiment, theme/tags, and date when available from the search result metadata.
 
 ### 6. Summarize
 
 After pulling content, confirm what was loaded:
 
-> Loaded 3 documents (~27 KB), 1 project, and 4 tasks into context. You can now ask me questions
-> about them.
+> Loaded 3 documents (~27 KB), 1 project, and 4 tasks into context. You can now ask me questions about them.
 
-The agent now has this content in its conversation context and can reason about it in subsequent
-messages.
+The agent now has this content in its conversation context and can reason about it in subsequent messages.
 
 ## Limits
 
-- **Per-document cap:** 200 KB of text content. If a document exceeds this, load the first 200 KB and
-  note: "Document truncated at 200 KB. Use `get_document_content` with `offset` to read further."
-- **Total context budget:** If the user selects "all" and total content would exceed **500 KB**, warn
-  before loading:
+- **Per-document cap:** 200 KB of text content. If a document exceeds this, load the first 200 KB and note: "Document
+  truncated at 200 KB. Use `get_document_content` with `offset` to read further."
+- **Total context budget:** If the user selects "all" and total content would exceed **500 KB**, warn before loading:
 
-  > That's ~620 KB of content, which may reduce available context for our conversation. Load anyway,
-  > or pick specific items?
+  > That's ~620 KB of content, which may reduce available context for our conversation. Load anyway, or pick specific
+  > items?
 
   Proceed only if the user confirms.
 
 ## Error handling
 
-| Failure | Message |
-| --- | --- |
-| 401 / unauthorized | Guide the user to authenticate through their app's UI (see Prerequisites). The agent cannot handle OAuth directly. |
-| Document not found | "Selected document not found — it may have been deleted. Skipping." |
-| Search returned error | "Search failed: `<error>`. Try again or check that the MCP server is connected (`/mcp`)." |
+| Failure               | Message                                                                                                            |
+| --------------------- | ------------------------------------------------------------------------------------------------------------------ |
+| 401 / unauthorized    | Guide the user to authenticate through their app's UI (see Prerequisites). The agent cannot handle OAuth directly. |
+| Document not found    | "Selected document not found — it may have been deleted. Skipping."                                                |
+| Search returned error | "Search failed: `<error>`. Try again or check that the MCP server is connected (`/mcp`)."                          |

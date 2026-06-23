@@ -10,15 +10,14 @@ provided by the caller, and trigger Project Brain generation after project conte
 
 ## Prerequisites
 
-A **Kestral** MCP server must be in this session (`/mcp`). Call `whoami` first — if it fails, ask the user to
-reconnect or authenticate the **Kestral** MCP server in their app's MCP settings. The agent cannot handle OAuth
-directly — authenticate through your app's UI (Cowork: Customize → Connectors; Codex: Settings → MCP Servers →
-Authenticate; Claude Code: `/mcp` → reconnect).
-Do not call other tools until authenticated.
+A **Kestral** MCP server must be in this session (`/mcp`). Call `whoami` first — if it fails, ask the user to reconnect
+or authenticate the **Kestral** MCP server in their app's MCP settings. The agent cannot handle OAuth directly —
+authenticate through your app's UI (Cowork: Customize → Connectors; Codex: Settings → MCP Servers → Authenticate; Claude
+Code: `/mcp` → reconnect). Do not call other tools until authenticated.
 
-Local file uploads use Kestral-owned upload URLs (`upload_request_urls` → PUT → response includes the document record).
-There is no separate finalize step. This requires network egress from the agent sandbox to `app.kestral.ai`. If uploads
-fail with a network error, guide the user:
+Local file uploads use Kestral-owned upload URLs (`execute_operation("upload_request_urls", ...)` → PUT → response
+includes the document record). There is no separate finalize step. This requires network egress from the agent sandbox
+to `app.kestral.ai`. If uploads fail with a network error, guide the user:
 
 - **Claude Cowork:** **Settings → Capabilities** → enable **"Allow network egress"** → add `app.kestral.ai` as an
   allowed domain.
@@ -26,8 +25,8 @@ fail with a network error, guide the user:
 - **Cursor:** Grant network access when prompted, or add `app.kestral.ai` to allowed domains.
 
 Missing upload tools or blocked egress do not block project creation, task import, or external doc linking. Text files
-can be uploaded as inline content via `create_document`. Binary files (PDFs, images) require egress or manual upload
-through the Kestral web app.
+can be uploaded as inline content via `execute_operation("create_document", ...)`. Binary files (PDFs, images) require
+egress or manual upload through the Kestral web app.
 
 ## Inputs
 
@@ -47,8 +46,8 @@ From the scan step or user edits at the manifest checkpoint:
 Keep Kestral IDs internal unless the user asks for them. In user-facing output:
 
 - Tasks: show `slug - title` when a slug is available, linked with `url` when the host can render links.
-- Projects, documents, feedback, customers, tags, statuses, and other Kestral entities: show the readable name/title/label
-  first, linked with `url` when the host can render links.
+- Projects, documents, feedback, customers, tags, statuses, and other Kestral entities: show the readable
+  name/title/label first, linked with `url` when the host can render links.
 - People and actors: show display names; if unresolved, write `Unknown member (id: <rawId>)`.
 - Unknown non-member entities: write `Unknown <entity type> (id: <rawId>)`.
 - Approval tables and write-back plans must put the human-readable label first. Raw URLs, machine IDs, source IDs, and
@@ -62,23 +61,23 @@ generation fail for one project.
 
 ### 1. Create project
 
-Call `create_project` with `{ title, description }`. Store `projectId` and `url` from the response.
+Call `execute_operation("create_project", { title, description })`. Store `projectId` and `url` from the response.
 
 ### 2. Upload documents
 
-Use `upload_request_urls` + direct PUT (max 50 files per request). On network/egress failure, help the user fix it and
-retry.
+Use `execute_operation("upload_request_urls", ...)` + direct PUT (max 50 files per request). On network/egress failure,
+help the user fix it and retry.
 
 **Step 1: Upload local files**
 
 Derive `contentType` from each file's extension (e.g. `.md` → `text/markdown`, `.pdf` → `application/pdf`) and use
 `byteSize` from kestral-scan-folder as `sizeBytes`:
 
-1. `upload_request_urls({ projectId, files: [{ filename, relativePath, contentType, sizeBytes }], explanation })`
+1. `execute_operation("upload_request_urls", { projectId, files: [{ filename, relativePath, contentType, sizeBytes }] })`
 2. `curl -X PUT -H "Content-Type: <type>" -T "<path>" "<uploadUrl>"` per file — the PUT response returns the completed
    document record (`{ documents: [{ id, title, sourceUrl }] }`), so there is no separate finalize step.
 
-If `upload_request_urls` is not available, use the fallback below.
+If `upload_request_urls` is not available via `execute_operation`, use the fallback below.
 
 **Step 2: On upload failure (network/egress error)**
 
@@ -99,27 +98,29 @@ Wait for the user's response, then retry the upload. If upload still fails after
 
 If `upload_request_urls` is not available, or upload fails and cannot be recovered:
 
-Read text/markdown via Read tool → `create_document({ title, content, projectId, explanation })`. Skip binary files
-with a message pointing to manual upload from the Kestral project page.
+Read text/markdown via Read tool → `execute_operation("create_document", { title, content, projectId })`. Skip binary
+files with a message pointing to manual upload from the Kestral project page.
 
 On 401, tell user to reconnect and retry. Report failures per-file.
 
-**External documents:** `link_external_document({ url, title, projectId, content? })`. Never use `create_document` for
-external docs — it loses provenance and autosync. Track `resolutionStatus` for pending-link reporting.
+**External documents:** `execute_operation("link_external_document", { url, title, projectId, content? })`. Never use
+`create_document` for external docs — it loses provenance and autosync. Track `resolutionStatus` for pending-link
+reporting.
 
-**Inline content** (pasted text, summaries — not a file or URL): `create_document({ title, content, projectId,
-explanation })`. Confirm the response shows the document is linked to the project.
+**Inline content** (pasted text, summaries — not a file or URL):
+`execute_operation("create_document", { title, content, projectId })`. Confirm the response shows the document is linked
+to the project.
 
 ### 3. Import tasks
 
-If a project's `tasks` input is non-empty, call `create_tasks` with `{ projectId, tasks }`. Capture `created` and
-`failed`. Do not fail the overall flow if some tasks fail. Skip entirely if `tasks` is empty or not provided. For
-approved bulk imports, batch by project and source and continue reporting partial success.
+If a project's `tasks` input is non-empty, call `execute_operation("create_tasks_batch", { projectId, tasks })`. Capture
+`created` and `failed`. Do not fail the overall flow if some tasks fail. Skip entirely if `tasks` is empty or not
+provided. For approved bulk imports, batch by project and source and continue reporting partial success.
 
 ### 4. Trigger brain generation
 
-Call `trigger_brain_build` with `{ projectId }` after selected documents and tasks have been attached. Capture the
-response — do not fail the overall flow on error. Three response cases:
+Call `execute_operation("trigger_brain_build", { projectId })` after selected documents and tasks have been attached.
+Capture the response — do not fail the overall flow on error. Three response cases:
 
 | Response                                           | User-facing message                                                                                                          |
 | -------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------- |
@@ -134,7 +135,7 @@ are listed, use task titles or `slug - title` when slugs are available.
 
 Print each project by readable title linked to its URL, and summarize all outcomes:
 
-> Your project is ready: [\<project title\>](\<url\>)
+> Your project is ready: [\<project title\>](url)
 >
 > **Documents:** N/M uploaded or linked successfully. \<list failures or pending links if any\>
 >
@@ -148,7 +149,7 @@ Task summary format:
 - Some failed: "Imported X tasks from \<source\>; Y could not be imported."
 - All failed: "Could not import tasks — you can add them manually in Kestral."
 
-If all documents failed: "Upload failed — no documents were saved. The project was created: [\<project title\>](\<url\>).
+If all documents failed: "Upload failed — no documents were saved. The project was created: [\<project title\>](url).
 You can add files manually, or delete it and try again."
 
 When multiple projects were approved, repeat the same compact summary per project and include every successful project
@@ -156,7 +157,7 @@ URL. One project's failure does not hide successful results from other projects.
 
 ## Error handling
 
-- If `create_project` fails for one project, surface that project's error and continue with other approved projects when
-  safe.
+- If `create_project` operation fails for one project, surface that project's error and continue with other approved
+  projects when safe.
 - Document upload/link failures, brain trigger failures, and task import failures are non-fatal after a project exists —
   always present the project URL.

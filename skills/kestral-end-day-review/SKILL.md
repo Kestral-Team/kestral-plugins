@@ -11,20 +11,19 @@ covered by the User preferences rules.
 
 ## Prerequisites
 
-The `Kestral` MCP server must be in this session (`/mcp`). Call `whoami` first — if it fails, ask the user to
-reconnect or authenticate the **Kestral** MCP server in their app's MCP settings. The agent cannot handle OAuth
-directly — authenticate through your app's UI (Cowork: Customize → Connectors; Codex: Settings → MCP Servers →
-Authenticate; Claude Code: `/mcp` → reconnect).
-Do not call other tools until authenticated.
-Calendar access is optional, but use it when tomorrow prioritization depends on schedule realism.
+The `Kestral` MCP server must be in this session (`/mcp`). Call `whoami` first — if it fails, ask the user to reconnect
+or authenticate the **Kestral** MCP server in their app's MCP settings. The agent cannot handle OAuth directly —
+authenticate through your app's UI (Cowork: Customize → Connectors; Codex: Settings → MCP Servers → Authenticate; Claude
+Code: `/mcp` → reconnect). Do not call other tools until authenticated. Calendar access is optional, but use it when
+tomorrow prioritization depends on schedule realism.
 
 ## Human-readable references
 
 Keep Kestral IDs internal unless the user asks for them. In user-facing output:
 
 - Tasks: show `slug - title` when a slug is available, linked with `url` when the host can render links.
-- Projects, documents, feedback, customers, tags, statuses, and other Kestral entities: show the readable name/title/label
-  first, linked with `url` when the host can render links.
+- Projects, documents, feedback, customers, tags, statuses, and other Kestral entities: show the readable
+  name/title/label first, linked with `url` when the host can render links.
 - People and actors: show display names; if unresolved, write `Unknown member (id: <rawId>)`.
 - Unknown non-member entities: write `Unknown <entity type> (id: <rawId>)`.
 - Approval tables and write-back plans must put the human-readable label first. Raw URLs, machine IDs, source IDs, and
@@ -49,7 +48,7 @@ Default order:
    own local or hosted transcript stores.
 2. Read `.kestral/preferences.md` by checking the current workspace folder and then parent folders. Use the first match
    as the source for durable user close-out and tomorrow-planning preferences, not as task or project state.
-3. Fetch the latest Kestral daily brief with `get_daily_brief`.
+3. Fetch the latest Kestral daily brief with `execute_operation("get_daily_brief", {})`.
 4. Search Kestral tasks, projects, feedback, knowledge, and document chunks for today, especially Project Brain or named
    projects from the brief and agent session history.
 5. Read relevant Kestral entities directly when search results identify exact project, task, document, or project brain
@@ -58,8 +57,8 @@ Default order:
    commit or PR references in relevant task comments.
 7. Check connected MCPs/apps that are directly relevant to tomorrow prioritization, especially Calendar when the user's
    day has scheduling constraints.
-8. Read local project files only when they are relevant to surfaced projects or updates, such as a matching `overview.md`
-   or repo plan file.
+8. Read local project files only when they are relevant to surfaced projects or updates, such as a matching
+   `overview.md` or repo plan file.
 
 Do not treat one source as authoritative when it conflicts with fresher live state. Prefer exact Kestral entity state
 over generated summaries, and call out stale or unavailable sources.
@@ -67,15 +66,16 @@ over generated summaries, and call out stale or unavailable sources.
 Kestral searches to run when close-out needs verification:
 
 - Tasks updated today in a project: use `timeFilter: "updated today"` with `projectId` (resolve the project name to an
-  ID first via `entity_lookup` or `query_entities(type: "projects")`). Do not put the project name in the `query` field
-  alongside `projectId` — this causes false zero-result sets from keyword matching on the project name.
+  ID first via `entity_lookup` or `execute_operation("search_projects", { query: "<project name>" })`). Do not put the
+  project name in the `query` field alongside `projectId` — this causes false zero-result sets from keyword matching on
+  the project name.
 - `urgent open tasks in <project name>`
 - `blocked tasks <project name>`
 - `documents updated today <project name>`
 - For project status, blockers, next steps, and goal progress: use `entity_lookup(type: "project", id: "<projectId>")`
-  or `query_entities(type: "projects", query: "<project name>")` — both return `knowledgeSummary` with blockers, next
-  steps, and goal progress. Reserve `search_content(type: "knowledge", targetType: "project")` for semantic discovery
-  of specific topics across all projects, not for reliable project-scoped status lookup.
+  or `execute_operation("search_projects", { query: "<project name>" })` — both return `knowledgeSummary` with blockers,
+  next steps, and goal progress. Reserve `execute_operation("find_documents", { query })` for semantic discovery of
+  specific topics across all projects, not for reliable project-scoped status lookup.
 
 Calendar searches should use explicit local-day RFC3339 bounds for tomorrow. If calendar access is missing or empty, do
 not infer a free day; state the gap.
@@ -94,8 +94,8 @@ walking upward from the current workspace folder and using the first match.
 - Apply relevant saved preferences when recommending tomorrow priorities, such as preferred close-out format, decision
   style, focus-hour defaults, recurring projects to check, communication cadence, and work the user consistently wants
   avoided.
-- Capture durable preference signals from the user's constraints, corrections, repeated edits, and stated likes/dislikes.
-  Do not require the user to explicitly say "remember", "note", "save", or "prefer".
+- Capture durable preference signals from the user's constraints, corrections, repeated edits, and stated
+  likes/dislikes. Do not require the user to explicitly say "remember", "note", "save", or "prefer".
 - Do not treat one-day constraints or today's mood as durable preferences. Save only stable work-style, close-out,
   prioritization, scheduling, or write-back preferences that are likely to apply across future end-day reviews.
 - Update `.kestral/preferences.md` silently when a durable preference is clear. This is local memory maintenance, not a
@@ -125,8 +125,8 @@ Build a compact evidence list before summarizing:
 
 Keep raw session review targeted. Search for today's user messages, final answers, tool calls, project names, task IDs,
 PR URLs, commit SHAs, branch names, and write-back actions instead of reading every token linearly. If transcript search
-or session context is unavailable, state the gap and continue from live Kestral, git, GitHub, and available local project
-evidence.
+or session context is unavailable, state the gap and continue from live Kestral, git, GitHub, and available local
+project evidence.
 
 ### 2. Reconcile done vs not done
 
@@ -162,8 +162,8 @@ Rank tomorrow's work by impact, urgency, unblock value, and calendar realism:
 3. Quick wins or communications that reduce risk.
 4. Deferred work with a reason.
 
-If Calendar is available, fit priorities around known meetings and preserve buffer. If Calendar is unavailable, label the
-plan as task-priority-only and ask for fixed commitments if needed.
+If Calendar is available, fit priorities around known meetings and preserve buffer. If Calendar is unavailable, label
+the plan as task-priority-only and ask for fixed commitments if needed.
 
 ### 5. Ask before write-back
 
@@ -179,8 +179,8 @@ Valid write-backs:
 - Create `overview.md` if the target project folder has no overview file and the folder is a local draft/project
   workspace.
 
-For each proposed write, include target, action, and exact content summary. For task changes, include priority/status/due
-date values. For document or `overview.md` edits, include the section names that will be changed.
+For each proposed write, include target, action, and exact content summary. For task changes, include
+priority/status/due date values. For document or `overview.md` edits, include the section names that will be changed.
 
 After approval, apply only the approved writes. Return links for Kestral mutations and file paths for local edits.
 
@@ -193,20 +193,25 @@ Use this structure unless the user asks for something else:
 
 ```markdown
 ## Done Today
+
 - ...
 
 ## Not Done
+
 - ...
 
 ## Project Brain / Project Updates
+
 - ...
 
 ## Tomorrow Priorities
+
 1. ...
 2. ...
 3. ...
 
 ## Recommended Write-Backs
+
 - [human-readable target] [action] - [summary]
 
 Approve these write-backs?
@@ -218,7 +223,8 @@ If the user already approved a specific write-back plan, replace the final quest
 
 - Cite evidence with Kestral links, local file paths, task slugs, document titles, PR URLs, or session filenames when
   possible.
-- Keep raw Kestral IDs internal to search and lookup steps. In final summaries and write-back plans, use `slug - title` for tasks and readable names/titles for projects, documents, feedback, customers, statuses, tags, and members.
+- Keep raw Kestral IDs internal to search and lookup steps. In final summaries and write-back plans, use `slug - title`
+  for tasks and readable names/titles for projects, documents, feedback, customers, statuses, tags, and members.
 - Include data gaps instead of hiding them.
 - Do not mutate Kestral, Calendar, GitHub, or local files without approval, except `.kestral/preferences.md` memory
   updates covered by the User preferences rules.

@@ -49,12 +49,25 @@ creation, and phase completion. The explicit `/kestral:sync` invocation is a man
 
 3. **Manual sync:** type `$kestral-sync` or `@kestral` to target the plugin.
 
-### Cursor / VS Code
+### Cursor
 
-Cursor and VS Code connect to Kestral via MCP (no plugin marketplace). Set up the MCP server first, then copy the skill
-and rule into your project:
+**Recommended:** install the full bundle with one command (MCP, skills, and always-on sync rule):
 
-1. **Connect MCP** — add to your MCP settings (Cursor: Settings > MCP Servers; VS Code: `.vscode/mcp.json`):
+```bash
+curl -fsSL https://raw.githubusercontent.com/Kestral-Team/kestral-plugins/main/setup.sh | bash -s -- --app cursor
+```
+
+Fully quit and restart Cursor. The plugin rule loads automatically — no manual copy into `.cursor/rules/`.
+
+1. **Authenticate** — Settings → **Tools & MCPs** → **Connect** on **Kestral** if prompted.
+2. **Ambient sync** — the plugin rule loads automatically.
+3. **Manual sync** — ask the agent to sync with Kestral, or invoke the `kestral-sync` skill.
+
+**Team admins:** add marketplace `Kestral-Team/kestral-plugins` at [cursor.com/dashboard](https://cursor.com/dashboard).
+
+**Advanced fallback (MCP only):** connect MCP manually, then copy the rule and skill into your project:
+
+1. **Connect MCP** — Settings → **Tools & MCPs**, or add:
 
    ```json
    {
@@ -64,18 +77,23 @@ and rule into your project:
    }
    ```
 
-   After adding the server, your app should prompt you to authenticate — click it to open a browser window for
-   Kestral sign-in and workspace selection. Tokens are managed automatically after that.
+2. **Ambient sync (Cursor):** copy [`rules/kestral-sync.mdc`](rules/kestral-sync.mdc) into `.cursor/rules/`.
+3. **Full skill (optional):** copy [`SKILL.md`](SKILL.md) into `.cursor/skills/kestral-sync/SKILL.md`.
 
-2. **Ambient sync (Cursor):** copy [`rules/kestral-sync.mdc`](rules/kestral-sync.mdc) into your project's
-   `.cursor/rules/` directory. This always-applied rule gives the agent sync triggers.
+### VS Code
 
-3. **Ambient sync (VS Code):** paste the contents of [`rules/agents-snippet.md`](rules/agents-snippet.md) into your
-   project's `AGENTS.md`.
+1. **Connect MCP** — add to `.vscode/mcp.json` or your MCP settings:
 
-4. **Full skill (optional):** copy [`SKILL.md`](SKILL.md) into `.cursor/skills/kestral-sync/SKILL.md` (Cursor) or
-   reference it in your agent instructions. The rule/snippet loads the skill automatically when deeper sync logic is
-   needed; having a local copy avoids fetching it from the plugin repo.
+   ```json
+   {
+     "mcpServers": {
+       "Kestral": { "url": "https://app.kestral.ai/mcp" }
+     }
+   }
+   ```
+
+2. **Ambient sync:** paste the contents of [`rules/agents-snippet.md`](rules/agents-snippet.md) into your project's
+   `AGENTS.md`.
 
 ### Other MCP-compatible clients
 
@@ -106,7 +124,7 @@ You: I'm working on KES-42
 Agent: [calls entity_lookup with slug "KES-42"]
        Found: "Improve date range filtering" — assigned to you, status Todo.
        No conflicts. Setting to In Progress.
-       [calls update_task: status → in_progress, branchName → feat/date-range-filter]
+       [calls execute_operation("claim_task_and_branch", { taskId, branchName: "feat/date-range-filter" })]
        Claimed KES-42, set to In Progress.
 
        [calls entity_lookup: project_brain]
@@ -119,8 +137,8 @@ Agent: [calls entity_lookup with slug "KES-42"]
 
 You: push and sync
 
-Agent: [calls list_statuses, then link_pr_to_task with the review status key,
-        comment: "Users can now filter by date range — last 7/30/90 days plus custom."]
+Agent: [calls execute_operation("complete_task_with_review", { taskId, prUrl, comment:
+        "Users can now filter by date range — last 7/30/90 days plus custom." })]
        Synced KES-42:
          Status: In Progress → [review status]
          PR: github.com/org/repo/pull/347 linked
@@ -134,7 +152,7 @@ Agent: [calls list_statuses, then link_pr_to_task with the review status key,
   technical detail.
 - **Statuses:** sync discovers your workspace's status keys via `list_statuses` — custom statuses work automatically.
 - **Complex operations:** for bulk updates, subtask hierarchy, tag management, or task prioritization, the skill routes
-  to the `project_management` tool (AI agent, 10–30s).
+  to the `manage_project` operation (AI agent, 10–30s).
 
 ## Coming next
 
