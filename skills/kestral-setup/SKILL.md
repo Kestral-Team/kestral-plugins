@@ -48,6 +48,11 @@ Do not block setup if upload tools are missing. Step 7 handles upload attempts g
 tool, offering egress fix instructions on failure, and falling back to summarization via `create_document` for text
 files. Project creation, task import, and external doc linking work regardless of upload capability.
 
+**Auth failure signals:** HTTP 401, `unauthorized`, or tool error `Not authenticated` (MCP v2 returns
+`{"error":"Not authenticated"}` — no `401` in the message). When any call returns one of these, the OAuth token has
+expired or the connection dropped. Guide the user to re-authenticate through their host's UI (same troubleshooting steps
+as "MCP not connected" above) and stop.
+
 **Host capability detection:** Check what document upload operations are available in this session:
 
 - `upload_document` present → local Go bridge; can read and upload files from disk directly
@@ -59,27 +64,10 @@ Also check whether the agent has filesystem access (Read tool, Shell tool) — h
 typically do not, even when the user shares files via the chat `+` button (the agent gets the content in conversation
 context, not a file path on disk). This affects whether `scan-folder` and file-path-based upload are usable.
 
-### 1. Authenticate
+### 1. Existing project detection
 
-Call `whoami`. If it succeeds, proceed. If it fails (401 / unauthorized), guide the user through their host's UI to
-authenticate — the agent cannot handle OAuth callbacks or generate auth links directly:
-
-- **Claude Code Desktop / Claude Cowork:** Open **Customize → Kestral** (under Personal plugins) **→ Connectors**, click
-  **Install** on Kestral, then click **Add**. A browser opens for sign-in.
-- **Claude Code CLI:** Run `/mcp`, find **Kestral**, and reconnect it. Follow the browser prompt to sign in.
-- **Codex:** Open **Settings → MCP Servers**, find **Kestral**, click **Authenticate**. Sign in via the browser that
-  opens. Run `$kestral-setup` in a **new thread** after authenticating.
-- **Cursor:** Open **Settings → MCP Servers**, find **Kestral**, click **Authenticate** or **Connect**. If `mcp_auth` is
-  available, the agent can call it to trigger the browser flow.
-
-> Once you've signed in, ask me to continue.
-
-Do not call other Kestral tools until `whoami` succeeds.
-
-### 1.5. Existing project detection
-
-After `whoami` succeeds, call `execute_operation("search_projects", { query: "all projects" })` to see whether the
-workspace already has projects.
+After Preflight confirms tools are present, call `execute_operation("search_projects", { query: "all projects" })` to
+see whether the workspace already has projects.
 
 | Condition   | Behavior                                                                              |
 | ----------- | ------------------------------------------------------------------------------------- |
@@ -144,10 +132,10 @@ Do not ask for sources or a manifest until the user picks **Add more context** o
 
 When the user wants to explore existing projects rather than create or enrich:
 
-1. If the **prioritized work snapshot** (step 1.5) already ran, do not repeat the full project list — confirm which
+1. If the **prioritized work snapshot** (step 1) already ran, do not repeat the full project list — confirm which
    project to focus on, or pick the top project from the brief/brain highlights if the user says "just help me get
    started."
-2. Otherwise share project links and brain highlights (same pattern as step 1.5).
+2. Otherwise share project links and brain highlights (same pattern as step 1).
 3. Suggest visiting the Project Brain link, then **plan your day** — invoke `kestral-plan-day/SKILL.md` or tell the user
    to run **`/kestral:plan-day`** (Claude Code / Cowork) or **`$kestral-plan-day`** (Codex). Pull daily brief, calendar,
    and task state for prioritized work; help them pick a task from the plan.
@@ -641,7 +629,7 @@ If blockers were not yet fetched, run `entity_lookup({ type: "project_brain", id
 When you're back from the project page, run **`/kestral:plan-day`** (or `$kestral-plan-day` in Codex) for broader day
 prioritization across projects.
 
-If the user came from **explore and work** (step 1.5) with no new imports, skip re-listing projects — focus on plan-day
+If the user came from **explore and work** (step 1) with no new imports, skip re-listing projects — focus on plan-day
 and ongoing skills from the snapshot already shown.
 
 #### 9b. Plan My Day

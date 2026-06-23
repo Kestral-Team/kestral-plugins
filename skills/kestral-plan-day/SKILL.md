@@ -11,11 +11,11 @@ attention, what fits today, and what should be deferred.
 
 ## Prerequisites
 
-The `Kestral` MCP server must be in this session (`/mcp`). Call `whoami` first — if it fails, ask the user to reconnect
-or authenticate the **Kestral** MCP server in their app's MCP settings. The agent cannot handle OAuth directly —
-authenticate through your app's UI (Cowork: Customize → Connectors; Codex: Settings → MCP Servers → Authenticate; Claude
-Code: `/mcp` → reconnect). Do not call other tools until authenticated. A calendar MCP/app connector should also be
-available for best results. If calendar access is missing, the behavior depends on whether this is the user's first
+The `Kestral` MCP server must be in this session (`/mcp`). Authentication is handled by the MCP connection — proceed
+directly with data-fetching calls. If any call returns auth failure (401, unauthorized, or `Not authenticated`), ask the
+user to reconnect or authenticate the **Kestral** MCP server through their app's UI (Cowork: Customize → Connectors;
+Codex: Settings → MCP Servers → Authenticate; Claude Code: `/mcp` → reconnect). A calendar MCP/app connector should also
+be available for best results. If calendar access is missing, the behavior depends on whether this is the user's first
 plan-day after a kestral-setup in the same session:
 
 **First plan-day after setup (same session):** The user just finished onboarding and is trying plan-day for the first
@@ -75,10 +75,10 @@ Default order:
    around it.
 6. Use deeper Kestral research only when cross-project state is ambiguous and the extra latency is justified.
 
-Start data gathering after `whoami` succeeds. Run independent reads in parallel whenever the host supports it: daily
-brief, local preferences, calendar, broad task searches, and profile/member lookup do not need to block one another. Do
-not parallelize dependent checks; fetch exact tasks or projects only after the brief or search results identify what
-needs verification.
+Start data gathering immediately. Run independent reads in parallel whenever the host supports it: daily brief, local
+preferences, calendar, broad task searches, and profile/member lookup do not need to block one another. Do not
+parallelize dependent checks; fetch exact tasks or projects only after the brief or search results identify what needs
+verification.
 
 Kestral task searches to run when planning needs verification:
 

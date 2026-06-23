@@ -11,10 +11,10 @@ having to paste anything.
 
 ## Prerequisites
 
-The `Kestral` MCP server must be in this session (`/mcp`). Call `whoami` first — if it fails, ask the user to reconnect
-or authenticate the **Kestral** MCP server in their app's MCP settings. The agent cannot handle OAuth directly —
-authenticate through your app's UI (Cowork: Customize → Connectors; Codex: Settings → MCP Servers → Authenticate; Claude
-Code: `/mcp` → reconnect).
+The `Kestral` MCP server must be in this session (`/mcp`). Authentication is handled by the MCP connection (OAuth) —
+proceed directly with operations. If any call returns auth failure (401, unauthorized, or `Not authenticated`), ask the
+user to reconnect or authenticate through their app's UI (Cowork: Customize → Connectors; Codex: Settings → MCP Servers
+→ Authenticate; Claude Code: `/mcp` → reconnect).
 
 ## Human-readable references
 
@@ -31,11 +31,7 @@ Keep Kestral IDs internal unless the user asks for them. In user-facing output:
 
 ## Workflow
 
-### 1. Authenticate
-
-Call `whoami`. If it fails, guide the user to authenticate through their app's UI (see Prerequisites) and stop.
-
-### 2. Get the query
+### 1. Get the query
 
 The user's prompt after `/kestral:context` is the search topic. Examples:
 
@@ -45,7 +41,7 @@ The user's prompt after `/kestral:context` is the search topic. Examples:
 
 If the prompt is empty, ask: "What topic should I search for in your Kestral workspace?"
 
-### 3. Search across entity types
+### 2. Search across entity types
 
 Run searches in parallel using the user's query:
 
@@ -55,7 +51,7 @@ Run searches in parallel using the user's query:
 4. If the query mentions customers, feedback, pain points, or what users say →
    `execute_operation("search_feedback", { query: "<topic>" })`
 
-### 4. Present the context manifest
+### 3. Present the context manifest
 
 Show what was found so the user can choose what to pull in:
 
@@ -93,11 +89,11 @@ Which items should I pull into context? (numbers, "all", "docs only", or "skip")
 - For tasks, show `slug - title` when available; otherwise show the task title.
 - For projects and documents, show the readable name/title and URL when available; do not show raw Kestral IDs as
   handles.
-- If a category has zero results, omit it from the display (Feedback only appears when step 3 ran `search_feedback`).
+- If a category has zero results, omit it from the display (Feedback only appears when step 2 ran `search_feedback`).
 - If all searches return zero results: "I didn't find anything in Kestral matching that topic. Try different keywords or
   check that the relevant project/docs exist."
 
-### 5. Pull selected content
+### 4. Pull selected content
 
 Based on the user's selection:
 
@@ -140,11 +136,11 @@ Present project details:
 
 For each selected task, call `entity_lookup({ id: "<taskId>", type: "task" })`.
 
-Present task details in the same format as the `/kestral:tasks` drill-down view (see `kestral-tasks/SKILL.md` step 4).
+Present task details in the same format as the `/kestral:tasks` drill-down view (see `kestral-tasks/SKILL.md` step 3).
 
 #### Feedback
 
-Feedback items are already loaded from step 3's `search_feedback` results. Present each selected item:
+Feedback items are already loaded from step 2's `search_feedback` results. Present each selected item:
 
 ```
 ─── Feedback: "SSO setup took 3 attempts before it worked" ───
@@ -159,7 +155,7 @@ Feedback items are already loaded from step 3's `search_feedback` results. Prese
 
 Show source (customer/company), sentiment, theme/tags, and date when available from the search result metadata.
 
-### 6. Summarize
+### 5. Summarize
 
 After pulling content, confirm what was loaded:
 
@@ -180,8 +176,8 @@ The agent now has this content in its conversation context and can reason about 
 
 ## Error handling
 
-| Failure               | Message                                                                                                            |
-| --------------------- | ------------------------------------------------------------------------------------------------------------------ |
-| 401 / unauthorized    | Guide the user to authenticate through their app's UI (see Prerequisites). The agent cannot handle OAuth directly. |
-| Document not found    | "Selected document not found — it may have been deleted. Skipping."                                                |
-| Search returned error | "Search failed: `<error>`. Try again or check that the MCP server is connected (`/mcp`)."                          |
+| Failure                                                  | Message                                                                                                            |
+| -------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------ |
+| Auth failure (401, unauthorized, or `Not authenticated`) | Guide the user to authenticate through their app's UI (see Prerequisites). The agent cannot handle OAuth directly. |
+| Document not found                                       | "Selected document not found — it may have been deleted. Skipping."                                                |
+| Search returned error                                    | "Search failed: `<error>`. Try again or check that the MCP server is connected (`/mcp`)."                          |

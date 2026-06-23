@@ -28,12 +28,21 @@ work with no new progress, skip.
 
 ## Core Infrastructure
 
-### Auth
+### Identity & Error Handling
 
-Call `whoami` before any other Kestral MCP call (reads included). If it succeeds, proceed. If it fails, guide the user
-to authenticate through their app's UI — the agent cannot handle OAuth directly. Cowork: Customize → Connectors; Codex:
-Settings → MCP Servers → Authenticate; Claude Code: `/mcp` → reconnect; Cursor: Settings → MCP Servers → Authenticate
-(or agent calls `mcp_auth`). Do not call other Kestral tools until `whoami` succeeds.
+The MCP connection is OAuth-authenticated at the transport layer — you do not need to call `whoami` to verify auth
+before making calls.
+
+**`whoami`** returns workspace and member identity (workspace ID, member ID, names). Call it when you need `memberId` —
+for **Conflict Check** and when ranking multiple task lookup candidates (prefer tasks assigned to you). Cache the result
+for the rest of the session — do not call again unless a prior call returned stale data.
+
+**Auth failure signals:** HTTP 401, `unauthorized`, or tool error `Not authenticated` (MCP v2 returns
+`{"error":"Not authenticated"}` via `errorResult` — the message does not contain `401`). When any Kestral MCP call
+returns one of these, the OAuth token has expired or the connection dropped. Guide the user to re-authenticate through
+their app's UI — the agent cannot handle OAuth directly. Cowork: Customize → Connectors; Codex: Settings → MCP Servers →
+Authenticate; Claude Code: `/mcp` → reconnect; Cursor: Settings → MCP Servers → Authenticate (or agent calls
+`mcp_auth`). Do not retry other tools until the user confirms reconnection.
 
 All MCP calls require an `explanation` field — use a clear description of the operation.
 
@@ -46,7 +55,7 @@ Find the Kestral task for the current work. Each step is 1–3 seconds except th
 2. **Branch→task exact match:** `execute_operation("find_task_by_branch", { branchName: "<current-branch>" })`. Returns
    the task linked to this branch, if any (0 or 1 result).
 3. **My active tasks:** `execute_operation("list_my_active_tasks", {})` — tasks assigned to me in todo or in_progress.
-   Exactly one match → use it. Multiple → pick the one whose title best matches the branch name.
+   Exactly one match → use it. Multiple → apply **Candidate Ranking** (title match first among my tasks).
 4. **Keyword search:**
    `execute_operation("search_my_tasks_by_keyword", { keyword: "<branch-slug-as-words>", statusFilter: ["todo", "in_progress"] })`.
    Convert the branch slug to words (e.g. `feat/improve-auth-flow` → `"improve auth flow"`). Scoped to my tasks — do not
@@ -57,11 +66,22 @@ Find the Kestral task for the current work. Each step is 1–3 seconds except th
 After resolution:
 
 - One clear match → use it
-- Multiple matches → ask the user to pick
+- Multiple matches → apply **Candidate Ranking** below (get `memberId` from `whoami` once per session for assignment
+  comparison); if still tied, ask the user to pick
 - No matches → ask the user; offer to create a task (see Task Creation)
 - Hold the task ID in session context for subsequent updates
 
 If the user provided a task URL, slug, or ID directly, skip the chain and call `entity_lookup` immediately.
+
+#### Candidate Ranking
+
+When multiple candidates appear (especially from `deep_research`), rank by:
+
+1. **Title/scope match** — prefer the task whose title describes the branch/work over a loosely related match.
+2. **Status** — prefer Todo / In Progress over Done (Done → warn, do not silently link).
+3. **Assignment** — prefer tasks assigned to the current user (`assigneeId` === cached `memberId` from `whoami`) over
+   unassigned, and unassigned over tasks assigned to someone else.
+4. **Recency** — among equal candidates, prefer the more recently created task.
 
 #### Status Discovery
 
@@ -77,7 +97,8 @@ Skip archived projects (`archivedAt` non-null) when choosing a target — the se
 
 Before starting implementation or claiming a task:
 
-1. Get `memberId` from `whoami`
+1. Get `memberId` from `whoami` (once per session when first needed; reuse cached result from Candidate Ranking if
+   already fetched)
 2. Compare `entity.assigneeId` against `memberId`
 3. **Already done:** status is Done → verify against the codebase before redoing
 4. **No conflict:** `assigneeId` is null (and status Todo/Backlog) or matches current user
@@ -258,7 +279,7 @@ status to `awaiting_review`, and posts a comment in one call.
 
 Complete sync workflow (user asks to sync, or auto-trigger fires):
 
-1. Auth check
+1. Proceed with MCP calls (OAuth at transport; stop on auth failure — 401, unauthorized, or `Not authenticated`)
 2. Diff context: `git log --oneline -10`, `git diff --stat main...HEAD`
 3. Task lookup (fast chain) — `entity_lookup` also returns existing comments
 4. **Dedup:** if the most recent comment covers the same branch/scope with no new progress → skip, confirm "no updates"

@@ -9,10 +9,10 @@ Search, view, and update tasks in your Kestral workspace without leaving the cha
 
 ## Prerequisites
 
-The `Kestral` MCP server must be in this session (`/mcp`). Call `whoami` first — if it fails, ask the user to reconnect
-or authenticate the **Kestral** MCP server in their app's MCP settings. The agent cannot handle OAuth directly —
-authenticate through your app's UI (Cowork: Customize → Connectors; Codex: Settings → MCP Servers → Authenticate; Claude
-Code: `/mcp` → reconnect).
+The `Kestral` MCP server must be in this session (`/mcp`). Authentication is handled by the MCP connection (OAuth) —
+proceed directly with operations. If any call returns auth failure (401, unauthorized, or `Not authenticated`), ask the
+user to reconnect or authenticate through their app's UI (Cowork: Customize → Connectors; Codex: Settings → MCP Servers
+→ Authenticate; Claude Code: `/mcp` → reconnect).
 
 ## Human-readable references
 
@@ -29,30 +29,26 @@ Keep Kestral IDs internal unless the user asks for them. In user-facing output:
 
 ## Workflow
 
-### 1. Authenticate
-
-Call `whoami`. If it fails, guide the user to authenticate through their app's UI (see Prerequisites) and stop.
-
-### 2. Parse intent
+### 1. Parse intent
 
 The user's prompt determines which path to follow:
 
 | User says                                                                               | Intent         | Path   |
 | --------------------------------------------------------------------------------------- | -------------- | ------ |
-| "show my tasks", "list open tasks in auth project"                                      | **List**       | Step 3 |
-| "show task AUTH-12", "get details on AUTH-12"                                           | **Drill-down** | Step 4 |
-| "mark AUTH-12 done", "assign AUTH-12 to Sarah", "comment on AUTH-12: shipped in PR #42" | **Update**     | Step 5 |
+| "show my tasks", "list open tasks in auth project"                                      | **List**       | Step 2 |
+| "show task AUTH-12", "get details on AUTH-12"                                           | **Drill-down** | Step 3 |
+| "mark AUTH-12 done", "assign AUTH-12 to Sarah", "comment on AUTH-12: shipped in PR #42" | **Update**     | Step 4 |
 
 If the intent is ambiguous, ask one clarifying question.
 
-### 3. List tasks
+### 2. List tasks
 
-#### 3a. Resolve "my tasks"
+#### 2a. Resolve "my tasks"
 
 If the user asks for "my" tasks, call `execute_operation("list_my_active_tasks", {})`. The OAuth token identifies the
 user automatically — no `whoami` call or manual member ID lookup is needed.
 
-#### 3b. Build filters
+#### 2b. Build filters
 
 Pick the operation that matches the filter intent. `search_tasks` accepts only `{ query, limit? }` — semantic NL search
 with no assignee or status params. Do not pass `assigneeFilter` or `statusFilter` to `search_tasks`; they are dropped at
@@ -72,7 +68,7 @@ validation.
 
 Call the matching `execute_operation` from the table above.
 
-#### 3c. Resolve display values
+#### 2c. Resolve display values
 
 Before rendering, prefer display fields already returned by the task search result: `slug`, `title`, `url`,
 `statusName`, `priorityLabel`, `projectName`, and any display-name fields.
@@ -97,7 +93,7 @@ Say a task slug or title to see details, or describe an update ("mark AUTH-12 do
 
 If zero results: "No tasks matched those filters. Try broadening the search."
 
-### 4. Drill-down
+### 3. Drill-down
 
 If the user gives a slug or title from the displayed list, map it back to that row's task ID before lookup; if it is
 ambiguous or not in the list, search or ask one clarifying question.
@@ -121,7 +117,7 @@ Recent comments: Bob Park (2026-06-09): "Started token audit — 3 of 5 provider
 
 After rendering, prompt: "What would you like to do? (update status, comment, assign, go back to list)"
 
-### 5. Update
+### 4. Update
 
 All updates require confirmation before calling the write tool.
 
@@ -182,9 +178,9 @@ If the write fails, show the error and suggest retrying or reconnecting the MCP 
 
 ## Error handling
 
-| Failure                      | Message                                                                                                            |
-| ---------------------------- | ------------------------------------------------------------------------------------------------------------------ |
-| 401 / unauthorized           | Guide the user to authenticate through their app's UI (see Prerequisites). The agent cannot handle OAuth directly. |
-| Task not found               | "Task `<reference>` not found in your workspace. Double-check the reference."                                      |
-| Project not found for filter | "I couldn't find a project matching `<query>`. Try a different name."                                              |
-| Write failed                 | "Update failed: `<error>`. Try again, or reconnect the MCP server if it's an auth issue."                          |
+| Failure                                                  | Message                                                                                                            |
+| -------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------ |
+| Auth failure (401, unauthorized, or `Not authenticated`) | Guide the user to authenticate through their app's UI (see Prerequisites). The agent cannot handle OAuth directly. |
+| Task not found                                           | "Task `<reference>` not found in your workspace. Double-check the reference."                                      |
+| Project not found for filter                             | "I couldn't find a project matching `<query>`. Try a different name."                                              |
+| Write failed                                             | "Update failed: `<error>`. Try again, or reconnect the MCP server if it's an auth issue."                          |

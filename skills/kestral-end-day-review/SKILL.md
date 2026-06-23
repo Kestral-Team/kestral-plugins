@@ -11,11 +11,11 @@ covered by the User preferences rules.
 
 ## Prerequisites
 
-The `Kestral` MCP server must be in this session (`/mcp`). Call `whoami` first — if it fails, ask the user to reconnect
-or authenticate the **Kestral** MCP server in their app's MCP settings. The agent cannot handle OAuth directly —
-authenticate through your app's UI (Cowork: Customize → Connectors; Codex: Settings → MCP Servers → Authenticate; Claude
-Code: `/mcp` → reconnect). Do not call other tools until authenticated. Calendar access is optional, but use it when
-tomorrow prioritization depends on schedule realism.
+The `Kestral` MCP server must be in this session (`/mcp`). Authentication is handled by the MCP connection — proceed
+directly with data-fetching calls. If any call returns auth failure (401, unauthorized, or `Not authenticated`), ask the
+user to reconnect or authenticate the **Kestral** MCP server through their app's UI (Cowork: Customize → Connectors;
+Codex: Settings → MCP Servers → Authenticate; Claude Code: `/mcp` → reconnect). Calendar access is optional, but use it
+when tomorrow prioritization depends on schedule realism.
 
 ## Human-readable references
 

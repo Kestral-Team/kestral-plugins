@@ -12,10 +12,11 @@ docs, see the [plugin README](../README.md).
 | Claude Code / Claude Cowork | `/kestral:<skill>` — e.g. `/kestral:tasks`, `/kestral:sync`. Type `/kestral:` for autocomplete.       |
 | Codex                       | `$kestral-<name>` — e.g. `$kestral-tasks`, `$kestral-sync` — or type `@kestral` to target the plugin. |
 
-All skills require the **Kestral** MCP server in this session. Every skill calls `whoami` first — if it succeeds,
-proceed; if it fails (401), the agent cannot handle OAuth directly — guide the user to authenticate through their app's
-UI (Cowork: Customize → Connectors; Codex: Settings → MCP Servers → Authenticate; Claude Code: `/mcp` → reconnect).
-See the plugin [README](../README.md#troubleshooting) for platform-specific troubleshooting.
+All skills require the **Kestral** MCP server in this session. Authentication is handled by the MCP connection itself
+(OAuth) — skills do not need to call `whoami` to verify auth. If any MCP call returns auth failure (401, unauthorized,
+or `Not authenticated`), guide the user to re-authenticate through their app's UI (Cowork: Customize → Connectors;
+Codex: Settings → MCP Servers → Authenticate; Claude Code: `/mcp` → reconnect). See the plugin
+[README](../README.md#troubleshooting) for platform-specific troubleshooting.
 
 ## User-facing skills
 
@@ -25,9 +26,11 @@ Help the user set up a **Kestral project with a Project Brain** — a living wor
 team. Pulls context from connected tools (Linear, Jira, GitHub, Notion, Drive, Granola, …); local files only when
 offered. If projects already exist, surfaces brain contents and suggests next steps they can take right now.
 
-- **When to use:** first-time setup, or organizing work into a Kestral project with a brain you can work from immediately.
+- **When to use:** first-time setup, or organizing work into a Kestral project with a brain you can work from
+  immediately.
 - **Example:** `/kestral:kestral-setup` → explains what a Kestral project with a brain gives you, asks where context
-  lives, shows manifest, creates the project. Existing workspaces: surfaces brain contents + next steps you can take now.
+  lives, shows manifest, creates the project. Existing workspaces: surfaces brain contents + next steps you can take
+  now.
 - **Note:** each run creates a fresh project — there is no update-in-place. Composes `kestral-scan-tasks` and
   `kestral-upload` internally; dispatches `kestral-scan-folder` only when the user provides local files.
 

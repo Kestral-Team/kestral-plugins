@@ -63,7 +63,8 @@ the kestral-sync skill rather than improvising.
 
 After resolving a task via `entity_lookup`:
 
-1. Compare `entity.assigneeId` against `whoami().memberId`
+1. Compare `entity.assigneeId` against `memberId` from `whoami` (call once per session when first needed; cache and
+   reuse)
 2. If status is Done (any assignee) → work may already be complete; verify against the codebase before redoing
 3. If assigneeId is null (and status Todo/Backlog) or matches current user → no conflict
 4. If assigneeId differs AND status is active → **conflict**
@@ -72,22 +73,22 @@ After resolving a task via `entity_lookup`:
 
 ## MCP Tools Quick Reference
 
-| Action                    | Tool                                                                          |
-| ------------------------- | ----------------------------------------------------------------------------- |
-| Check auth                | `whoami` (primary)                                                            |
-| Get task details          | `entity_lookup` (primary)                                                     |
-| Discover status keys      | `list_statuses` (primary)                                                     |
-| Find task by branch       | `execute_operation("find_task_by_branch", { branchName })`                    |
-| Keyword search (my tasks) | `execute_operation("search_my_tasks_by_keyword", { keyword, statusFilter? })` |
-| Semantic task search      | `execute_operation("search_tasks", { query })`                                |
-| List my active tasks      | `execute_operation("list_my_active_tasks", {})`                               |
-| Filter tasks by status    | `execute_operation("list_tasks_by_status", { statusFilter, projectId? })`     |
-| Deep concept search       | `execute_operation("deep_research", { query })` (last resort)                 |
-| Update status             | `execute_operation("update_task_status", { taskId, statusKey })`              |
-| Register branch           | `execute_operation("register_branch_on_task", { taskId, branchName })`        |
-| Post comment              | `execute_operation("post_progress_comment", { taskId, content })`             |
-| Link PR                   | `execute_operation("link_pr_to_task", { taskId, prUrl })`                     |
-| Create task               | `execute_operation("create_task", { projectId, title, ... })`                 |
-| Claim + start work        | `execute_operation("claim_task_and_branch", { taskId, branchName })`          |
-| Complete with PR          | `execute_operation("complete_task_with_review", { taskId, prUrl, comment })`  |
-| Complex operations        | `execute_operation("manage_project", { request })`                            |
+| Action                    | Tool                                                                                |
+| ------------------------- | ----------------------------------------------------------------------------------- |
+| Get member identity       | `whoami` (primary — when `memberId` needed for Conflict Check or Candidate Ranking) |
+| Get task details          | `entity_lookup` (primary)                                                           |
+| Discover status keys      | `list_statuses` (primary)                                                           |
+| Find task by branch       | `execute_operation("find_task_by_branch", { branchName })`                          |
+| Keyword search (my tasks) | `execute_operation("search_my_tasks_by_keyword", { keyword, statusFilter? })`       |
+| Semantic task search      | `execute_operation("search_tasks", { query })`                                      |
+| List my active tasks      | `execute_operation("list_my_active_tasks", {})`                                     |
+| Filter tasks by status    | `execute_operation("list_tasks_by_status", { statusFilter, projectId? })`           |
+| Deep concept search       | `execute_operation("deep_research", { query })` (last resort)                       |
+| Update status             | `execute_operation("update_task_status", { taskId, statusKey })`                    |
+| Register branch           | `execute_operation("register_branch_on_task", { taskId, branchName })`              |
+| Post comment              | `execute_operation("post_progress_comment", { taskId, content })`                   |
+| Link PR                   | `execute_operation("link_pr_to_task", { taskId, prUrl })`                           |
+| Create task               | `execute_operation("create_task", { projectId, title, ... })`                       |
+| Claim + start work        | `execute_operation("claim_task_and_branch", { taskId, branchName })`                |
+| Complete with PR          | `execute_operation("complete_task_with_review", { taskId, prUrl, comment })`        |
+| Complex operations        | `execute_operation("manage_project", { request })`                                  |

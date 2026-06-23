@@ -10,10 +10,10 @@ provided by the caller, and trigger Project Brain generation after project conte
 
 ## Prerequisites
 
-A **Kestral** MCP server must be in this session (`/mcp`). Call `whoami` first — if it fails, ask the user to reconnect
-or authenticate the **Kestral** MCP server in their app's MCP settings. The agent cannot handle OAuth directly —
-authenticate through your app's UI (Cowork: Customize → Connectors; Codex: Settings → MCP Servers → Authenticate; Claude
-Code: `/mcp` → reconnect). Do not call other tools until authenticated.
+A **Kestral** MCP server must be in this session (`/mcp`). Authentication is handled by the MCP connection (OAuth) —
+proceed directly with operations. If any call returns auth failure (401, unauthorized, or `Not authenticated`), ask the
+user to reconnect or authenticate through their app's UI (Cowork: Customize → Connectors; Codex: Settings → MCP Servers
+→ Authenticate; Claude Code: `/mcp` → reconnect).
 
 Local file uploads use Kestral-owned upload URLs (`execute_operation("upload_request_urls", ...)` → PUT → response
 includes the document record). There is no separate finalize step. This requires network egress from the agent sandbox
@@ -101,7 +101,7 @@ If `upload_request_urls` is not available, or upload fails and cannot be recover
 Read text/markdown via Read tool → `execute_operation("create_document", { title, content, projectId })`. Skip binary
 files with a message pointing to manual upload from the Kestral project page.
 
-On 401, tell user to reconnect and retry. Report failures per-file.
+On auth failure (401, unauthorized, or `Not authenticated`), tell user to reconnect and retry. Report failures per-file.
 
 **External documents:** `execute_operation("link_external_document", { url, title, projectId, content? })`. Never use
 `create_document` for external docs — it loses provenance and autosync. Track `resolutionStatus` for pending-link
