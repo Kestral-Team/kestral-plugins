@@ -27,7 +27,7 @@ skill when the Kestral plugin is installed.
 ### During implementation
 
 - After each meaningful phase: post a progress comment via
-  `execute_operation("post_progress_comment", { taskId, content })`
+  `execute_operation("add_task_comment", { taskId, content })`
 - Do NOT update on every commit or minor edit
 
 ### After completing work
@@ -37,22 +37,30 @@ skill when the Kestral plugin is installed.
   open/unmerged; only mark complete/done when the PR is **merged**. Never mark a task complete while its PR is unmerged.
   Use `list_statuses` to discover valid status keys — never hardcode them.
 - Post a final progress comment
-- Prefer `execute_operation("complete_task_with_review", { taskId, prUrl, comment })` for atomic PR link + status +
+- Prefer `execute_operation("complete_task_with_review", { taskId, prUrl, summary })` for atomic PR link + status +
   comment in one call
 
 ### On branch push
 
 After every `git push` where a Kestral task is linked:
 
-1. **First push:** `execute_operation("update_task_status", { taskId, statusKey })` (if still todo) +
+1. **First push:** `execute_operation("update_task", { taskId, statusKey })` (if still todo) +
    `execute_operation("register_branch_on_task", { taskId, branchName })` +
-   `execute_operation("post_progress_comment", { taskId, content })` +
+   `execute_operation("add_task_comment", { taskId, content })` +
    `execute_operation("link_pr_to_task", { taskId, prUrl })` if a PR exists. Or use
    `execute_operation("claim_task_and_branch", { taskId, branchName })` to combine assign + status + branch + comment in
    one call.
-2. **Subsequent pushes:** `execute_operation("post_progress_comment", ...)` only if meaningful new progress since the
+2. **Subsequent pushes:** `execute_operation("add_task_comment", ...)` only if meaningful new progress since the
    last comment
 3. If no PR exists yet, post a branch comment: `Started work on branch \`branch-name\``
+
+### GitHub PR bodies — link vs skip auto-link
+
+When running `gh pr create`:
+
+- **Has a linked Kestral task:** call `link_pr_to_task` after create; optional slug in title for webhook auto-link
+- **Chore / no task:** add `<!-- kestral:skip-auto-link -->` to the PR body to suppress AI auto-link and bot comments
+  (see plugin `kestral-sync` skill **GitHub PR auto-link directives**)
 
 ### Other processes (review, bugfix, spike)
 
@@ -84,11 +92,11 @@ After resolving a task via `entity_lookup`:
 | List my active tasks      | `execute_operation("list_my_active_tasks", {})`                                     |
 | Filter tasks by status    | `execute_operation("list_tasks_by_status", { statusFilter, projectId? })`           |
 | Deep concept search       | `execute_operation("deep_research", { query })` (last resort)                       |
-| Update status             | `execute_operation("update_task_status", { taskId, statusKey })`                    |
+| Update status             | `execute_operation("update_task", { taskId, statusKey })`                    |
 | Register branch           | `execute_operation("register_branch_on_task", { taskId, branchName })`              |
-| Post comment              | `execute_operation("post_progress_comment", { taskId, content })`                   |
+| Post comment              | `execute_operation("add_task_comment", { taskId, content })`                   |
 | Link PR                   | `execute_operation("link_pr_to_task", { taskId, prUrl })`                           |
 | Create task               | `execute_operation("create_task", { projectId, title, ... })`                       |
 | Claim + start work        | `execute_operation("claim_task_and_branch", { taskId, branchName })`                |
-| Complete with PR          | `execute_operation("complete_task_with_review", { taskId, prUrl, comment })`        |
+| Complete with PR          | `execute_operation("complete_task_with_review", { taskId, prUrl, summary })`        |
 | Complex operations        | `execute_operation("manage_project", { request })`                                  |

@@ -48,7 +48,10 @@ HAS_DESKTOP_APP=0
 HAS_DESKTOP_READY=0
 DESKTOP_NOT_READY=0
 
-# bash 3.2-safe indexed arrays (no associative arrays)
+# bash 3.2-safe indexed arrays (no associative arrays).
+# Under set -u, "${name[@]}" on an empty array errors on macOS bash 3.2.
+# Prefer an explicit length guard before for-loops when empty is meaningful;
+# use ${name[@]+"${name[@]}"} only in small utility scans (e.g. membership checks).
 DETECTED_TARGETS=()
 SELECTED_TARGETS=()
 DESKTOP_ROOTS=()
@@ -568,7 +571,7 @@ detect_apps() {
 _add_target_if_missing() {
   local _t="$1"
   local _existing
-  for _existing in "${SELECTED_TARGETS[@]:-}"; do
+  for _existing in ${SELECTED_TARGETS[@]+"${SELECTED_TARGETS[@]}"}; do
     if [ "$_existing" = "$_t" ]; then
       return 0
     fi
@@ -643,12 +646,14 @@ _print_detection_summary() {
   local _idx=0
   local _target _name _blurb
 
-  for _target in "${DETECTED_TARGETS[@]}"; do
-    _idx=$((_idx + 1))
-    _name="$(_target_display_name "$_target")"
-    _blurb="$(_target_detection_blurb "$_target")"
-    printf '    [%s] %s (%s)\n' "$_idx" "$_name" "$_blurb"
-  done
+  if [ "${#DETECTED_TARGETS[@]}" -gt 0 ]; then
+    for _target in "${DETECTED_TARGETS[@]}"; do
+      _idx=$((_idx + 1))
+      _name="$(_target_display_name "$_target")"
+      _blurb="$(_target_detection_blurb "$_target")"
+      printf '    [%s] %s (%s)\n' "$_idx" "$_name" "$_blurb"
+    done
+  fi
 
   if [ "$DESKTOP_NOT_READY" -eq 1 ]; then
     printf '    [ ] Claude Cowork (installed but not signed in — open it, sign in, re-run)\n'
@@ -664,11 +669,13 @@ _build_target_selection_prompt() {
   local _idx=0
   local _target _name
 
-  for _target in "${DETECTED_TARGETS[@]}"; do
-    _idx=$((_idx + 1))
-    _name="$(_target_display_name "$_target")"
-    _prompt="${_prompt}[${_idx}] ${_name}  "
-  done
+  if [ "${#DETECTED_TARGETS[@]}" -gt 0 ]; then
+    for _target in "${DETECTED_TARGETS[@]}"; do
+      _idx=$((_idx + 1))
+      _name="$(_target_display_name "$_target")"
+      _prompt="${_prompt}[${_idx}] ${_name}  "
+    done
+  fi
 
   _prompt="${_prompt}— Enter = all, or type numbers (e.g. \"1\"): "
   printf '%s' "$_prompt"
@@ -720,21 +727,23 @@ select_targets() {
 
   if [ "$EXPLICIT_APP_FLAG" -eq 1 ]; then
     _parse_app_flag "$APP_FLAG"
-    local _t
-    for _t in "${SELECTED_TARGETS[@]}"; do
-      if [ "$_t" = "claude-code" ] && [ "$HAS_CLAUDE_CLI" -eq 0 ]; then
-        : # ensure_claude_cli handles --app claude-code with missing CLI
-      elif [ "$_t" = "claude-desktop" ]; then
-        if [ "$HAS_DESKTOP_APP" -eq 0 ]; then
-          abort_with_hint "Claude Cowork is not installed." \
-            "Install Claude Cowork from https://claude.ai/download, sign in, then re-run."
+    if [ "${#SELECTED_TARGETS[@]}" -gt 0 ]; then
+      local _t
+      for _t in "${SELECTED_TARGETS[@]}"; do
+        if [ "$_t" = "claude-code" ] && [ "$HAS_CLAUDE_CLI" -eq 0 ]; then
+          : # ensure_claude_cli handles --app claude-code with missing CLI
+        elif [ "$_t" = "claude-desktop" ]; then
+          if [ "$HAS_DESKTOP_APP" -eq 0 ]; then
+            abort_with_hint "Claude Cowork is not installed." \
+              "Install Claude Cowork from https://claude.ai/download, sign in, then re-run."
+          fi
+          if [ "$HAS_DESKTOP_READY" -eq 0 ]; then
+            abort_with_hint "Claude Cowork is installed but no Cowork session was found." \
+              "Open Claude Cowork, sign in, then re-run this script."
+          fi
         fi
-        if [ "$HAS_DESKTOP_READY" -eq 0 ]; then
-          abort_with_hint "Claude Cowork is installed but no Cowork session was found." \
-            "Open Claude Cowork, sign in, then re-run this script."
-        fi
-      fi
-    done
+      done
+    fi
     return 0
   fi
 
@@ -883,7 +892,7 @@ install_or_update_plugin() {
 
 _is_cowork_selected() {
   local _t
-  for _t in "${SELECTED_TARGETS[@]:-}"; do
+  for _t in ${SELECTED_TARGETS[@]+"${SELECTED_TARGETS[@]}"}; do
     if [ "$_t" = "claude-desktop" ]; then
       return 0
     fi
@@ -893,7 +902,7 @@ _is_cowork_selected() {
 
 _is_claude_code_selected() {
   local _t
-  for _t in "${SELECTED_TARGETS[@]:-}"; do
+  for _t in ${SELECTED_TARGETS[@]+"${SELECTED_TARGETS[@]}"}; do
     if [ "$_t" = "claude-code" ]; then
       return 0
     fi
@@ -2217,9 +2226,11 @@ main() {
   select_targets
 
   local _target
-  for _target in "${SELECTED_TARGETS[@]}"; do
-    _run_target "$_target" || true
-  done
+  if [ "${#SELECTED_TARGETS[@]}" -gt 0 ]; then
+    for _target in "${SELECTED_TARGETS[@]}"; do
+      _run_target "$_target" || true
+    done
+  fi
 
   _print_summary
 }

@@ -64,28 +64,36 @@ Expected invocations include:
 
 Default order:
 
-1. Fetch the Kestral daily brief with `execute_operation("get_daily_brief", {})`.
+1. Fetch bundled planning context with `execute_operation("get_daily_planning_context", { timezone })`. This returns
+   `daily_brief`, `my_active_tasks`, `my_overdue_tasks`, `my_blocked_tasks`, and `load_status` in one call. Pass the
+   user's local IANA timezone when known (e.g. from stated locale, calendar connector, or ask once if unclear). Check
+   `load_status` before the Morning Readout: if a section is `false`, treat that slice as missing and use the fallbacks
+   in step 4 (`get_daily_brief` for brief-only failure; targeted task ops for failed task sections).
 2. Read `.kestral/preferences.md` by checking the current workspace folder and then parent folders. Use the first match
    as the source for durable user planning preferences, not as a task or project source of truth.
 3. Read calendar events for today and the next two business days using the available calendar MCP/app connector. Include
    event titles, times, attendees when visible, and free/busy pressure. Do not assume empty calendar access means no
    meetings; state access gaps.
-4. Search Kestral tasks for urgent, overdue, blocked, stale, due-today, and due-soon work.
+4. If the bundled response is insufficient (e.g. need project-scoped searches, stale-task sweep, or cross-team work), or
+   `load_status` marks a section failed, run targeted task searches:
+   - Prefer `my_overdue_tasks` from the bundle for overdue work before extra searches.
+   - `execute_operation("list_stale_tasks", { staleDays: 7, assigneeFilter: "me" })` — active tasks not updated
+     in the last 7 days (stale/forgotten commitments).
+   - `execute_operation("search_tasks_by_time", { timeFilter: "due in the next two business days", assigneeFilter: "me", sortBy: "dueDate" })` —
+     tasks due today through the next two business days (weekends skipped; anchored to caller local time via MCP context).
+   - For blocked work, prefer `execute_operation("list_blocked_tasks", { assigneeFilter: "me" })` over semantic
+     `search_tasks` with query "blocked tasks".
 5. Search or fetch Kestral projects only when the brief or task search names a project without enough detail to plan
    around it.
 6. Use deeper Kestral research only when cross-project state is ambiguous and the extra latency is justified.
 
-Start data gathering immediately. Run independent reads in parallel whenever the host supports it: daily brief, local
-preferences, calendar, broad task searches, and profile/member lookup do not need to block one another. Do not
-parallelize dependent checks; fetch exact tasks or projects only after the brief or search results identify what needs
-verification.
+Task search results include slug, assignee name, status, priority, due date, blocker counts, and URL. Use these fields
+directly for the Morning Readout — do not call `entity_lookup` to re-verify search results. Reserve `entity_lookup` for
+tasks referenced by slug/URL in the brief that were not returned by search.
 
-Kestral task searches to run when planning needs verification:
-
-- `urgent tasks due today or overdue`
-- `blocked tasks`
-- `stale commitments or tasks not updated recently`
-- `tasks due today or in the next two business days`
+Start data gathering immediately. Run independent reads in parallel whenever the host supports it: bundled planning
+context, local preferences, and calendar do not need to block one another. Do not parallelize dependent checks; fetch
+exact tasks or projects only after the brief or search results identify what needs verification.
 
 Calendar event searches should use explicit local-day RFC3339 bounds from start-of-day today through end-of-day of the
 second business day after today, skipping weekends. If today is a weekend, still include today plus the next two
@@ -125,8 +133,9 @@ URLs when useful.
 
 ### 0. Gather first
 
-Do not ask for constraints before data gathering. Start by loading the Kestral brief, local preferences, calendar, and
-broad task searches. Run independent reads in parallel whenever the host supports it.
+Do not ask for constraints before data gathering. Start by loading bundled planning context, local preferences, and
+calendar; run targeted task searches only when the bundle is incomplete or `load_status` reports a failed section. Run
+independent reads in parallel whenever the host supports it.
 
 This keeps the first real user question visible in the conversation instead of relying on transient progress or status
 messages for input that changes the plan.
@@ -148,8 +157,10 @@ top tasks that could change the plan.
 
 Resolve contradictions selectively. Verify live state for tasks or projects only when they are blockers,
 launch-critical, assigned to the user, due soon, or central to the proposed must-win. Do not deep-inspect every
-referenced task just because it appears in the brief. When generated Project Brain knowledge conflicts with live
-task/project fields, label the generated knowledge as stale and prefer the live record for planning.
+referenced task just because it appears in the brief. Do not call `entity_lookup` on tasks already returned by
+`get_daily_planning_context` or `search_tasks` — those results already include slug, assignee, status, and URL. When
+generated Project Brain knowledge conflicts with live task/project fields, label the generated knowledge as stale and
+prefer the live record for planning.
 
 ### 2. Ask constraints before planning
 
@@ -217,8 +228,10 @@ Kestral link.
 
 If the daily brief is missing, stale, or obviously incomplete:
 
+- Check `load_status.daily_brief` from the bundled response first.
 - Say what is missing and the timestamp if available.
-- Fall back to urgent/overdue/stale task searches plus calendar events.
+- Fall back to `execute_operation("get_daily_brief", { timezone })`, overdue/stale task searches from step 4, plus
+  calendar events.
 - Ask whether the user wants a best-effort plan or wants to refresh/generate the brief first.
 
 If calendar access is missing:

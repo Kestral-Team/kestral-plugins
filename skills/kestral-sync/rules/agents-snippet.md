@@ -20,28 +20,38 @@ in Claude Code, `$kestral-sync` in Codex).
    backlog → link to it rather than creating a duplicate.
 3. If no match, proceed — offer to create a task after the work takes shape.
 
-**During implementation:** post a progress comment via `execute_operation("post_progress_comment", { taskId, content })`
+**During implementation:** post a progress comment via `execute_operation("add_task_comment", { taskId, content })`
 after each meaningful phase. Do NOT update on every commit or minor edit.
 
 **After completing work:** run the Acceptance Check from the skill, then update task status based on PR merge state: use
 the workspace's review/pending status if any linked PR is open/unmerged; only mark complete/done when the PR is
 **merged**. Never mark a task complete while its PR is unmerged. Post a final progress comment. Prefer
-`execute_operation("complete_task_with_review", { taskId, prUrl, comment })` for atomic PR link + status + comment in
+`execute_operation("complete_task_with_review", { taskId, prUrl, summary })` for atomic PR link + status + comment in
 one call. Use `list_statuses` to discover valid status keys — never hardcode them.
 
 **On branch push** (when a Kestral task is linked):
 
-- First push: `execute_operation("update_task_status", { taskId, statusKey })` (if still todo) +
+- First push: `execute_operation("update_task", { taskId, statusKey })` (if still todo) +
   `execute_operation("register_branch_on_task", { taskId, branchName })` +
-  `execute_operation("post_progress_comment", { taskId, content })` +
+  `execute_operation("add_task_comment", { taskId, content })` +
   `execute_operation("link_pr_to_task", { taskId, prUrl })` if a PR exists. Or use
   `execute_operation("claim_task_and_branch", { taskId, branchName })` to combine assign + status + branch + comment.
-- Subsequent pushes: `execute_operation("post_progress_comment", ...)` only if meaningful new progress since the last
+- Subsequent pushes: `execute_operation("add_task_comment", ...)` only if meaningful new progress since the last
   comment.
 - No PR yet: post `Started work on branch \`branch-name\``.
 
 **Review / bugfix / spike:** use the skill's comment formats (Review Summary, Decision Comment, Bugfix Comment) rather
 than improvising.
+
+### GitHub PR bodies — link vs skip auto-link
+
+When opening a PR (`gh pr create`), choose one:
+
+- **Tracked feature/fix (has a Kestral task):** omit skip directive; after create call
+  `execute_operation("link_pr_to_task", { taskId, prUrl })`. Optionally include task slug in the title for webhook
+  auto-link.
+- **Chore / manifest bump / no task:** add `<!-- kestral:skip-auto-link -->` (or `Kestral: skip auto-link`) to the PR
+  body so Kestral does not enqueue AI auto-link or post no-task-linked bot comments.
 
 ### Conflict Check
 
@@ -67,11 +77,11 @@ After resolving a task via `entity_lookup`:
 | List my active tasks      | `execute_operation("list_my_active_tasks", {})`                                     |
 | Filter tasks by status    | `execute_operation("list_tasks_by_status", { statusFilter, projectId? })`           |
 | Deep concept search       | `execute_operation("deep_research", { query })` (last resort)                       |
-| Update status             | `execute_operation("update_task_status", { taskId, statusKey })`                    |
+| Update status             | `execute_operation("update_task", { taskId, statusKey })`                           |
 | Register branch           | `execute_operation("register_branch_on_task", { taskId, branchName })`              |
-| Post comment              | `execute_operation("post_progress_comment", { taskId, content })`                   |
+| Post comment              | `execute_operation("add_task_comment", { taskId, content })`                        |
 | Link PR                   | `execute_operation("link_pr_to_task", { taskId, prUrl })`                           |
 | Create task               | `execute_operation("create_task", { projectId, title, ... })`                       |
 | Claim + start work        | `execute_operation("claim_task_and_branch", { taskId, branchName })`                |
-| Complete with PR          | `execute_operation("complete_task_with_review", { taskId, prUrl, comment })`        |
+| Complete with PR          | `execute_operation("complete_task_with_review", { taskId, prUrl, summary })`        |
 | Complex operations        | `execute_operation("manage_project", { request })`                                  |

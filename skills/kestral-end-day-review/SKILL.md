@@ -69,6 +69,8 @@ Kestral searches to run when close-out needs verification:
   ID first via `entity_lookup` or `execute_operation("search_projects", { query: "<project name>" })`). Do not put the
   project name in the `query` field alongside `projectId` — this causes false zero-result sets from keyword matching on
   the project name.
+- Stale or forgotten active tasks: use `execute_operation("list_stale_tasks", { staleDays: 7, assigneeFilter: "me" })`.
+  Do not use negated time phrases like `"not updated recently"` — they are unsupported by the timeFilter parser.
 - `urgent open tasks in <project name>`
 - `blocked tasks <project name>`
 - `documents updated today <project name>`

@@ -1,10 +1,10 @@
 ---
 name: kestral-sync
 description: >-
-  Keep Kestral in sync with your coding session: task lookup, conflict detection, progress comments,
-  status updates, PR linking, and task creation — all via the Kestral MCP. Install the companion
-  rule/snippet for ambient sync (auto-triggers on push, PR, phase completion); invoke manually as
-  the "sync now" escape hatch.
+  Keep Kestral in sync with your work session: task lookup, conflict detection, progress comments,
+  status updates, deliverable linking, and task creation — all via the Kestral MCP. Install the
+  companion rule/snippet for ambient sync (auto-triggers on milestones, reviews, or phase
+  completion); invoke manually as the "sync now" escape hatch.
 ---
 
 # Kestral Sync
@@ -13,13 +13,15 @@ description: >-
 
 Update the Kestral task when:
 
-- **Implementation:** phase/feature complete, first branch push, PR created, blocker worth documenting
-- **Retroactive:** bug investigated and fixed, unlinked branch pushed (prompt to create task)
-- **Review:** code review complete (post Review Summary — even when clean)
-- **Decision:** spike or prototype concluded (capture the proceed/pivot/kill verdict)
-- **General:** user asks to sync, user asks to create a task for the branch
+- **Work progress:** milestone complete, deliverable shared (e.g. branch push, PR opened, document published), blocker
+  worth documenting
+- **Fixes:** issue investigated and resolved, unlinked work surfaced (e.g. unlinked branch pushed — prompt to create
+  task)
+- **Review:** review complete (post Review Summary — even when clean)
+- **Decision:** investigation or prototype concluded (capture the proceed/pivot/kill verdict)
+- **General:** user asks to sync, user asks to create a task
 
-Do NOT update on every commit or minor edit.
+Do NOT update on every minor edit, routine commit, or incremental save.
 
 **Dedup:** Before posting, call `entity_lookup` to read existing comments. If the most recent comment covers the same
 work with no new progress, skip.
@@ -50,34 +52,37 @@ All MCP calls require an `explanation` field — use a clear description of the 
 
 Find the Kestral task for the current work. Each step is 1–3 seconds except the last; stop as soon as you have a match:
 
-1. **Slug in branch name:** if the branch contains a slug (e.g. `kes-42-fix-auth`), call `entity_lookup` with the slug
-   directly — instant.
-2. **Branch→task exact match:** `execute_operation("find_task_by_branch", { branchName: "<current-branch>" })`. Returns
-   the task linked to this branch, if any (0 or 1 result).
+1. **Slug in context:** if the user mentioned a task slug (e.g. `KES-42`) or the git branch contains one (e.g.
+   `kes-42-fix-auth`), call `entity_lookup` with the slug directly — instant.
+2. **Branch→task exact match (code repos only):**
+   `execute_operation("find_task_by_branch", { branchName: "<current-branch>" })`. May return multiple tasks if the
+   branch is shared. One match → use it. Multiple → apply **Candidate Ranking** below. Skip this step outside code
+   repositories.
 3. **My active tasks:** `execute_operation("list_my_active_tasks", {})` — tasks assigned to me in todo or in_progress.
    Exactly one match → use it. Multiple → apply **Candidate Ranking** (title match first among my tasks).
 4. **Keyword search:**
-   `execute_operation("search_my_tasks_by_keyword", { keyword: "<branch-slug-as-words>", statusFilter: ["todo", "in_progress"] })`.
-   Convert the branch slug to words (e.g. `feat/improve-auth-flow` → `"improve auth flow"`). Scoped to my tasks — do not
-   use `search_tasks` with `assigneeFilter`; that param is dropped at validation.
+   `execute_operation("search_my_tasks_by_keyword", { keyword: "<keywords from current work>", statusFilter: ["todo", "in_progress"] })`.
+   Use keywords from your current work context (branch name, document title, topic). Scoped to my tasks — do not use
+   `search_tasks` with `assigneeFilter`; that param is dropped at validation.
 5. **`execute_operation("deep_research", { query })`** — **last resort only** (10–30 seconds). Frame as the user-facing
-   problem, include branch name.
+   problem.
 
 After resolution:
 
 - One clear match → use it
 - Multiple matches → apply **Candidate Ranking** below (get `memberId` from `whoami` once per session for assignment
   comparison); if still tied, ask the user to pick
-- No matches → ask the user; offer to create a task (see Task Creation)
+- No matches → auto-create a task (see Task Creation / Unlinked Branch Prompt); only ask the user if the project is
+  ambiguous
 - Hold the task ID in session context for subsequent updates
 
 If the user provided a task URL, slug, or ID directly, skip the chain and call `entity_lookup` immediately.
 
 #### Candidate Ranking
 
-When multiple candidates appear (especially from `deep_research`), rank by:
+When any step returns multiple candidates (including `find_task_by_branch` when tasks share a branch), rank by:
 
-1. **Title/scope match** — prefer the task whose title describes the branch/work over a loosely related match.
+1. **Title/scope match** — prefer the task whose title describes the current work over a loosely related match.
 2. **Status** — prefer Todo / In Progress over Done (Done → warn, do not silently link).
 3. **Assignment** — prefer tasks assigned to the current user (`assigneeId` === cached `memberId` from `whoami`) over
    unassigned, and unassigned over tasks assigned to someone else.
@@ -95,12 +100,12 @@ Skip archived projects (`archivedAt` non-null) when choosing a target — the se
 
 ### Conflict Check
 
-Before starting implementation or claiming a task:
+Before starting work or claiming a task:
 
 1. Get `memberId` from `whoami` (once per session when first needed; reuse cached result from Candidate Ranking if
    already fetched)
 2. Compare `entity.assigneeId` against `memberId`
-3. **Already done:** status is Done → verify against the codebase before redoing
+3. **Already done:** status is Done → verify the work is actually complete before redoing
 4. **No conflict:** `assigneeId` is null (and status Todo/Backlog) or matches current user
 5. **Conflict:** `assigneeId` differs AND status is active (In Progress, Awaiting Review, etc.)
 6. **On conflict or done:** warn user with `assigneeName`, `statusName`, and any open PRs from `prLinks`
@@ -111,19 +116,20 @@ already been done and propose a scope adjustment.
 
 ### Context Pull
 
-Before building, pull project context so the agent knows *why* the task exists:
+Before starting, pull project context so the agent knows *why* the task exists:
 
 1. **Identify project:** task → `entity_lookup` → `projectId`. Or `execute_operation("search_projects", { query })`; ask
    if ambiguous.
-2. **Pull project brain:** `entity_lookup({ id: "<projectId>", type: "project_brain" })`.
+2. **Pull project brain:** `execute_operation("get_project_brain", { projectId })`, or
+   `entity_lookup({ id: "<projectId>", type: "project_brain" })`.
    - Check `brainGenerationStatus` in the response: if `queued` or `running`, tell the user "Brain is building (~30s)"
      instead of "no brain found."
    - If no brain exists, mention `execute_operation("trigger_brain_build", { projectId })` as an option.
 3. **Pull related tasks:**
    `execute_operation("list_tasks_by_status", { statusFilter: ["todo", "in_progress"], projectId })`, or
    `execute_operation("search_tasks", { query: "<topic from task or project>" })` when a semantic topic fits better.
-4. **One-call alternative:** `execute_operation("get_implementation_context", { taskId })` — returns task + brain +
-   related in a single call.
+4. **One-call alternative:** `entity_lookup` with `{ id: taskId, type: "task" }` — returns task + brain + related in a
+   single call.
 5. **Pull customer feedback:** `execute_operation("search_feedback", { query })` — frame the query around the task or
    project topic to surface the user-facing *why*.
 6. **Summarize** — present a brief digest; do not dump the full brain output.
@@ -135,18 +141,20 @@ all your projects — useful at the start of a session.
 
 ## Task Creation
 
-### From Branch
+### From Current Work
 
-When the user wants a task for the current branch (no existing task found):
+When the user wants a task for work in progress (no existing task found):
 
-1. **Gather context:** `git branch --show-current`, `git log --oneline -20`, `git diff --stat main...HEAD`
-2. **Find project:** `execute_operation("search_projects", { query })` with branch/commit keywords; ask if ambiguous.
+1. **Gather context:** In a code repo: `git branch --show-current`, `git log --oneline -20`,
+   `git diff --stat main...HEAD`. Otherwise: summarize the current work from the conversation or documents at hand.
+2. **Find project:** `execute_operation("search_projects", { query })` with keywords from the work context; ask if
+   ambiguous.
 3. **Create:**
    `execute_operation("create_task", { projectId, title, description, checkDuplicates: true, source: "mcp" })` — title
-   from branch + commits, description as plain-language markdown (Summary, What was built, Why it matters). If blocked
-   as a duplicate, present the existing task instead of creating.
-4. **Register branch:** `execute_operation("register_branch_on_task", { taskId, branchName })` — enables step 2 of the
-   lookup chain for all future lookups.
+   from the work topic, description as plain-language markdown (Summary, What was done, Why it matters). If blocked as a
+   duplicate, present the existing task instead of creating.
+4. **Register branch (code repos only):** `execute_operation("register_branch_on_task", { taskId, branchName })` —
+   enables step 2 of the lookup chain for all future lookups. Skip outside code repositories.
 5. **Link PR** (if one exists): `execute_operation("link_pr_to_task", { taskId, prUrl })`.
 6. **Confirm:** present the task URL.
 
@@ -162,8 +170,115 @@ Description:
 - **Impact:** [who was affected, severity, duration if known]
 - **Related:** [link to support ticket, alert, or Slack thread if applicable]
 
+Steps (preferred — single compound call):
+
+1. **Find project:** `execute_operation("search_projects", { query })` with keywords from the fix context; ask if
+   ambiguous.
+2. **Create + register + link:**
+   `execute_operation("create_task_for_branch", { branchName, projectId, title, description, prUrl, source: "bugfix" })`.
+3. **Confirm:** present the task URL from the response.
+
+Alternative (when branch is not available or compound op unavailable):
+
+1. **Find project:** `execute_operation("search_projects", { query })`.
+2. **Create:**
+   `execute_operation("create_task", { projectId, title, description, checkDuplicates: true, source: "mcp" })`.
+3. **Register branch (code repos only):** `execute_operation("register_branch_on_task", { taskId, branchName })`.
+4. **Link PR** (if one exists): `execute_operation("link_pr_to_task", { taskId, prUrl })`.
+5. **Confirm:** present the task URL.
+
 If the PR is already merged: create with a completed/done status (use `list_statuses` to find the right key), link PR,
 skip progress comments — the task is a historical record.
+
+### From Plan
+
+After writing a structured plan with phases or checklists, offer to create tracking tasks. If the user declines, skip.
+
+1. **Find project:** `execute_operation("search_projects", { query })`. Ask user if ambiguous.
+2. **Batch create:** `execute_operation("create_tasks_batch", { projectId, tasks: [...] })` with
+   `duplicatePolicy: "block"` — one task per phase. `title` = phase title, `description` = checklist items as markdown
+   task list, `source: "cursor-plan"`. Review any `duplicates` in the response and present them to the user.
+3. **Subtasks:** Only for project-scale plans where phases are separate deliverables. For typical single-document plans,
+   phase-level tasks with checklist descriptions suffice.
+4. **Confirm:** Present created tasks as markdown links.
+
+### From Prototype
+
+Create at the start of a spike or prototype — framed as the **question being answered**, not the work being done.
+
+Title: `[Question being de-risked]` — e.g. "Should we use SSE or WebSockets for real-time updates?"
+
+Description:
+
+- **Question:** [what we're trying to answer]
+- **Approach:** [what we'll build/test — 1-2 sentences]
+- **Timebox:** [when we commit to a direction regardless]
+- **Success criteria:** [what evidence justifies proceed / pivot / kill]
+
+Steps:
+
+1. **Find project:** `execute_operation("search_projects", { query })` with keywords from the spike topic; ask if
+   ambiguous.
+2. **Create:**
+   `execute_operation("create_task", { projectId, title, description, checkDuplicates: true, source: "mcp" })`.
+3. **Register branch (code repos only):** `execute_operation("register_branch_on_task", { taskId, branchName })`.
+4. **Confirm:** present the task URL.
+
+On conclusion, the decision-capture flow updates this task: retitle with the decision verb if helpful, post a **Decision
+Comment**, link artifacts, and set status.
+
+### From Decision
+
+When a spike/prototype concluded with "proceed" and a follow-up implementation task is needed. Description must stand
+alone without reading the spike history.
+
+Title: the work to be done, user-facing framing (not "implement the decision")
+
+Description:
+
+```markdown
+## Context
+
+[1-2 sentences: the question we de-risked and what we decided]
+
+**Decision:** [proceed — chosen approach] **Validated by:** [link to spike/prototype task, mockup, or POC branch]
+**Trade-offs accepted:** [what we gave up, if notable]
+
+## Scope
+
+[What to build — from the decision rationale]
+
+**Out of scope:** [anything explicitly deferred]
+```
+
+Steps:
+
+1. **Find project:** same project as the originating spike/prototype task; otherwise
+   `execute_operation("search_projects", { query })` and ask if ambiguous.
+2. **Create:** `execute_operation("create_task", { projectId, title, description, checkDuplicates: true, source })` —
+   use `source: "cursor-plan"` if originating from a spike plan, otherwise `"mcp"`.
+3. **Link the chain:** reference the originating task in the new description, and post a comment on the originating task
+   (`execute_operation("add_task_comment", { taskId: originatingTaskId, content: "Follow-up implementation: [task link]" })`).
+4. **Confirm:** present the task URL.
+
+### Unlinked Branch — Auto-Create
+
+When syncing after a push and no Kestral task is linked to the current branch, **create a task automatically** — do not
+prompt the user for permission. The `create_task_for_branch` call is idempotent (`checkDuplicates: true`) and safe to
+call speculatively.
+
+1. Check if a task exists via Task Lookup (fast chain)
+2. If no match: gather context (`git log`, `git diff --stat`, branch name, PR if any) and determine the best project
+   (`search_projects` — if exactly one strong match, use it; if ambiguous, ask the user to pick a project only).
+3. Auto-create: prefer
+   `execute_operation("create_task_for_branch", { branchName, projectId, title, description, prUrl, source })` — this
+   does branch lookup, task creation, branch registration, and PR linking in one call. Fall back to **From Current
+   Work** (or **From Bugfix**) when the compound operation is unavailable.
+4. **Confirm:** present the task URL. If blocked as a duplicate, present the existing task and link the branch/PR to it
+   instead.
+
+**Skip auto-create when:** the work is a review-feedback fix, CI fix, small chore, or incidental commit (schema
+regeneration, dep bump, lint fix) on a branch that already has a linked task.
 
 ---
 
@@ -175,41 +290,46 @@ When the user picks up a task:
 
 1. Task Lookup (fast chain above)
 2. Conflict Check
-3. Derive and confirm the branch name (slug + title, lowercase hyphenated) — ask the user before registering it on the
-   task or creating the git branch.
-4. **Claim:** `execute_operation("claim_task_and_branch", { taskId, branchName })` — uses the confirmed name from step
-   3; single call replaces assign + status + branch + comment. Returns 409 if the branch is already linked to another
-   task (conflict signal).
-5. **Confirm:** "Claimed [slug], set to [status name]."
+3. **Claim:**
+   - **Code repos:** derive and confirm the branch name (slug + title, lowercase hyphenated) — ask the user before
+     registering it on the task or creating the git branch. Then:
+     `execute_operation("claim_task_and_branch", { taskId, branchName })` — single call replaces assign + status +
+     branch + comment.
+   - **Non-code contexts:** mirror the same semantics without a branch:
+     1. `execute_operation("update_task", { taskId, statusKey: "<in_progress_key>", assigneeId: "me" })` — assign self
+        and set in-progress (use `list_statuses` to find the in-progress key if unsure).
+     2. `execute_operation("add_task_comment", { taskId, content: "Started work on [slug]." })` — post the pickup
+        comment.
+4. **Confirm:** "Claimed [slug], set to [status name]."
 
 ### Status Update
 
-Call `list_statuses` first, then `execute_operation("update_task_status", { taskId, statusKey })`. Only update at
-meaningful transitions. Run the Acceptance Check before moving a task to a completed/review status.
+Call `list_statuses` first, then `execute_operation("update_task", { taskId, statusKey })`. Only update at meaningful
+transitions. Run the Acceptance Check before moving a task to a completed/review status.
 
-**PR merge gate:** A task's "done" or "completed" status means the PR is **merged**, not just that implementation is
-finished. If a linked PR is still open, use the workspace's review/pending status instead. The one exception: when no PR
-exists and the user explicitly confirms the work is complete, `done` is valid. Never mark a task complete while its PR
+**Completion gate:** A task's "done" or "completed" status means the work is **fully delivered** — not just finished on
+your end. If a linked PR is still open/unmerged, use the workspace's review/pending status instead. When no PR applies
+(non-code work, or user explicitly confirms completion), `done` is valid. Never mark a task complete while a linked PR
 is unmerged.
 
 ### Acceptance Check
 
-Before updating task status after implementation:
+Before updating task status after completing work:
 
 1. `entity_lookup` — get acceptance criteria from the task description
-2. `git diff --stat main...HEAD` — see what changed
+2. Review what was done — in a code repo: `git diff --stat main...HEAD`; otherwise: summarize the deliverables
 3. For each criterion: satisfied? (Yes / No / Partial)
-4. All satisfied → check PR merge state: use the workspace's review/pending status if PR is open/unmerged; only use the
-   completed/done status if the PR is merged. Gaps → report, ask user.
+4. All satisfied → if a PR exists, check merge state: use the workspace's review/pending status if PR is open/unmerged;
+   only use the completed/done status if the PR is merged (or no PR applies). Gaps → report, ask user.
 
 ---
 
 ## Comments
 
-Comments are posted via `execute_operation("post_progress_comment", { taskId, content })` for progress updates, or
-`execute_operation("add_task_comment", { taskId, content })` for other comment types. Follow the writing style rule:
-**conversational outcomes** ("Users can now filter by date range"), not implementation jargon ("Added filterByDateRange
-param"). No file paths or function names. 2–4 lines max.
+Comments are posted via `execute_operation("add_task_comment", { taskId, content })`. Format the content appropriately
+for the comment type (progress update, bugfix note, review summary, decision, retrospective). Follow the writing style
+rule: **conversational outcomes** ("Users can now filter by date range"), not implementation jargon ("Added
+filterByDateRange param"). No file paths or function names. 2–4 lines max.
 
 ### Progress Comment
 
@@ -248,7 +368,7 @@ When a spike or prototype concludes:
 
 ### Review Summary
 
-Post after completing a code review — **whether findings are clean or not**:
+Post after completing a review — **whether findings are clean or not**:
 
 ```markdown
 **Review Summary**
@@ -259,14 +379,25 @@ Post after completing a code review — **whether findings are clean or not**:
 **Up next:** [fixes needed, or "Ready for merge"]
 ```
 
+### Retrospective Comment
+
+Post when a review or incident reveals a process gap:
+
+```markdown
+**Retrospective**
+
+**What happened:** [the miss — what slipped through] **Why we missed it:** [root cause of the process gap] **What we
+changed:** [rule/check added or updated] **Prevents:** [class of issues this catches going forward]
+```
+
 ---
 
 ## Linking
 
-### Branch/PR Linking
+### Work Linking
 
-**Compound PR linking (preferred):**
-`execute_operation("complete_task_with_review", { taskId, prUrl, comment: "PR opened: <title>" })` — links the PR, sets
+**Code repos — compound PR linking (preferred):**
+`execute_operation("complete_task_with_review", { taskId, prUrl, summary: "PR opened: <title>" })` — links the PR, sets
 status to `awaiting_review`, and posts a comment in one call.
 
 - PR exists → `execute_operation("link_pr_to_task", { taskId, prUrl })` (auto-assigns if unassigned, posts GitHub PR
@@ -275,18 +406,61 @@ status to `awaiting_review`, and posts a comment in one call.
   `Started work on branch \`branch-name\``
 - Post each link **once per session**
 
+**Non-code contexts:** post a comment noting what was shared or delivered (e.g. a document link, design file, or
+deliverable URL).
+
+### Artifact Task References
+
+When creating structured documents (implementation plans, design docs, spike writeups), embed the linked Kestral task ID
+so future agents can reconnect to context without a lookup chain:
+
+- **Plan frontmatter:** include `kestralTaskId` and `kestralTaskUrl` fields
+- **Document headers:** include a task reference link or slug
+- **PR descriptions:** include the task slug for webhook auto-link
+
+This enables fast task lookup (step 1 of the lookup chain) and avoids repeated `find_task_by_branch` calls across
+sessions.
+
+### Draft PR Creation
+
+When the user confirms creating a draft PR:
+
+1. Check for existing PR: `gh pr list --head $(git branch --show-current) --json number,title,url,isDraft --limit 1`. If
+   exists, use Work Linking instead.
+2. Push branch if needed. If uncommitted changes remain, ask before committing.
+3. `gh pr create --draft` with outcome-focused title/body. For chore/no-task PRs, include
+   `<!-- kestral:skip-auto-link -->` in the body (see **GitHub PR auto-link directives**).
+4. If a Kestral task is linked: `execute_operation("link_pr_to_task", { taskId, prUrl })` with the new PR URL (once per
+   session). Skip when the PR uses the skip directive and has no task.
+5. Return PR URL to user.
+
+### GitHub PR auto-link directives
+
+Code repos only. When the workspace **Auto-link & create tasks on PR open** beta is enabled, Kestral may enqueue an AI
+job for PRs with no slug/branch match. Control this via the PR **body** (include when running `gh pr create` or editing
+on GitHub).
+
+| Intent                                                  | Action                                                                                                                                                                                                                                      |
+| ------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Link PR to tracked work** (default)                   | `execute_operation("register_branch_on_task", { taskId, branchName })` on first push; `execute_operation("link_pr_to_task", { taskId, prUrl })` after PR exists. Optional: put task slug in PR title for webhook slug auto-link without AI. |
+| **Skip AI auto-link** (chore / manifest bump / no task) | Add to PR body: `<!-- kestral:skip-auto-link -->` **or** `Kestral: skip auto-link`                                                                                                                                                          |
+
+Suppresses AI auto-link job enqueue and transient bot comments; does **not** affect `link_pr_to_task`, slug/branch
+webhook linking, or PR status automation. Use for `chore/*`, manifest bumps, and docs-only PRs without a task.
+
 ### Full Sync
 
 Complete sync workflow (user asks to sync, or auto-trigger fires):
 
 1. Proceed with MCP calls (OAuth at transport; stop on auth failure — 401, unauthorized, or `Not authenticated`)
-2. Diff context: `git log --oneline -10`, `git diff --stat main...HEAD`
+2. Gather context — in a code repo: `git log --oneline -10`, `git diff --stat main...HEAD`. Otherwise: summarize recent
+   work from the conversation or documents at hand.
 3. Task lookup (fast chain) — `entity_lookup` also returns existing comments
-4. **Dedup:** if the most recent comment covers the same branch/scope with no new progress → skip, confirm "no updates"
+4. **Dedup:** if the most recent comment covers the same scope with no new progress → skip, confirm "no updates"
 5. Status update (skip if already correct; Acceptance Check before marking complete)
 6. Comment — pick the format: Review Summary after a review, Decision Comment after a spike, Bugfix Comment for a fix,
    otherwise Progress Comment
-7. Branch/PR linking if applicable
+7. Work linking if applicable
 8. Confirm what was synced (include task URL)
 
 ---

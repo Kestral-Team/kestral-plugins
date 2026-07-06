@@ -51,6 +51,8 @@ Run searches in parallel using the user's query:
 4. If the query mentions customers, feedback, pain points, or what users say →
    `execute_operation("search_feedback", { query: "<topic>" })`
 
+`search_projects` results are discovery summaries only — not full Project Brain content. Pull full brain in step 4.
+
 ### 3. Present the context manifest
 
 Show what was found so the user can choose what to pull in:
@@ -117,7 +119,12 @@ For each selected document, call `execute_operation("get_document_content", { wo
 
 #### Projects
 
-For each selected project, call `entity_lookup({ id: "<projectId>", type: "project" })`.
+For each selected project, call `entity_lookup({ id: "<projectId>", type: "project" })`. The response includes Project
+Brain knowledge in the `knowledge` field (goals, blockers, next steps) when generated. If `hasKnowledge` is false, note
+that brain is unavailable or still building (`brainGenerationStatus`).
+
+For brain-only when you already have a project ID and do not need project metadata, use
+`execute_operation("get_project_brain", { projectId: "<projectId>" })` instead.
 
 Present project details:
 

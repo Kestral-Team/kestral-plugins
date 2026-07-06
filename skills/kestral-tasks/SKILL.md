@@ -150,10 +150,10 @@ Depending on the update type, call one or more tools:
 
 | Action              | Operation                                                           | Key params                       |
 | ------------------- | ------------------------------------------------------------------- | -------------------------------- |
-| Change status       | `execute_operation("update_task_status", ...)`                      | `taskId`, `statusKey`            |
+| Change status       | `execute_operation("update_task", ...)`                      | `taskId`, `statusKey`            |
 | Change priority     | `execute_operation("update_task", ...)`                             | `taskId`, `priority`             |
-| Change assignee     | `execute_operation("assign_task", ...)`                             | `taskId`, `assigneeId`           |
-| Unassign            | `execute_operation("assign_task", ...)`                             | `taskId`, `unassign: true`       |
+| Change assignee     | `execute_operation("update_task", ...)`                             | `taskId`, `assigneeId`           |
+| Unassign            | `execute_operation("update_task", ...)`                             | `taskId`, `unassign: true`       |
 | Change title        | `execute_operation("update_task", ...)`                             | `taskId`, `title`                |
 | Change description  | `execute_operation("update_task", ...)`                             | `taskId`, `description`          |
 | Set due date        | `execute_operation("update_task", ...)`                             | `taskId`, `dueDate` (YYYY-MM-DD) |

@@ -137,7 +137,7 @@ Agent: [calls entity_lookup with slug "KES-42"]
 
 You: push and sync
 
-Agent: [calls execute_operation("complete_task_with_review", { taskId, prUrl, comment:
+Agent: [calls execute_operation("complete_task_with_review", { taskId, prUrl, summary:
         "Users can now filter by date range — last 7/30/90 days plus custom." })]
        Synced KES-42:
          Status: In Progress → [review status]
