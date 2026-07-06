@@ -1,0 +1,53 @@
+.agents/plugins/marketplace.json
+  s_68f3650a2d8a3b::t_307ee7bf7749d0 9
+.claude-plugin/marketplace.json
+  s_68f3650a2d8a3b::t_c24d0bebcb355a 10
+.claude-plugin/plugin.json
+  s_68f3650a2d8a3b::t_5075468bb88b00 4
+.codex-plugin/plugin.json
+  s_68f3650a2d8a3b::t_e6171217dfa062 3
+.cursor-plugin/marketplace.json
+  s_68f3650a2d8a3b::t_ce61bd619de5d5 14
+.cursor-plugin/plugin.json
+  s_68f3650a2d8a3b::t_ef406e3a36e92c 3
+README.md
+  s_68f3650a2d8a3b::t_555b6ff9661bcd 103
+server.json
+  s_68f3650a2d8a3b::t_40da0371103777 10
+setup.sh
+  s_68f3650a2d8a3b::t_6a8b63a72046b9 51-54,574,649-656,672-678,730-743,745-746,895,905,2229-2233
+skills/kestral-context/SKILL.md
+  s_68f3650a2d8a3b::t_451bb3078cdc5b 54-55,122-127
+skills/kestral-end-day-review/SKILL.md
+  s_68f3650a2d8a3b::t_547b8046f7df27 72-73
+skills/kestral-plan-day/SKILL.md
+  s_68f3650a2d8a3b::t_263c7b3d9dd2f8 67-71,77-85,90-92,94-96,136-138,160-163,231,233-234
+skills/kestral-sync/README.md
+  s_68f3650a2d8a3b::t_f78d42ac4b11c3 140
+skills/kestral-sync/SKILL.md
+  s_68f3650a2d8a3b::t_8c4736bce45688 4-7,16-22,24,55-60,64-66,68,75-76,83,85,103,108,119,123-124,131-132,144,146,148-151,154-157,173-189,193-282,293-303,307-308,310-312,317,320,322-323,329-332,371,382-392,397,399-400,409-450,456-457,459,463
+skills/kestral-sync/rules/agents-snippet.md
+  s_68f3650a2d8a3b::t_2c5370bf1ec8dd 23,29,34,36,39,46-55,80,82,86
+skills/kestral-sync/rules/kestral-sync.mdc
+  s_68f3650a2d8a3b::t_a63998313582f3 30,40,47,49,53,57-64,95,97,101
+skills/kestral-tasks/SKILL.md
+  s_68f3650a2d8a3b::t_2b511b7ac19bf6 153,155-156
+version.json
+  s_68f3650a2d8a3b::t_2e45dde3ec5091 2
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "72569ccec16b289b4e6c1432d4f49c0c7b2b7107",
+  "prompts": {},
+  "sessions": {
+    "s_68f3650a2d8a3b": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "944c5f25-e00b-45d8-bde4-fe1c9a224d44",
+        "model": "composer-2.5"
+      },
+      "human_author": "Bernard Xie <bxie94@gmail.com>"
+    }
+  }
+}
