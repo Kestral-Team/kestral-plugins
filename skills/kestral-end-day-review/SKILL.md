@@ -43,14 +43,18 @@ Expected invocations include:
 
 Default order:
 
-1. Get today's date, timezone, and relevant agent session history for the local day. Session stores are agent-specific:
-   for example, Codex uses `~/.codex/sessions`, Claude Code uses `~/.claude/projects`, and other agents may use their
-   own local or hosted transcript stores.
-2. Read `.kestral/preferences.md` by checking the current workspace folder and then parent folders. Use the first match
+1. Get today's date and timezone. Fetch bundled close-out context with
+   `execute_operation("get_daily_closeout_context", { timezone })`. This returns `daily_brief`, `tasks_completed_today`,
+   `tasks_updated_today`, `tasks_in_progress`, `open_blockers`, `stale_tasks`, and `load_status` in one call. If any
+   `load_status.*` section is `false`, fall back to individual operations for that section (e.g. `get_daily_brief`,
+   task search with `queryType: "stale"` or `timeFilter`).
+2. Get relevant agent session history for the local day. Session stores are agent-specific: for example, Codex uses
+   `~/.codex/sessions`, Claude Code uses `~/.claude/projects`, and other agents may use their own local or hosted
+   transcript stores.
+3. Read `.kestral/preferences.md` by checking the current workspace folder and then parent folders. Use the first match
    as the source for durable user close-out and tomorrow-planning preferences, not as task or project state.
-3. Fetch the latest Kestral daily brief with `execute_operation("get_daily_brief", {})`.
-4. Search Kestral tasks, projects, feedback, knowledge, and document chunks for today, especially Project Brain or named
-   projects from the brief and agent session history.
+4. Search Kestral projects, feedback, knowledge, and document chunks for today, especially Project Brain or named
+   projects from the brief and agent session history. Skip task searches already covered by the close-out bundle.
 5. Read relevant Kestral entities directly when search results identify exact project, task, document, or project brain
    IDs.
 6. Check remote GitHub context when available: current branch commits, open or recently updated PRs, linked PRs, and

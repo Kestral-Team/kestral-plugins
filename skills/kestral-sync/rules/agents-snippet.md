@@ -81,7 +81,7 @@ After resolving a task via `entity_lookup`:
 | Register branch           | `execute_operation("register_branch_on_task", { taskId, branchName })`              |
 | Post comment              | `execute_operation("add_task_comment", { taskId, content })`                        |
 | Link PR                   | `execute_operation("link_pr_to_task", { taskId, prUrl })`                           |
-| Create task               | `execute_operation("create_task", { projectId, title, ... })`                       |
+| Create task               | Resolve `projectId` first (Project Selection); then `execute_operation("create_task", { projectId, title, ... })` |
 | Claim + start work        | `execute_operation("claim_task_and_branch", { taskId, branchName })`                |
 | Complete with PR          | `execute_operation("complete_task_with_review", { taskId, prUrl, summary })`        |
 | Complex operations        | `execute_operation("manage_project", { request })`                                  |

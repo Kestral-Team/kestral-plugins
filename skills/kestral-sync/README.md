@@ -22,8 +22,9 @@ flowchart LR
 
 ## Install
 
-Sync is **ambient-first** — the primary install is an always-on rule or snippet that fires automatically on push, PR
-creation, and phase completion. The explicit `/kestral:sync` invocation is a manual "sync now" escape hatch.
+Sync is **ambient-first** — the plugin installs hooks (Cursor + Claude Code) and an always-on rule so sync fires
+automatically on session start, push, and PR creation. The explicit `/kestral:sync` invocation is a manual "sync now"
+escape hatch.
 
 ### Claude Code / Claude Cowork
 
@@ -34,11 +35,14 @@ creation, and phase completion. The explicit `/kestral:sync` invocation is a man
    claude plugin install kestral@kestral-plugins
    ```
 
-2. **Ambient sync:** paste the contents of [`rules/agents-snippet.md`](rules/agents-snippet.md) into your project's
-   `AGENTS.md` or `CLAUDE.md`. This gives the agent the sync triggers — it will read the full skill automatically when
-   needed.
+2. **Hooks (automatic):** the plugin registers session-start and post-push hooks so the agent loads sync instructions
+   and reminds itself to Full Sync after `git push`, Graphite submit, or `gh pr create`. Reload plugins or restart
+   Claude Code after install/update.
 
-3. **Manual sync:** run `/kestral:sync` in the chat whenever you want an immediate sync.
+3. **Ambient sync (optional backup):** paste the contents of [`rules/agents-snippet.md`](rules/agents-snippet.md) into
+   your project's `AGENTS.md` or `CLAUDE.md` if you want the same triggers written into project docs.
+
+4. **Manual sync:** run `/kestral:sync` in the chat whenever you want an immediate sync.
 
 ### Codex
 
@@ -57,10 +61,10 @@ creation, and phase completion. The explicit `/kestral:sync` invocation is a man
 curl -fsSL https://raw.githubusercontent.com/Kestral-Team/kestral-plugins/main/setup.sh | bash -s -- --app cursor
 ```
 
-Fully quit and restart Cursor. The plugin rule loads automatically — no manual copy into `.cursor/rules/`.
+Fully quit and restart Cursor. The plugin rule and sync hooks load automatically — no manual copy into `.cursor/rules/`.
 
 1. **Authenticate** — Settings → **Tools & MCPs** → **Connect** on **Kestral** if prompted.
-2. **Ambient sync** — the plugin rule loads automatically.
+2. **Ambient sync** — the plugin rule plus session-start / post-push hooks load automatically.
 3. **Manual sync** — ask the agent to sync with Kestral, or invoke the `kestral-sync` skill.
 
 **Team admins:** add marketplace `Kestral-Team/kestral-plugins` at [cursor.com/dashboard](https://cursor.com/dashboard).
@@ -78,7 +82,7 @@ Fully quit and restart Cursor. The plugin rule loads automatically — no manual
    ```
 
 2. **Ambient sync (Cursor):** copy [`rules/kestral-sync.mdc`](rules/kestral-sync.mdc) into `.cursor/rules/`.
-3. **Full skill (optional):** copy [`SKILL.md`](SKILL.md) into `.cursor/skills/kestral-sync/SKILL.md`.
+3. **Full skill (optional):** copy [`SKILL.md`](SKILL.md) into `.agents/skills/kestral-sync/SKILL.md`.
 
 ### VS Code
 

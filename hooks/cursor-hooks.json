@@ -1,0 +1,23 @@
+{
+  "version": 1,
+  "hooks": {
+    "sessionStart": [
+      {
+        "command": "bash -c 'ROOT=\"${CURSOR_PLUGIN_ROOT:-${CLAUDE_PLUGIN_ROOT:-}}\"; exec bash \"$ROOT/scripts/kestralSessionContext.sh\" cursor'"
+      }
+    ],
+    "postToolUse": [
+      {
+        "command": "bash -c 'ROOT=\"${CURSOR_PLUGIN_ROOT:-${CLAUDE_PLUGIN_ROOT:-}}\"; exec bash \"$ROOT/scripts/kestralSyncReminder.sh\" cursor'",
+        "matcher": "Shell"
+      }
+    ],
+    "beforeMCPExecution": [
+      {
+        "command": "bash -c 'ROOT=\"${CURSOR_PLUGIN_ROOT:-${CLAUDE_PLUGIN_ROOT:-}}\"; exec bash \"$ROOT/scripts/kestralMcpSchemaCheck.sh\" cursor'",
+        "matcher": "Kestral|user-Kestral|user-kestral(-dev)?",
+        "failClosed": false
+      }
+    ]
+  }
+}

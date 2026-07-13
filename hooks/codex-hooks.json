@@ -1,0 +1,40 @@
+{
+  "hooks": {
+    "SessionStart": [
+      {
+        "matcher": "startup|resume|clear|compact",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash -c 'ROOT=\"${PLUGIN_ROOT:-${CLAUDE_PLUGIN_ROOT:-}}\"; exec bash \"$ROOT/scripts/kestralSessionContext.sh\" codex'",
+            "timeout": 10
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash -c 'ROOT=\"${PLUGIN_ROOT:-${CLAUDE_PLUGIN_ROOT:-}}\"; exec bash \"$ROOT/scripts/kestralSyncReminder.sh\" codex'",
+            "timeout": 10
+          }
+        ]
+      }
+    ],
+    "PreToolUse": [
+      {
+        "matcher": "mcp__.*(Kestral|kestral).*__execute_operation",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash -c 'ROOT=\"${PLUGIN_ROOT:-${CLAUDE_PLUGIN_ROOT:-}}\"; exec bash \"$ROOT/scripts/kestralMcpSchemaCheck.sh\" codex'",
+            "timeout": 10
+          }
+        ]
+      }
+    ]
+  }
+}

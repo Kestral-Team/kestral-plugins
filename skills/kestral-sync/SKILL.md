@@ -112,7 +112,8 @@ Before starting work or claiming a task:
 7. Ask: **proceed** / **coordinate** / **pick a different task**
 
 **Adjacent-work:** if lookup returns near-matches that overlap the planned scope and are active or Done, surface what's
-already been done and propose a scope adjustment.
+already been done and propose a scope adjustment. Prefer creating a separate task linked with `create_task_relationship`
+(`relationshipType: "related"`) over silently adopting a Done task.
 
 ### Context Pull
 
@@ -141,14 +142,37 @@ all your projects — useful at the start of a session.
 
 ## Task Creation
 
+### Project Selection
+
+Before creating any task, resolve a `projectId`. Never guess from nearby chat topics alone.
+
+1. **Prefer an already-linked project** when one exists (linked task, originating spike/prototype task, or confirmed
+   branch task).
+2. **Otherwise search:** `execute_operation("search_projects", { query })` with keywords from the **task subject and
+   intended workstream** (what the work is for), not product names that only appear in adjacent conversation. If
+   `sync_session_workflow` returned `context.projects`, treat that list as candidates and **re-rank** — do not pick the
+   first or most salient name match.
+3. **Skip archived projects** (`archivedAt` non-null).
+4. **Match work type:**
+   - Product / launch / build work → projects about shipping that product.
+   - Customer follow-up / deal support / call routing → existing triage or customer-request buckets whose description
+     matches that work type — not a product-launch project just because the follow-up mentions a product.
+5. **Decide:**
+   - Exactly one strong match → use it.
+   - Several plausible matches → surface the top candidates (name + ID) and ask the user; do not hard-assume.
+   - Unclear → prefer in order: strongest existing work-type fit → a general triage / routing bucket → ask the user.
+6. **Do not create a new project** unless the user explicitly asks for one, or search shows no reasonable existing
+   destination. Never create a single-customer project as a shortcut.
+7. **After the user rejects a project:** re-rank the remaining existing projects for the work type. Do **not** call
+   `create_project` as the recovery default.
+
 ### From Current Work
 
 When the user wants a task for work in progress (no existing task found):
 
 1. **Gather context:** In a code repo: `git branch --show-current`, `git log --oneline -20`,
    `git diff --stat main...HEAD`. Otherwise: summarize the current work from the conversation or documents at hand.
-2. **Find project:** `execute_operation("search_projects", { query })` with keywords from the work context; ask if
-   ambiguous.
+2. **Project:** apply **Project Selection**.
 3. **Create:**
    `execute_operation("create_task", { projectId, title, description, checkDuplicates: true, source: "mcp" })` — title
    from the work topic, description as plain-language markdown (Summary, What was done, Why it matters). If blocked as a
@@ -172,15 +196,14 @@ Description:
 
 Steps (preferred — single compound call):
 
-1. **Find project:** `execute_operation("search_projects", { query })` with keywords from the fix context; ask if
-   ambiguous.
+1. **Project:** apply **Project Selection** (keywords from the fix context).
 2. **Create + register + link:**
    `execute_operation("create_task_for_branch", { branchName, projectId, title, description, prUrl, source: "bugfix" })`.
 3. **Confirm:** present the task URL from the response.
 
 Alternative (when branch is not available or compound op unavailable):
 
-1. **Find project:** `execute_operation("search_projects", { query })`.
+1. **Project:** apply **Project Selection**.
 2. **Create:**
    `execute_operation("create_task", { projectId, title, description, checkDuplicates: true, source: "mcp" })`.
 3. **Register branch (code repos only):** `execute_operation("register_branch_on_task", { taskId, branchName })`.
@@ -194,7 +217,7 @@ skip progress comments — the task is a historical record.
 
 After writing a structured plan with phases or checklists, offer to create tracking tasks. If the user declines, skip.
 
-1. **Find project:** `execute_operation("search_projects", { query })`. Ask user if ambiguous.
+1. **Project:** apply **Project Selection**.
 2. **Batch create:** `execute_operation("create_tasks_batch", { projectId, tasks: [...] })` with
    `duplicatePolicy: "block"` — one task per phase. `title` = phase title, `description` = checklist items as markdown
    task list, `source: "cursor-plan"`. Review any `duplicates` in the response and present them to the user.
@@ -217,8 +240,7 @@ Description:
 
 Steps:
 
-1. **Find project:** `execute_operation("search_projects", { query })` with keywords from the spike topic; ask if
-   ambiguous.
+1. **Project:** apply **Project Selection** (keywords from the spike topic).
 2. **Create:**
    `execute_operation("create_task", { projectId, title, description, checkDuplicates: true, source: "mcp" })`.
 3. **Register branch (code repos only):** `execute_operation("register_branch_on_task", { taskId, branchName })`.
@@ -253,8 +275,8 @@ Description:
 
 Steps:
 
-1. **Find project:** same project as the originating spike/prototype task; otherwise
-   `execute_operation("search_projects", { query })` and ask if ambiguous.
+1. **Project:** same project as the originating spike/prototype task when available; otherwise apply **Project
+   Selection**.
 2. **Create:** `execute_operation("create_task", { projectId, title, description, checkDuplicates: true, source })` —
    use `source: "cursor-plan"` if originating from a spike plan, otherwise `"mcp"`.
 3. **Link the chain:** reference the originating task in the new description, and post a comment on the originating task
@@ -268,14 +290,28 @@ prompt the user for permission. The `create_task_for_branch` call is idempotent 
 call speculatively.
 
 1. Check if a task exists via Task Lookup (fast chain)
-2. If no match: gather context (`git log`, `git diff --stat`, branch name, PR if any) and determine the best project
-   (`search_projects` — if exactly one strong match, use it; if ambiguous, ask the user to pick a project only).
+2. If no match: gather context (`git log`, `git diff --stat`, branch name, PR if any) and apply **Project Selection**.
 3. Auto-create: prefer
    `execute_operation("create_task_for_branch", { branchName, projectId, title, description, prUrl, source })` — this
    does branch lookup, task creation, branch registration, and PR linking in one call. Fall back to **From Current
    Work** (or **From Bugfix**) when the compound operation is unavailable.
-4. **Confirm:** present the task URL. If blocked as a duplicate, present the existing task and link the branch/PR to it
-   instead.
+4. **Confirm:** present the task URL. Interpret the create response with this three-outcome table:
+
+| Response signal                                           | Meaning                                                            | What to do                                                                                  |
+| --------------------------------------------------------- | ------------------------------------------------------------------ | ------------------------------------------------------------------------------------------- |
+| `created: false` + Done `warning` (true duplicate/reopen) | Matched an existing Done task                                      | Ask the user: reopen/continue that task, or create new work? Do **not** silently adopt.     |
+| `created: true` + `relatedTo`                             | New task created and linked as related to a near-miss (often Done) | Treat as success. Branch/PR are on the **new** task only. Mention the related task briefly. |
+| `created: true` with no `relatedTo` / no Done warning     | Fresh create, unrelated                                            | Confirm the new task URL as usual.                                                          |
+| Blocked as duplicate (open task)                          | High-confidence open match                                         | Present the existing task and link branch/PR to it instead of creating.                     |
+
+If the user confirms **new work** after a Done duplicate warning (no `relatedTo`), create via **From Bugfix** or **From
+Current Work** with `duplicatePolicy: "create_anyway"` and
+`overrideReason: "New work, existing task was already completed"`, then optionally
+`execute_operation("create_task_relationship", { fromTaskId: newTaskId, toTaskId: doneTaskId, relationshipType: "related" })`
+to attach a related edge.
+
+Use `create_task_relationship` anytime you need an ad-hoc `related` / `blocker` / `replaces` link between two existing
+tasks (outside create-time `replacementForTaskId` for replaces).
 
 **Skip auto-create when:** the work is a review-feedback fix, CI fix, small chore, or incidental commit (schema
 regeneration, dep bump, lint fix) on a branch that already has a linked task.

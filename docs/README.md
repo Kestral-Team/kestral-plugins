@@ -1,8 +1,8 @@
 # Kestral Plugin
 
-Connect Claude Code, Claude Cowork, or Codex to [Kestral](https://app.kestral.ai) — an AI-powered project management tool for
-teams. Kestral stores your projects, tasks, documents, and customer feedback, and gives an AI agent context about all of
-it.
+Connect Claude Code, Claude Cowork, or Codex to [Kestral](https://app.kestral.ai) — an AI-powered project management
+tool for teams. Kestral stores your projects, tasks, documents, and customer feedback, and gives an AI agent context
+about all of it.
 
 This plugin lets you work with Kestral directly from the chat: onboard a project from your connected tools, search and
 update tasks, pull workspace knowledge into a conversation, or scaffold a new project with tasks.
@@ -21,8 +21,8 @@ update tasks, pull workspace knowledge into a conversation, or scaffold a new pr
 
 ## Install
 
-**Recommended:** one command connects to Kestral at `https://app.kestral.ai/mcp` and installs to detected apps
-(Claude Code and/or Codex on macOS and Linux; Claude Cowork is macOS only; Cursor via `--app cursor`):
+**Recommended:** one command connects to Kestral at `https://app.kestral.ai/mcp` and installs to detected apps (Claude
+Code and/or Codex on macOS and Linux; Claude Cowork is macOS only; Cursor via `--app cursor`):
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/Kestral-Team/kestral-plugins/main/setup.sh | bash
@@ -45,7 +45,8 @@ curl -fsSL https://raw.githubusercontent.com/Kestral-Team/kestral-plugins/main/s
 The script checks prerequisites and registers the marketplace. On macOS it can also install to Claude Cowork (writes
 plugin files under `~/Library/Application Support/Claude/`).
 [View source](https://github.com/Kestral-Team/kestral-plugins/blob/main/setup.sh) or download first:
-`curl -fsSL https://raw.githubusercontent.com/Kestral-Team/kestral-plugins/main/setup.sh -o kestral-setup.sh && less kestral-setup.sh` then `bash kestral-setup.sh`.
+`curl -fsSL https://raw.githubusercontent.com/Kestral-Team/kestral-plugins/main/setup.sh -o kestral-setup.sh && less kestral-setup.sh`
+then `bash kestral-setup.sh`.
 
 Pick your app below for manual steps (the same steps the script automates).
 
@@ -63,6 +64,9 @@ Pick your app below for manual steps (the same steps the script automates).
    claude plugin install kestral@kestral-plugins
    ```
 
+   After install, reload plugins or restart Claude Code so session-start, post-push, and Kestral request-checking hooks
+   register.
+
 3. In chat, run the setup skill:
 
    ```
@@ -79,7 +83,8 @@ Pick your app below for manual steps (the same steps the script automates).
 3. Choose **Add from a repository** (sync a marketplace from a GitHub repository or git URL).
 4. In the URL field, enter `Kestral-Team/kestral-plugins`, then click **Sync**.
 5. Click **+** on the **Kestral** card to install the plugin.
-6. Kestral is set up automatically when the plugin installs — no extra configuration. If Kestral isn't available in a new chat, fully quit and restart Cowork, then try again.
+6. Kestral is set up automatically when the plugin installs — no extra configuration. If Kestral isn't available in a
+   new chat, fully quit and restart Cowork, then try again.
 7. In Cowork, run `/kestral-setup` to sign up or login, connect your workspace, and start onboarding.
 
 ### Codex App
@@ -94,47 +99,50 @@ Pick your app below for manual steps (the same steps the script automates).
    `$kestral-tasks`, `$kestral-context`, or type `@kestral` to target the plugin.
 
 After installing in Codex, fully quit and restart the app so it reloads the plugin cache. In a new thread, type `$` and
-look for `kestral-setup`, `kestral-tasks`, or `kestral-context`.
+look for `kestral-setup`, `kestral-tasks`, or `kestral-context`. Review and trust the Kestral hooks when Codex prompts;
+they load session context, remind the agent to sync after a push or PR, and check Kestral requests before sending them.
+In Codex CLI, use `/hooks` to review them at any time.
 
 ### Cursor
 
-**Recommended:** one command installs the full bundle (MCP, plan-day, end-day-review skills, and ambient sync rule):
+**Recommended:** one command installs the full bundle (MCP, plan-day, end-day-review skills, ambient sync rule, and sync
+hooks):
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/Kestral-Team/kestral-plugins/main/setup.sh | bash -s -- --app cursor
 ```
 
-Then fully quit and restart Cursor. Open **Settings → Tools & MCPs** and click **Connect** on **Kestral** if authentication
-is required. In agent chat, try **plan my day**, **end of day review**, or push a branch linked to a Kestral task.
+Then fully quit and restart Cursor. Open **Settings → Tools & MCPs** and click **Connect** on **Kestral** if
+authentication is required. In agent chat, try **plan my day**, **end of day review**, or push a branch linked to a
+Kestral task. Sync hooks remind the agent to update Kestral after push or PR create.
 
-**Team admins:** add marketplace `Kestral-Team/kestral-plugins` at [cursor.com/dashboard](https://cursor.com/dashboard) →
-Settings → Plugins.
+**Team admins:** add marketplace `Kestral-Team/kestral-plugins` at [cursor.com/dashboard](https://cursor.com/dashboard)
+→ Settings → Plugins.
 
 **MCP only (no skills):** use **Settings → Tools & MCPs → Add MCP Server** with URL `https://app.kestral.ai/mcp`, or the
 one-click install link from the Kestral Integrations page.
 
 ## What you can do
 
-| Command            | What it does                                                              | Example                                                                                    |
-| ------------------ | ------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------ |
-| `/kestral:kestral-setup`    | Set up a Kestral project with a Project Brain from connected tools and goals. | `/kestral:kestral-setup` → authenticates, finds your work, shows a manifest, creates project + brain.     |
-| `/kestral:tasks`   | Search, view, and update tasks in your workspace.                         | `/kestral:tasks show my open tasks in the auth project` → returns a filtered task list.    |
-| `/kestral:context` | Pull docs, projects, and tasks into the chat as context.                  | `/kestral:context auth migration` → finds matching docs and tasks, asks which to load.     |
+| Command                  | What it does                                                                  | Example                                                                                               |
+| ------------------------ | ----------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------- |
+| `/kestral:kestral-setup` | Set up a Kestral project with a Project Brain from connected tools and goals. | `/kestral:kestral-setup` → authenticates, finds your work, shows a manifest, creates project + brain. |
+| `/kestral:tasks`         | Search, view, and update tasks in your workspace.                             | `/kestral:tasks show my open tasks in the auth project` → returns a filtered task list.               |
+| `/kestral:context`       | Pull docs, projects, and tasks into the chat as context.                      | `/kestral:context auth migration` → finds matching docs and tasks, asks which to load.                |
 
-In Claude Code, type `/kestral:` and use autocomplete to see all available commands.
-In Codex, type `@kestral` to target the plugin, or invoke a bundled skill directly with `$kestral-setup`,
-`$kestral-tasks`, or `$kestral-context`.
+In Claude Code, type `/kestral:` and use autocomplete to see all available commands. In Codex, type `@kestral` to target
+the plugin, or invoke a bundled skill directly with `$kestral-setup`, `$kestral-tasks`, or `$kestral-context`.
 
 ## Getting started
 
 Run `/kestral:kestral-setup` to start. The skill walks you through four steps:
 
-1. **Authenticate** — on first use, your app prompts you to authenticate. Sign in through the browser window that
-   opens, select your workspace, and you're connected. Tokens are managed automatically after that.
+1. **Authenticate** — on first use, your app prompts you to authenticate. Sign in through the browser window that opens,
+   select your workspace, and you're connected. Tokens are managed automatically after that.
 
 2. **Set up your project** — explains what you get: a Kestral project with a Project Brain — a living summary for you,
-   your coding agents, and your team. Asks where your context lives — Linear, Jira, Notion, Drive, Granola notes,
-   local files/folders, or a goal you're working toward.
+   your coding agents, and your team. Asks where your context lives — Linear, Jira, Notion, Drive, Granola notes, local
+   files/folders, or a goal you're working toward.
 
 3. **Review the manifest** — a summary of your project: tasks and documents pulled from connected tools, any local files
    you included, and a title/description it inferred. Every item is labelled by source. You can add, remove, or edit
@@ -169,10 +177,10 @@ conversations.
 
 ### Documents
 
-| Source               | File types                                | Notes                                                                                    |
-| -------------------- | ----------------------------------------- | ---------------------------------------------------------------------------------------- |
-| MCP document sources | Notion, Google Drive, Slack, Confluence   | Linked into Kestral with source provenance (not copied). Detected automatically when the MCP is loaded. Nothing is pulled in unless you ask for it. |
-| Local files          | `.md`, `.txt`, `.doc`, `.docx`, and more  | Mention a file or folder if you want it included — same as any other source. |
+| Source               | File types                               | Notes                                                                                                                                               |
+| -------------------- | ---------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------- |
+| MCP document sources | Notion, Google Drive, Slack, Confluence  | Linked into Kestral with source provenance (not copied). Detected automatically when the MCP is loaded. Nothing is pulled in unless you ask for it. |
+| Local files          | `.md`, `.txt`, `.doc`, `.docx`, and more | Mention a file or folder if you want it included — same as any other source.                                                                        |
 
 ### Tasks
 
@@ -182,17 +190,17 @@ Protocol (the way Claude Code talks to external tools).
 
 ## Troubleshooting
 
-| Problem | Fix |
-| ------- | --- |
-| Auth required / not authenticated | Reconnect or authenticate the **Kestral** MCP server in your app's MCP settings — a browser should open for sign-in. |
-| Project Brain not enabled | Ask your workspace admin to enable it, then generate from the project page. |
-| MCP won't connect | Re-run the setup script, restart your AI app, and confirm **Kestral** appears in your MCP server list. |
-| Local file upload fails | File uploads use presigned URLs and require network egress. On **Claude Cowork**: Settings → Capabilities → enable "Allow network egress" → add `storage.googleapis.com` and `app.kestral.ai`. On **Codex**: Settings → Configuration → enable "Allow network access". You can also upload files manually from the Kestral project page. |
-| Codex: plugin added but no skills | Restart Codex after install. Enable the plugin under **Plugins** if it is disabled. |
-| Cursor: plugin installed but MCP needs auth | Open **Settings → Tools & MCPs**, click **Connect** on **Kestral**, and sign in through your browser. |
-| Cursor: skills not appearing | Fully quit and restart Cursor after install. Confirm the Kestral plugin is enabled under **Plugins**. |
-| Reinstall still uses old plugin content | Run setup with `--full-reinstall`, then fully quit and restart your AI app before starting a new chat or thread. |
-| Network errors | Check your connection. If the error persists, re-run setup. |
+| Problem                                     | Fix                                                                                                                                                                                                                                                                                                                                      |
+| ------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Auth required / not authenticated           | Reconnect or authenticate the **Kestral** MCP server in your app's MCP settings — a browser should open for sign-in.                                                                                                                                                                                                                     |
+| Project Brain not enabled                   | Ask your workspace admin to enable it, then generate from the project page.                                                                                                                                                                                                                                                              |
+| MCP won't connect                           | Re-run the setup script, restart your AI app, and confirm **Kestral** appears in your MCP server list.                                                                                                                                                                                                                                   |
+| Local file upload fails                     | File uploads use presigned URLs and require network egress. On **Claude Cowork**: Settings → Capabilities → enable "Allow network egress" → add `storage.googleapis.com` and `app.kestral.ai`. On **Codex**: Settings → Configuration → enable "Allow network access". You can also upload files manually from the Kestral project page. |
+| Codex: plugin added but no skills           | Restart Codex after install. Enable the plugin under **Plugins** if it is disabled.                                                                                                                                                                                                                                                      |
+| Cursor: plugin installed but MCP needs auth | Open **Settings → Tools & MCPs**, click **Connect** on **Kestral**, and sign in through your browser.                                                                                                                                                                                                                                    |
+| Cursor: skills not appearing                | Fully quit and restart Cursor after install. Confirm the Kestral plugin is enabled under **Plugins**.                                                                                                                                                                                                                                    |
+| Reinstall still uses old plugin content     | Run setup with `--full-reinstall`, then fully quit and restart your AI app before starting a new chat or thread.                                                                                                                                                                                                                         |
+| Network errors                              | Check your connection. If the error persists, re-run setup.                                                                                                                                                                                                                                                                              |
 
 ## Links
 
