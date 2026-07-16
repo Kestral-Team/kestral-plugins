@@ -50,6 +50,26 @@ then `bash kestral-setup.sh`.
 
 Pick your app below for manual steps (the same steps the script automates).
 
+### Sync hooks (optional)
+
+During setup, the script explains sync hooks and asks whether to enable them (default: yes). You can also pass a flag:
+
+```bash
+# Recommended — keep tasks updated after push / pull request
+bash setup.sh --with-hooks
+
+# Skills and Kestral still work; sync when you ask
+bash setup.sh --no-hooks
+
+# Turn hooks back on later without reinstalling everything
+bash setup.sh --hooks-only
+```
+
+**Why enable them?** Without hooks, your coding app can update Kestral when it remembers — but it's easy to forget
+after a push or pull request. With hooks, it gets a reminder at session start and after push/PR, so tasks stay up to
+date. Hooks only nudge the app; they don't change your git history. Choosing no is fine — you can re-enable anytime
+with `--hooks-only`. On Codex, trust the hooks in `/hooks` after enabling.
+
 ### Claude Code
 
 1. From your terminal or within Claude Code, add the Kestral plugin marketplace:

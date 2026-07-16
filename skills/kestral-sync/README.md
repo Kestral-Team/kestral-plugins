@@ -22,49 +22,59 @@ flowchart LR
 
 ## Install
 
-Sync is **ambient-first** — the plugin installs hooks (Cursor + Claude Code) and an always-on rule so sync fires
-automatically on session start, push, and PR creation. The explicit `/kestral:sync` invocation is a manual "sync now"
-escape hatch.
+Sync is **ambient-first** when hooks are enabled: session-start and post-push reminders keep tasks current. Hooks are
+**optional** — setup explains why and asks before enabling (default yes). Skills and the Kestral connection still work
+if you decline; sync when you ask, or re-enable later with `bash setup.sh --hooks-only`.
+
+The explicit `/kestral:sync` (or `$kestral-sync`) invocation is a manual "sync now" escape hatch.
+
+**Recommended one-shot install** (Claude Code, Cowork, Codex, and/or Cursor):
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/Kestral-Team/kestral-plugins/main/setup.sh | bash
+```
+
+Flags: `--with-hooks` / `--no-hooks` / `--hooks-only` / `--app claude-code|codex|cursor`. See the [plugin README](../../README.md).
 
 ### Claude Code / Claude Cowork
 
-1. Install the Kestral plugin if you haven't already:
+1. Install via `setup.sh` or:
 
    ```bash
    claude plugin marketplace add Kestral-Team/kestral-plugins
    claude plugin install kestral@kestral-plugins
    ```
 
-2. **Hooks (automatic):** the plugin registers session-start and post-push hooks so the agent loads sync instructions
-   and reminds itself to Full Sync after `git push`, Graphite submit, or `gh pr create`. Reload plugins or restart
-   Claude Code after install/update.
+2. **Hooks (if enabled):** session-start and post-push reminders. Reload plugins or restart Claude Code after
+   install/update.
 
-3. **Ambient sync (optional backup):** paste the contents of [`rules/agents-snippet.md`](rules/agents-snippet.md) into
-   your project's `AGENTS.md` or `CLAUDE.md` if you want the same triggers written into project docs.
+3. **Ambient sync (optional backup):** paste [`rules/agents-snippet.md`](rules/agents-snippet.md) into your project's
+   `AGENTS.md` or `CLAUDE.md` if you want the same triggers in project docs.
 
-4. **Manual sync:** run `/kestral:sync` in the chat whenever you want an immediate sync.
+4. **Manual sync:** run `/kestral:sync` whenever you want an immediate sync.
 
 ### Codex
 
-1. Install the Kestral plugin via **Plugins > More > Add more** with repo `Kestral-Team/kestral-plugins`.
+1. Install via `setup.sh` or **Plugins > More > Add more** with repo `Kestral-Team/kestral-plugins`.
 
-2. **Ambient sync:** paste the contents of [`rules/agents-snippet.md`](rules/agents-snippet.md) into your project's
-   `AGENTS.md`. Codex reads this on every task.
+2. **Hooks (if enabled):** review and trust them in `/hooks` when Codex prompts.
 
-3. **Manual sync:** type `$kestral-sync` or `@kestral` to target the plugin.
+3. **Ambient sync backup:** paste [`rules/agents-snippet.md`](rules/agents-snippet.md) into your project's `AGENTS.md`.
+
+4. **Manual sync:** type `$kestral-sync` or `@kestral` to target the plugin.
 
 ### Cursor
 
-**Recommended:** install the full bundle with one command (MCP, skills, and always-on sync rule):
+**Recommended:**
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/Kestral-Team/kestral-plugins/main/setup.sh | bash -s -- --app cursor
 ```
 
-Fully quit and restart Cursor. The plugin rule and sync hooks load automatically — no manual copy into `.cursor/rules/`.
+Fully quit and restart Cursor.
 
 1. **Authenticate** — Settings → **Tools & MCPs** → **Connect** on **Kestral** if prompted.
-2. **Ambient sync** — the plugin rule plus session-start / post-push hooks load automatically.
+2. **Hooks (if enabled)** — session-start / post-push reminders load with the plugin.
 3. **Manual sync** — ask the agent to sync with Kestral, or invoke the `kestral-sync` skill.
 
 **Team admins:** add marketplace `Kestral-Team/kestral-plugins` at [cursor.com/dashboard](https://cursor.com/dashboard).
