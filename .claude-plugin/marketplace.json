@@ -7,7 +7,7 @@
   "plugins": [
     {
       "name": "kestral",
-      "version": "0.4.31",
+      "version": "0.4.32",
       "source": "./",
       "policy": { "installation": "AVAILABLE", "authentication": "ON_INSTALL" },
       "category": "Productivity"

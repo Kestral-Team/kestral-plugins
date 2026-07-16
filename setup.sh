@@ -942,7 +942,20 @@ install_or_update_plugin() {
   fi
 
   if printf '%s' "$_output" | grep -qi 'already installed'; then
-    ok "Kestral plugin is up to date"
+    # marketplace update alone does not refresh the installed plugin
+    log "Already installed — updating plugin..."
+    set +e
+    _output="$(_run_claude_cmd plugin update "$PLUGIN_ID")"
+    _rc=$?
+    set -e
+    verbose "plugin update output: $_output (rc=$_rc)"
+    if [ "$_rc" -eq 0 ]; then
+      ok "Kestral plugin updated"
+      return 0
+    fi
+    warn "Plugin update failed — using existing install."
+    verbose "update failure: $_output"
+    ok "Kestral plugin is installed"
     return 0
   fi
 
