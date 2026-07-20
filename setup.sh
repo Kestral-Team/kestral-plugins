@@ -489,7 +489,12 @@ _codex_marketplace_root() {
     return 0
   fi
   local _candidate
+  # Codex stores git marketplaces under ~/.codex/.tmp/marketplaces/ (not
+  # plugins/marketplaces/, which is Claude Code's layout). Keep the plugins/
+  # paths as a last resort for older or atypical installs.
   for _candidate in \
+    "${HOME}/.codex/.tmp/marketplaces/${MARKETPLACE_NAME}" \
+    "${HOME}/.codex/.tmp/marketplaces/kestral-plugins" \
     "${HOME}/.codex/plugins/marketplaces/${MARKETPLACE_NAME}" \
     "${HOME}/.codex/plugins/marketplaces/kestral-plugins"; do
     if [ -d "$_candidate" ]; then

@@ -1,7 +1,7 @@
 {
   "name": "kestral",
   "displayName": "Kestral",
-  "version": "0.4.33",
+  "version": "0.4.34",
   "description": "Onboard projects, search and update tasks, pull workspace context, and plan or review workdays — all from Claude Code and Claude Cowork.",
   "author": {
     "name": "Kestral"
