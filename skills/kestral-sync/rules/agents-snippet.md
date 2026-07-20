@@ -5,8 +5,9 @@
 Keep Kestral in sync with your coding work via the Kestral MCP tools. Use judgment — skip for trivial one-off fixes,
 debugging notes, or exploratory sketches.
 
-For full procedures (comment formats, task creation, acceptance check): invoke the kestral-sync skill (`/kestral:sync`
-in Claude Code, `$kestral-sync` in Codex).
+For full procedures (comment formats, task creation, acceptance check): call
+`execute_operation("sync_session_workflow", { intent })` and follow the returned playbook (or invoke the thin
+`kestral-sync` skill which points at that operation).
 
 ### Workflow
 
@@ -23,33 +24,33 @@ in Claude Code, `$kestral-sync` in Codex).
 **During implementation:** post a progress comment via `execute_operation("add_task_comment", { taskId, content })`
 after each meaningful phase. Do NOT update on every commit or minor edit.
 
-**After completing work:** run the Acceptance Check from the skill, then update task status based on PR merge state: use
-the workspace's review/pending status if any linked PR is open/unmerged; only mark complete/done when the PR is
-**merged**. Never mark a task complete while its PR is unmerged. Post a final progress comment. Prefer
+**After completing work:** call `execute_operation("sync_session_workflow", { intent: "update" })` and follow the
+returned **Acceptance Check**, then update task status based on PR merge state: use the workspace's review/pending
+status if any linked PR is open/unmerged; only mark complete/done when the PR is **merged**. Never mark a task complete
+while its PR is unmerged. Post a final progress comment. Prefer
 `execute_operation("complete_task_with_review", { taskId, prUrl, summary })` for atomic PR link + status + comment in
 one call. Use `list_statuses` to discover valid status keys — never hardcode them.
 
-**On branch push** (when a Kestral task is linked):
+**On branch push / submit / PR creation:** call `execute_operation("sync_after_push", { branchName, summary?, prUrl? })`
+once. Do not follow it with Full Sync.
 
-- First push: `execute_operation("update_task", { taskId, statusKey })` (if still todo) +
-  `execute_operation("register_branch_on_task", { taskId, branchName })` +
-  `execute_operation("add_task_comment", { taskId, content })` +
-  `execute_operation("link_pr_to_task", { taskId, prUrl })` if a PR exists. Or use
-  `execute_operation("claim_task_and_branch", { taskId, branchName })` to combine assign + status + branch + comment.
-- Subsequent pushes: `execute_operation("add_task_comment", ...)` only if meaningful new progress since the last
-  comment.
-- No PR yet: post `Started work on branch \`branch-name\``.
+- `synced` or `skipped` → done
+- `needsDecision: unlinked_branch` → ask once this session whether to create a task; never auto-create
+- `needsDecision: ambiguous_branch` → ask which candidate task to update
+- `partial` → report the failed part and retry the operation named by `retryOperation`
 
-**Review / bugfix / spike:** use the skill's comment formats (Review Summary, Decision Comment, Bugfix Comment) rather
-than improvising.
+If the user approves creation, call `execute_operation("sync_session_workflow", { intent: "create" })` and follow the
+returned **Unlinked Branch — Explicit Create** section. Remember a decline for later pushes in the same session.
+
+**Review / bug fix / spike:** call `execute_operation("sync_session_workflow", { intent: "update" })` and use the
+returned comment templates (Review Summary, Decision Comment, Bug Fix Comment) rather than improvising.
 
 ### GitHub PR bodies — link vs skip auto-link
 
 When opening a PR (`gh pr create`), choose one:
 
-- **Tracked feature/fix (has a Kestral task):** omit skip directive; after create call
-  `execute_operation("link_pr_to_task", { taskId, prUrl })`. Optionally include task slug in the title for webhook
-  auto-link.
+- **Tracked feature/fix (has a Kestral task):** omit skip directive; after create use the one-call `sync_after_push`
+  path above with the current branch and PR URL. Optionally include the task slug in the title for webhook auto-link.
 - **Chore / manifest bump / no task:** add `<!-- kestral:skip-auto-link -->` (or `Kestral: skip auto-link`) to the PR
   body so Kestral does not enqueue AI auto-link or post no-task-linked bot comments.
 
@@ -66,22 +67,23 @@ After resolving a task via `entity_lookup`:
 
 ### MCP Tools Quick Reference
 
-| Action                    | Tool                                                                                |
-| ------------------------- | ----------------------------------------------------------------------------------- |
-| Get member identity       | `whoami` (primary — when `memberId` needed for Conflict Check or Candidate Ranking) |
-| Get task details          | `entity_lookup` (primary)                                                           |
-| Discover status keys      | `list_statuses` (primary)                                                           |
-| Find task by branch       | `execute_operation("find_task_by_branch", { branchName })`                          |
-| Keyword search (my tasks) | `execute_operation("search_my_tasks_by_keyword", { keyword, statusFilter? })`       |
-| Semantic task search      | `execute_operation("search_tasks", { query })`                                      |
-| List my active tasks      | `execute_operation("list_my_active_tasks", {})`                                     |
-| Filter tasks by status    | `execute_operation("list_tasks_by_status", { statusFilter, projectId? })`           |
-| Deep concept search       | `execute_operation("deep_research", { query })` (last resort)                       |
-| Update status             | `execute_operation("update_task", { taskId, statusKey })`                           |
-| Register branch           | `execute_operation("register_branch_on_task", { taskId, branchName })`              |
-| Post comment              | `execute_operation("add_task_comment", { taskId, content })`                        |
-| Link PR                   | `execute_operation("link_pr_to_task", { taskId, prUrl })`                           |
+| Action                    | Tool                                                                                                              |
+| ------------------------- | ----------------------------------------------------------------------------------------------------------------- |
+| Get member identity       | `whoami` (primary — when `memberId` needed for Conflict Check or Candidate Ranking)                               |
+| Get task details          | `entity_lookup` (primary)                                                                                         |
+| Discover status keys      | `list_statuses` (primary)                                                                                         |
+| Find task by branch       | `execute_operation("find_task_by_branch", { branchName })`                                                        |
+| Keyword search (my tasks) | `execute_operation("search_my_tasks_by_keyword", { keyword, statusFilter? })`                                     |
+| Semantic task search      | `execute_operation("search_tasks", { query })`                                                                    |
+| List my active tasks      | `execute_operation("list_my_active_tasks", {})`                                                                   |
+| Filter tasks by status    | `execute_operation("list_tasks_by_status", { statusFilter, projectId? })`                                         |
+| Deep concept search       | `execute_operation("deep_research", { query })` (last resort)                                                     |
+| Update status             | `execute_operation("update_task", { taskId, statusKey })`                                                         |
+| Register branch           | `execute_operation("register_branch_on_task", { taskId, branchName })`                                            |
+| Post comment              | `execute_operation("add_task_comment", { taskId, content })`                                                      |
+| Link PR                   | `execute_operation("link_pr_to_task", { taskId, prUrl })`                                                         |
 | Create task               | Resolve `projectId` first (Project Selection); then `execute_operation("create_task", { projectId, title, ... })` |
-| Claim + start work        | `execute_operation("claim_task_and_branch", { taskId, branchName })`                |
-| Complete with PR          | `execute_operation("complete_task_with_review", { taskId, prUrl, summary })`        |
-| Complex operations        | `execute_operation("manage_project", { request })`                                  |
+| Claim + start work        | `execute_operation("claim_task_and_branch", { taskId, branchName })`                                              |
+| Sync after push           | `execute_operation("sync_after_push", { branchName, summary?, prUrl? })`                                          |
+| Complete with PR          | `execute_operation("complete_task_with_review", { taskId, prUrl, summary })`                                      |
+| Complex operations        | `execute_operation("manage_project", { request })`                                                                |

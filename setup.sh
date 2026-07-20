@@ -2,6 +2,8 @@
 # Kestral plugin one-shot setup script (macOS and Linux).
 #
 # Installs the Kestral plugin to Claude Code, Claude Cowork, Codex, and/or Cursor.
+# Re-running shows Update (existing) + Install (other apps); Enter updates existing only.
+# Type numbers to mix, or use --app to force a specific set.
 #
 # Usage:
 #   curl -fsSL https://raw.githubusercontent.com/Kestral-Team/kestral-plugins/main/setup.sh | bash
@@ -10,7 +12,7 @@
 #
 # Options:
 #   --app <targets>       Non-interactive target set (comma-separated: claude-code, claude-cowork, codex, cursor)
-#   --enable-cursor       Include Cursor in autodetect and interactive install (off by default until marketplace publish)
+#   --enable-cursor       Include Cursor in first-install autodetect (off by default until marketplace publish)
 #   --full-reinstall      Remove all Kestral plugins, caches, and credentials before reinstalling
 #   --with-hooks          Enable sync hooks without prompting (recommended default when non-interactive)
 #   --no-hooks            Skip sync hooks; skills and Kestral connection still install
@@ -64,7 +66,9 @@ DESKTOP_NOT_READY=0
 # Under set -u, "${name[@]}" on an empty array errors on macOS bash 3.2.
 # Prefer an explicit length guard before for-loops when empty is meaningful;
 # use ${name[@]+"${name[@]}"} only in small utility scans (e.g. membership checks).
-DETECTED_TARGETS=()
+INSTALLED_TARGETS=()
+AVAILABLE_TARGETS=()
+MENU_TARGETS=()
 SELECTED_TARGETS=()
 DESKTOP_ROOTS=()
 
@@ -94,6 +98,8 @@ usage() {
 Kestral plugin setup
 
 Configures the remote MCP at app.kestral.ai (macOS and Linux).
+Re-running shows Update + Install; Enter updates existing only; numbers can add hosts.
+Use --app to force a specific target set.
 
 Usage:
   curl -fsSL https://raw.githubusercontent.com/Kestral-Team/kestral-plugins/main/setup.sh | bash
@@ -102,7 +108,7 @@ Usage:
 
 Options:
   --app <targets>       Non-interactive target set (comma-separated: claude-code, claude-cowork, codex, cursor)
-  --enable-cursor       Include Cursor in autodetect and interactive install (off by default)
+  --enable-cursor       Include Cursor in first-install autodetect (off by default)
   --full-reinstall      Remove all Kestral plugins, caches, and credentials before reinstalling
   --with-hooks          Enable sync hooks without prompting (keeps tasks updated after push/PR)
   --no-hooks            Skip sync hooks; skills and Kestral connection still install
@@ -651,7 +657,15 @@ _target_display_name() {
 }
 
 _target_detection_blurb() {
-  case "$1" in
+  local _target="$1"
+  local _kind="${2:-install}"
+
+  if [ "$_kind" = "update" ]; then
+    printf '%s' "Kestral plugin found"
+    return 0
+  fi
+
+  case "$_target" in
     claude-code)
       if [ "$HAS_DESKTOP_READY" -eq 1 ]; then
         printf '%s' "claude CLI found; Claude Code Desktop also signed in"
@@ -676,41 +690,150 @@ _target_detection_blurb() {
   esac
 }
 
-_populate_detected_targets() {
-  DETECTED_TARGETS=()
+# True when a marketplace/plugin clone looks like an existing Kestral install.
+_marketplace_has_kestral_plugin() {
+  local _root="${1:-}"
+  if [ -z "$_root" ] || [ ! -d "$_root" ]; then
+    return 1
+  fi
+  if [ -f "${_root}/.claude-plugin/plugin.json" ] \
+    || [ -f "${_root}/.codex-plugin/plugin.json" ] \
+    || [ -f "${_root}/.cursor-plugin/plugin.json" ]; then
+    return 0
+  fi
+  return 1
+}
 
-  if [ "$HAS_CLAUDE_CLI" -eq 1 ]; then
-    DETECTED_TARGETS+=("claude-code")
+_kestral_plugin_installed_on_claude_desktop() {
+  local _root _clone _saved_root
+  _saved_root="${DESKTOP_SELECTED_ROOT:-}"
+  for _root in ${DESKTOP_ROOTS[@]+"${DESKTOP_ROOTS[@]}"}; do
+    DESKTOP_SELECTED_ROOT="$_root"
+    _clone="$(_desktop_marketplace_clone_dir 2>/dev/null || true)"
+    if _marketplace_has_kestral_plugin "$_clone"; then
+      DESKTOP_SELECTED_ROOT="$_saved_root"
+      return 0
+    fi
+  done
+  DESKTOP_SELECTED_ROOT="$_saved_root"
+  return 1
+}
+
+_kestral_plugin_installed_on() {
+  local _target="$1"
+  local _root=""
+  case "$_target" in
+    claude-code)
+      _root="$(_claude_marketplace_root 2>/dev/null || true)"
+      _marketplace_has_kestral_plugin "$_root"
+      ;;
+    codex)
+      _root="$(_codex_marketplace_root 2>/dev/null || true)"
+      _marketplace_has_kestral_plugin "$_root"
+      ;;
+    cursor)
+      [ -f "$(_cursor_plugin_install_dir)/.cursor-plugin/plugin.json" ]
+      ;;
+    claude-desktop)
+      _kestral_plugin_installed_on_claude_desktop
+      ;;
+    *)
+      return 1
+      ;;
+  esac
+}
+
+_is_installed_target() {
+  local _needle="$1"
+  local _existing
+  for _existing in ${INSTALLED_TARGETS[@]+"${INSTALLED_TARGETS[@]}"}; do
+    if [ "$_existing" = "$_needle" ]; then
+      return 0
+    fi
+  done
+  return 1
+}
+
+_populate_installed_targets() {
+  INSTALLED_TARGETS=()
+
+  if _kestral_plugin_installed_on "claude-code"; then
+    INSTALLED_TARGETS+=("claude-code")
   fi
-  if [ "$HAS_DESKTOP_READY" -eq 1 ]; then
-    DETECTED_TARGETS+=("claude-desktop")
+  if _kestral_plugin_installed_on "claude-desktop"; then
+    INSTALLED_TARGETS+=("claude-desktop")
   fi
-  if [ "$HAS_CODEX_CLI" -eq 1 ]; then
-    DETECTED_TARGETS+=("codex")
+  if _kestral_plugin_installed_on "codex"; then
+    INSTALLED_TARGETS+=("codex")
   fi
-  if [ "$HAS_CURSOR" -eq 1 ] && [ "$ENABLE_CURSOR" -eq 1 ]; then
-    DETECTED_TARGETS+=("cursor")
+  # Existing Cursor installs appear under Update even without --enable-cursor.
+  if _kestral_plugin_installed_on "cursor"; then
+    INSTALLED_TARGETS+=("cursor")
   fi
+}
+
+# App-detected hosts not already installed (Cursor gated by --enable-cursor).
+_populate_available_targets() {
+  AVAILABLE_TARGETS=()
+
+  if [ "$HAS_CLAUDE_CLI" -eq 1 ] && ! _is_installed_target "claude-code"; then
+    AVAILABLE_TARGETS+=("claude-code")
+  fi
+  if [ "$HAS_DESKTOP_READY" -eq 1 ] && ! _is_installed_target "claude-desktop"; then
+    AVAILABLE_TARGETS+=("claude-desktop")
+  fi
+  if [ "$HAS_CODEX_CLI" -eq 1 ] && ! _is_installed_target "codex"; then
+    AVAILABLE_TARGETS+=("codex")
+  fi
+  if [ "$HAS_CURSOR" -eq 1 ] && [ "$ENABLE_CURSOR" -eq 1 ] && ! _is_installed_target "cursor"; then
+    AVAILABLE_TARGETS+=("cursor")
+  fi
+}
+
+_build_menu_targets() {
+  local _t
+  MENU_TARGETS=()
+  for _t in ${INSTALLED_TARGETS[@]+"${INSTALLED_TARGETS[@]}"}; do
+    MENU_TARGETS+=("$_t")
+  done
+  for _t in ${AVAILABLE_TARGETS[@]+"${AVAILABLE_TARGETS[@]}"}; do
+    MENU_TARGETS+=("$_t")
+  done
 }
 
 _print_detection_summary() {
   local _idx=0
   local _target _name _blurb
 
-  if [ "${#DETECTED_TARGETS[@]}" -gt 0 ]; then
-    for _target in "${DETECTED_TARGETS[@]}"; do
+  if [ "${#INSTALLED_TARGETS[@]}" -gt 0 ]; then
+    printf '  Update (Kestral already installed):\n'
+    for _target in "${INSTALLED_TARGETS[@]}"; do
       _idx=$((_idx + 1))
       _name="$(_target_display_name "$_target")"
-      _blurb="$(_target_detection_blurb "$_target")"
+      _blurb="$(_target_detection_blurb "$_target" "update")"
       printf '    [%s] %s (%s)\n' "$_idx" "$_name" "$_blurb"
     done
   fi
 
-  if [ "$DESKTOP_NOT_READY" -eq 1 ]; then
+  if [ "${#AVAILABLE_TARGETS[@]}" -gt 0 ]; then
+    if [ "${#INSTALLED_TARGETS[@]}" -gt 0 ]; then
+      printf '  Install (apps detected, not yet installed):\n'
+    else
+      printf '  Install (apps detected):\n'
+    fi
+    for _target in "${AVAILABLE_TARGETS[@]}"; do
+      _idx=$((_idx + 1))
+      _name="$(_target_display_name "$_target")"
+      _blurb="$(_target_detection_blurb "$_target" "install")"
+      printf '    [%s] %s (%s)\n' "$_idx" "$_name" "$_blurb"
+    done
+  fi
+
+  if [ "$DESKTOP_NOT_READY" -eq 1 ] && ! _is_installed_target "claude-desktop"; then
     printf '    [ ] Claude Cowork (installed but not signed in — open it, sign in, re-run)\n'
   fi
 
-  if [ "${#DETECTED_TARGETS[@]}" -eq 0 ] && [ "$DESKTOP_NOT_READY" -eq 0 ]; then
+  if [ "${#MENU_TARGETS[@]}" -eq 0 ] && [ "$DESKTOP_NOT_READY" -eq 0 ]; then
     printf '  (none detected)\n'
   fi
 }
@@ -725,30 +848,47 @@ _print_selected_targets_from_flag() {
 }
 
 _build_target_selection_prompt() {
-  local _prompt="Install Kestral to: "
+  local _prompt
   local _idx=0
   local _target _name
 
-  if [ "${#DETECTED_TARGETS[@]}" -gt 0 ]; then
-    for _target in "${DETECTED_TARGETS[@]}"; do
-      _idx=$((_idx + 1))
-      _name="$(_target_display_name "$_target")"
-      _prompt="${_prompt}[${_idx}] ${_name}  "
-    done
+  if [ "${#INSTALLED_TARGETS[@]}" -gt 0 ] && [ "${#AVAILABLE_TARGETS[@]}" -gt 0 ]; then
+    _prompt="Update/Install: "
+  elif [ "${#INSTALLED_TARGETS[@]}" -gt 0 ]; then
+    _prompt="Update Kestral on: "
+  else
+    _prompt="Install Kestral to: "
   fi
 
-  _prompt="${_prompt}— Enter = all, or type numbers (e.g. \"1\"): "
+  for _target in ${MENU_TARGETS[@]+"${MENU_TARGETS[@]}"}; do
+    _idx=$((_idx + 1))
+    _name="$(_target_display_name "$_target")"
+    _prompt="${_prompt}[${_idx}] ${_name}  "
+  done
+
+  if [ "${#INSTALLED_TARGETS[@]}" -gt 0 ]; then
+    _prompt="${_prompt}— Enter = all updates, or type numbers (e.g. \"1 3\"): "
+  else
+    _prompt="${_prompt}— Enter = all, or type numbers (e.g. \"1\"): "
+  fi
   printf '%s' "$_prompt"
 }
 
 _select_targets_from_choice() {
   local _choice="$1"
-  local _digit _index _target
+  local _token _index _target
 
-  for _digit in $(printf '%s' "$_choice" | grep -o '[0-9]' || true); do
-    _index=$((_digit))
-    if [ "$_index" -ge 1 ] && [ "$_index" -le "${#DETECTED_TARGETS[@]}" ]; then
-      _target="${DETECTED_TARGETS[$((_index - 1))]}"
+  # Whitespace- or comma-separated integers (supports indexes ≥10). Skip non-numeric tokens.
+  # shellcheck disable=SC2086
+  for _token in $(printf '%s' "$_choice" | tr ',;' '  '); do
+    case "$_token" in
+      '' | *[!0-9]*)
+        continue
+        ;;
+    esac
+    _index=$((_token))
+    if [ "$_index" -ge 1 ] && [ "$_index" -le "${#MENU_TARGETS[@]}" ]; then
+      _target="${MENU_TARGETS[$((_index - 1))]}"
       _add_target_if_missing "$_target"
     fi
   done
@@ -779,9 +919,19 @@ _parse_app_flag() {
   done
 }
 
+_default_selected_targets() {
+  if [ "${#INSTALLED_TARGETS[@]}" -gt 0 ]; then
+    SELECTED_TARGETS=("${INSTALLED_TARGETS[@]}")
+  else
+    SELECTED_TARGETS=("${AVAILABLE_TARGETS[@]}")
+  fi
+}
+
 select_targets() {
   SELECTED_TARGETS=()
-  _populate_detected_targets
+  INSTALLED_TARGETS=()
+  AVAILABLE_TARGETS=()
+  MENU_TARGETS=()
 
   if [ "$EXPLICIT_APP_FLAG" -eq 1 ]; then
     # --app already chose targets — do not show the interactive numbered chooser.
@@ -807,22 +957,26 @@ select_targets() {
     return 0
   fi
 
+  _populate_installed_targets
+  _populate_available_targets
+  _build_menu_targets
+
   _print_detection_summary
 
-  if [ "${#DETECTED_TARGETS[@]}" -eq 0 ]; then
+  if [ "${#MENU_TARGETS[@]}" -eq 0 ]; then
     abort_with_hint "No supported apps detected." \
       "Install Claude Code (https://claude.ai/code), Claude Cowork (https://claude.ai/download), Codex (https://codex.openai.com), or Cursor (https://cursor.com), then re-run."
   fi
 
-  # Default: all detected targets pre-selected
   local _choice=""
   local _prompt
   _prompt="$(_build_target_selection_prompt)"
 
   if read_tty "$_prompt" _choice; then
-    _choice="$(printf '%s' "$_choice" | tr -d '[:space:]')"
+    # Trim ends only — keep internal spaces so "1 10" parses as two indexes.
+    _choice="$(printf '%s' "$_choice" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')"
     if [ -z "$_choice" ]; then
-      SELECTED_TARGETS=("${DETECTED_TARGETS[@]}")
+      _default_selected_targets
     else
       _select_targets_from_choice "$_choice"
       if [ "${#SELECTED_TARGETS[@]}" -eq 0 ]; then
@@ -830,8 +984,12 @@ select_targets() {
       fi
     fi
   else
-    warn "No TTY — installing to all detected targets."
-    SELECTED_TARGETS=("${DETECTED_TARGETS[@]}")
+    if [ "${#INSTALLED_TARGETS[@]}" -gt 0 ]; then
+      warn "No TTY — updating all existing Kestral installs."
+    else
+      warn "No TTY — installing to all detected targets."
+    fi
+    _default_selected_targets
   fi
 }
 
@@ -1855,26 +2013,6 @@ print_cursor_success() {
   printf '  3. In agent chat, try "plan my day", "end of day review", or push a branch linked to a Kestral task.\n'
 }
 
-_write_sync_rule_to_project() {
-  local _plugin_root="$1"
-  local _rule_src="${_plugin_root}/skills/kestral-sync/rules/kestral-sync.mdc"
-  local _project_rules_dir="${PWD}/.cursor/rules"
-  local _rule_dest="${_project_rules_dir}/kestral-sync.mdc"
-
-  if [ ! -f "$_rule_src" ]; then
-    verbose "Sync rule source not found at ${_rule_src} — skipping project rule write"
-    return
-  fi
-
-  if [ ! -d "${PWD}/.cursor" ] && [ ! -e "${PWD}/.git" ]; then
-    return
-  fi
-
-  mkdir -p "$_project_rules_dir"
-  cp "$_rule_src" "$_rule_dest"
-  ok "Wrote sync rule → ${_rule_dest}"
-}
-
 install_to_cursor() {
   local _plugin_root _local_root _install_dir
   _install_dir="$(_cursor_plugin_install_dir)"
@@ -1908,8 +2046,6 @@ install_to_cursor() {
       return 1
     fi
   fi
-
-  _write_sync_rule_to_project "$_plugin_root"
 
   print_cursor_success
   return 0
@@ -2546,7 +2682,7 @@ main() {
 
   cleanup_old_local_mcp
 
-  section "Detecting installed apps"
+  section "Detecting Kestral installs / apps"
   detect_apps
 
   section "Choosing install targets"

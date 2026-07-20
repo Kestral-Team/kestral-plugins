@@ -70,14 +70,12 @@ files.
 ### `kestral-sync` — keep Kestral in sync while you code
 
 Ambient sync between your coding agent and Kestral: conflict detection before building, plain-language progress
-comments, status transitions, and PR linking — mostly automatic via the companion rule/snippet, with a manual "sync now"
-escape hatch.
+comments, status transitions, and PR linking — mostly automatic via sync hooks, with a manual "sync now" escape hatch.
 
-- **When to use:** install the [companion rule/snippet](kestral-sync/README.md) for ambient sync; invoke manually to
-  force an immediate sync.
+- **When to use:** enable hooks during setup (or `--hooks-only`); invoke `/kestral:sync` manually to force an immediate
+  sync.
 - **Example:** `/kestral:sync` → checks for conflicts, posts progress, links PRs.
-- **Note:** ambient-first — the primary install is the always-on rule (Cursor) or AGENTS.md snippet (Claude Code,
-  Codex). See the [sync README](kestral-sync/README.md) for per-platform install instructions.
+- **Note:** ambient-first via hooks after push/PR and at session start. See the [sync README](kestral-sync/README.md).
 
 ## Lower-level building blocks
 

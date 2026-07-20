@@ -145,10 +145,9 @@ When the user wants to explore existing projects rather than create or enrich:
    >
    > - **Plan day** — `/kestral:plan-day` or `$kestral-plan-day` — morning prioritization from your brief, calendar, and
    >   tasks (what you just ran, or rerun anytime).
-   > - **Kestral Sync** — `/kestral:sync` or `$kestral-sync` for a manual sync; for automatic updates, install the
-   >   ambient sync rule once (`kestral-sync/README.md` — paste the snippet into `AGENTS.md` or `CLAUDE.md`). After
-   >   that, progress comments, status changes, and PR links flow back on push and phase completion — you don't need to
-   >   keep saying "kestral sync."
+   > - **Kestral Sync** — `/kestral:sync` or `$kestral-sync` for a manual sync; for automatic updates, enable sync hooks
+   >   during setup (`setup.sh --hooks-only` if you skipped them). After that, progress comments, status changes, and PR
+   >   links flow back on push — you don't need to keep saying "kestral sync."
    > - **End day review** — `/kestral:end-day-review` or `$kestral-end-day-review` — when you wrap up, reconciles what
    >   got done, updates task status in the project, and sets tomorrow's priorities.
 
@@ -639,11 +638,26 @@ and ongoing skills from the snapshot already shown.
 
 #### 9c. Kestral Sync (set up once)
 
-> To keep your project and Project Brain updated as you work, set up **Kestral Sync** once — see
-> `kestral-sync/README.md` and paste the ambient snippet into your project's `AGENTS.md` or `CLAUDE.md` (Codex/Claude)
-> or install the Cursor rule. After that, progress comments, status changes, and PR links flow back automatically on
-> push and phase completion — you don't need to keep invoking sync. Use **`/kestral:sync`** or **`$kestral-sync`** only
-> when you want a manual "sync now."
+> To keep your project and Project Brain updated as you work, set up **Kestral Sync** once — enable sync hooks during
+> plugin setup (`setup.sh --hooks-only` if you skipped them). See `kestral-sync/README.md`. After that, progress
+> comments, status changes, and PR links flow back automatically on push — you don't need to keep invoking sync. Use
+> **`/kestral:sync`** or **`$kestral-sync`** only when you want a manual "sync now."
+
+**Local auto-sync prefs:** If the user is working from a local git repo for this project, upsert `"linked"` for this
+repo in `~/.kestral/hook-repos.json` (or `$KESTRAL_HOME/hook-repos.json`). Use lowercase `owner/repo` when origin is
+GitHub; otherwise `dir:$(realpath "$(git rev-parse --show-toplevel)")` so the key matches the hook helper. Create the
+directory/file if needed; merge into any existing object.
+
+Example:
+
+```json
+{
+  "acme/ratel": "linked"
+}
+```
+
+Tell the user in one line that auto-sync is on for this repo and they can say “disable Kestral auto-sync for this repo”
+to turn it off. Do **not** add gitignore carve-outs for Kestral directories.
 
 #### 9d. End day review
 

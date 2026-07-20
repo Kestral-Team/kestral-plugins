@@ -1,6 +1,6 @@
 {
   "name": "kestral",
-  "version": "0.4.32",
+  "version": "0.4.33",
   "description": "Connect Cursor to Kestral — sync tasks while you code, plan your day, and close out with an end-of-day review.",
   "author": {
     "name": "Kestral"
@@ -18,7 +18,6 @@
     "skills/kestral-plan-day",
     "skills/kestral-end-day-review"
   ],
-  "rules": "skills/kestral-sync/rules/kestral-sync.mdc",
   "hooks": "hooks/cursor-hooks.json",
   "mcpServers": ".cursor-plugin/mcp.json"
 }

@@ -46,7 +46,8 @@ Example: "Use my Linear Auth project and matching Drive docs" or "I'm launching 
 When the workspace already has projects, run a **prioritized work snapshot** before showing options:
 
 1. `get_daily_brief` — 2–4 bullets on what changed, what's urgent, what needs attention.
-2. `entity_lookup({ type: "project_brain", id })` for top 2–3 projects (from brief priority, else most recently updated).
+2. `entity_lookup({ type: "project_brain", id })` for top 2–3 projects (from brief priority, else most recently
+   updated).
    - 2–3 bullets per brain; note if building or missing.
 
 Then render:
@@ -80,10 +81,10 @@ Do not ask for sources until the user picks add-context or create-new.
 After explore + plan-day, mention these ongoing skills (do not auto-run):
 
 - Plan day: /kestral:plan-day or $kestral-plan-day
-- Kestral Sync: install ambient rule once (kestral-sync/README.md) — then updates on push/phase completion without repeating sync
+- Kestral Sync: enable hooks once (kestral-sync/README.md) — then updates on push without repeating sync
 - End day review: /kestral:end-day-review or $kestral-end-day-review — reconciles done work and updates task status
-```
 
+```
 **Prefer instead** — lead with the Project Brain value prop, ask in conversational prose, and mention connected tools
 before local files. If the user wants local files, they'll say so.
 
@@ -104,70 +105,57 @@ manifest checkpoint, or not at all.
 ## Setup manifest format
 
 ### Recommended setup
-
 ```
+
 Recommended setup:
 
 I found 6 possible workstreams. I recommend starting with these 3 because they have the clearest active work and
 supporting context.
 
-1. Project Brain Onboarding
-   Why: Linear project "Project Brain", recent GitHub PRs, and matching setup docs.
-   Tasks: 12 selected [linear], 43 more matching.
-   Files to upload: 5 [local]
-   Documents to link: 3 [google_drive]
-   Confidence: high.
+1. Project Brain Onboarding Why: Linear project "Project Brain", recent GitHub PRs, and matching setup docs. Tasks: 12
+   selected [linear], 43 more matching. Files to upload: 5 [local] Documents to link: 3 [google_drive] Confidence: high.
 
-2. MCP Plugin Reliability
-   Why: GitHub issues and Linear tasks repeatedly reference MCP install failures.
-   Tasks: 7 selected [github, linear], 19 more matching.
-   Files to upload: 4 [local]
-   Confidence: high.
+2. MCP Plugin Reliability Why: GitHub issues and Linear tasks repeatedly reference MCP install failures. Tasks: 7
+   selected [github, linear], 19 more matching. Files to upload: 4 [local] Confidence: high.
 
-3. Marketing Launch
-   Why: Recent docs and tasks mention launch copy, Hacker News, and blog posts.
-   Tasks: 5 selected [linear].
-   Documents to link: 6 [notion, google_drive].
-   Confidence: medium.
+3. Marketing Launch Why: Recent docs and tasks mention launch copy, Hacker News, and blog posts. Tasks: 5 selected
+   [linear]. Documents to link: 6 [notion, google_drive]. Confidence: medium.
 
 Additional candidates: 3.
 
-Ready to create these projects? Say "create these" to proceed, or tell me how you'd like them grouped
-differently — I can split, merge, rename projects, or add and remove items before creating anything.
-```
+Ready to create these projects? Say "create these" to proceed, or tell me how you'd like them grouped differently — I
+can split, merge, rename projects, or add and remove items before creating anything.
 
+```
 ### Expanded project detail
 
 Use this when the user needs to inspect selected items before approval:
-
 ```
+
 Proposed projects
 
-1. Billing Automation
-   Description: Consolidates active billing workflow work and supporting implementation docs.
-   Rationale: Linear project, recent GitHub issues, and matching Drive design docs.
-   Tasks:
-     - Fix invoice retry state [linear, high]
-     - Add webhook replay tests [github, medium]
-   Files to upload:
-     - billing-architecture.md [local, 4.2 KB]
-   Documents to link:
-     - Billing rollout notes [google_drive]
-   Coverage: 2 tasks selected, 43 more matching.
-   Confidence: High. Ambiguity: one Slack thread may belong to Support Ops.
+1. Billing Automation Description: Consolidates active billing workflow work and supporting implementation docs.
+   Rationale: Linear project, recent GitHub issues, and matching Drive design docs. Tasks:
+   - Fix invoice retry state [linear, high]
+   - Add webhook replay tests [github, medium] Files to upload:
+   - billing-architecture.md [local, 4.2 KB] Documents to link:
+   - Billing rollout notes [google_drive] Coverage: 2 tasks selected, 43 more matching. Confidence: High. Ambiguity: one
+     Slack thread may belong to Support Ops.
 
 Skipped
+
 - quarterly-review.pptx — unsupported file type (.pptx)
 
 Extra candidates to revisit later
+
 - Legacy billing cleanup: stale tasks and low recent activity.
 
 This is a curated first pass. I'll import the most relevant context now and leave the rest available to add later.
 
-Ready to create these projects? Say "create these" to proceed, or tell me how you'd like them grouped
-differently — I can split, merge, rename projects, or add and remove items before creating anything.
-```
+Ready to create these projects? Say "create these" to proceed, or tell me how you'd like them grouped differently — I
+can split, merge, rename projects, or add and remove items before creating anything.
 
+```
 ### Rules
 
 | Rule               | Detail                                                                                                                                                                                                             |
@@ -269,8 +257,8 @@ Example:
 
 After any successful create/enrich with brain triggered, always end with a get-started prompt — do not stop at import
 summary alone.
-
 ```
+
 Your Kestral project is created and the Project Brain is generating — usually ready in 30 seconds to 2 minutes.
 [Project Name](url)
 
@@ -278,13 +266,14 @@ Once it's ready, I'll pull blockers and next steps here so you can pick one and 
 "what should I work on?" — or ask me to check in a moment.
 
 From your Project Brain — here's what to tackle:
+
 - [blocker or next step]
 - ...
 
-You can start right now: pick one and I can set it in progress and help here.
-Or: run /kestral:plan-day for a full prioritized plan across your projects.
-```
+You can start right now: pick one and I can set it in progress and help here. Or: run /kestral:plan-day for a full
+prioritized plan across your projects.
 
+```
 If brain is still building, offer to retry on "brain's ready". If no brain content yet, fall back to open tasks on the
 project and still ask which to start.
 
@@ -337,3 +326,4 @@ Use when Kestral MCP tools are absent in the session. Pick host-specific bullets
 > - If the server is not running, select **Kestral** then **Start Server**.
 > - Follow the prompts to authenticate in the browser.
 > - Once the server is **Running** and kestral tools appear, run `/kestral-setup` again.
+```

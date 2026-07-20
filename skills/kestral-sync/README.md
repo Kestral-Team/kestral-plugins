@@ -7,7 +7,8 @@ push.
 - **Before you build:** the agent checks who's working on what, pulls the project brain and customer feedback, and warns
   you about conflicts or overlapping work.
 - **While you work:** plain-language progress comments land on the task so PMs see outcomes without reading code.
-- **When you push:** PRs link to tasks, status transitions happen, and the task stays current — all in one call.
+- **When you push:** meaningful progress and PR links land on the branch-linked task in one call. If no task is linked,
+  the agent asks before creating one.
 
 ## The loop
 
@@ -22,11 +23,20 @@ flowchart LR
 
 ## Install
 
-Sync is **ambient-first** when hooks are enabled: session-start and post-push reminders keep tasks current. Hooks are
-**optional** — setup explains why and asks before enabling (default yes). Skills and the Kestral connection still work
-if you decline; sync when you ask, or re-enable later with `bash setup.sh --hooks-only`.
+Sync is **ambient-first** when hooks are enabled, but only in folders that have opted in:
 
-The explicit `/kestral:sync` (or `$kestral-sync`) invocation is a manual "sync now" escape hatch.
+| Local state                               | What hooks do                                                                                                                        |
+| ----------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------ |
+| `~/.kestral/hook-repos.json` → `"linked"` | Session start → `session_start`; push/PR → `sync_after_push`                                                                         |
+| Home prefs `"skip"`                       | Stay quiet                                                                                                                           |
+| Neither                                   | Session start runs light `repo_opt_in`: connected GitHub remotes auto-enable; others get a one-time off-by-default notice + `"skip"` |
+
+Hooks are **optional** — setup explains why and asks before enabling (default yes). Skills and the Kestral connection
+still work if you decline; sync when you ask, or re-enable later with `bash setup.sh --hooks-only`.
+
+The explicit `/kestral:sync` (or `$kestral-sync`) invocation is a manual "sync now" escape hatch. After a successful
+sync in a folder, upsert `"linked"` in `~/.kestral/hook-repos.json` so future sessions use ambient sync — and say so in
+one line. Say “enable/disable Kestral auto-sync for this repo” anytime to override.
 
 **Recommended one-shot install** (Claude Code, Cowork, Codex, and/or Cursor):
 
@@ -34,7 +44,8 @@ The explicit `/kestral:sync` (or `$kestral-sync`) invocation is a manual "sync n
 curl -fsSL https://raw.githubusercontent.com/Kestral-Team/kestral-plugins/main/setup.sh | bash
 ```
 
-Flags: `--with-hooks` / `--no-hooks` / `--hooks-only` / `--app claude-code|codex|cursor`. See the [plugin README](../../README.md).
+Flags: `--with-hooks` / `--no-hooks` / `--hooks-only` / `--app claude-code|codex|cursor`. See the
+[plugin README](../../README.md).
 
 ### Claude Code / Claude Cowork
 
@@ -91,7 +102,8 @@ Fully quit and restart Cursor.
    }
    ```
 
-2. **Ambient sync (Cursor):** copy [`rules/kestral-sync.mdc`](rules/kestral-sync.mdc) into `.cursor/rules/`.
+2. **Ambient sync:** use `setup.sh --app cursor` (or `--hooks-only`) so session-start and post-push hooks are installed.
+   Do not rely on a project `.mdc` rule — hooks + the sync skill are enough.
 3. **Full skill (optional):** copy [`SKILL.md`](SKILL.md) into `.agents/skills/kestral-sync/SKILL.md`.
 
 ### VS Code
@@ -106,13 +118,13 @@ Fully quit and restart Cursor.
    }
    ```
 
-2. **Ambient sync:** paste the contents of [`rules/agents-snippet.md`](rules/agents-snippet.md) into your project's
-   `AGENTS.md`.
+2. **Optional instructions:** paste [`rules/agents-snippet.md`](rules/agents-snippet.md) into your project's `AGENTS.md`
+   if your client has no sync hooks.
 
 ### Other MCP-compatible clients
 
-Any client that speaks MCP can use sync. Connect to `https://app.kestral.ai/mcp`, then paste the
-[`rules/agents-snippet.md`](rules/agents-snippet.md) contents into whatever agent instruction file your client reads.
+Any client that speaks MCP can use sync. Connect to `https://app.kestral.ai/mcp`, enable hooks when available, or paste
+[`rules/agents-snippet.md`](rules/agents-snippet.md) into whatever agent instruction file your client reads.
 
 ## What it reads and writes
 
@@ -133,13 +145,13 @@ commit.
 ## Example session
 
 ```
-You: I'm working on KES-42
+You: I'm working on TASK-42
 
-Agent: [calls entity_lookup with slug "KES-42"]
+Agent: [calls entity_lookup with slug "TASK-42"]
        Found: "Improve date range filtering" — assigned to you, status Todo.
        No conflicts. Setting to In Progress.
        [calls execute_operation("claim_task_and_branch", { taskId, branchName: "feat/date-range-filter" })]
-       Claimed KES-42, set to In Progress.
+       Claimed TASK-42, set to In Progress.
 
        [calls entity_lookup: project_brain]
        Project context: The filtering overhaul aims to reduce support tickets about
@@ -151,10 +163,9 @@ Agent: [calls entity_lookup with slug "KES-42"]
 
 You: push and sync
 
-Agent: [calls execute_operation("complete_task_with_review", { taskId, prUrl, summary:
+Agent: [calls execute_operation("sync_after_push", { branchName: "feat/date-range-filter", prUrl, summary:
         "Users can now filter by date range — last 7/30/90 days plus custom." })]
-       Synced KES-42:
-         Status: In Progress → [review status]
+       Synced TASK-42:
          PR: github.com/org/repo/pull/347 linked
          Comment posted.
 ```

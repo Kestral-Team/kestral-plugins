@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-# Nudges the agent to sync with Kestral after push/submit/PR create.
+# Nudges the agent to sync with Kestral after push/submit/PR create via sync_after_push.
+# Only fires when the repo is opted in (home hook-repos.json linked, or legacy markers).
 # Fail-open — always exit 0.
 #
 # Usage: kestralSyncReminder.sh <cursor|claude|codex>
@@ -8,6 +9,10 @@ set -euo pipefail
 
 host="${1:-cursor}"
 input=$(cat)
+
+script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=_kestralProjectLinked.sh
+source "${script_dir}/_kestralProjectLinked.sh"
 
 if ! command -v jq >/dev/null 2>&1; then
   echo '{}'
@@ -27,20 +32,31 @@ if [[ ! "$command" =~ (^|[;&|[:space:]])(git[[:space:]]+push|gt[[:space:]]+(s|su
   exit 0
 fi
 
-ctx='A push/submit/PR operation just completed. Sync to Kestral NOW — this is a multi-step process:
+if ! kestral_project_linked; then
+  echo '{}'
+  exit 0
+fi
 
-Step 1: Call execute_operation on the Kestral MCP server (registered as "Kestral") with
-  operationId="sync_session_workflow", params={ intent: "update_or_create" },
-  explanation="<describe what was pushed>".
+branch=$(git branch --show-current 2>/dev/null || true)
+if [[ -z "$branch" ]]; then
+  branch='<current-branch>'
+fi
 
-Step 2: The response contains sync INSTRUCTIONS and context (active tasks, projects).
-  You MUST follow the "Full Sync" workflow in those instructions. At minimum:
-  - Look up a task via find_task_by_branch for the current branch
-  - If no task exists, create one (see "Unlinked Branch — Auto-Create")
-  - Post a progress comment
-  - Link the branch/PR if applicable
+ctx="A push/submit/PR just completed. Sync with one call — do not run Full Sync / sync_session_workflow for this:
 
-Do NOT stop after Step 1. Receiving instructions is not the same as syncing.'
+Call execute_operation on the Kestral MCP (registered as \"Kestral\") with
+  operationId=\"sync_after_push\",
+  params={ branchName: \"${branch}\", summary: \"<what changed>\", prUrl?: \"<PR URL if any>\" },
+  explanation=\"<describe what was pushed>\".
+
+Outcomes:
+- skipped: nothing to do — OK, continue coding
+- synced: done
+- needsDecision + unlinked_branch: ask once this session whether to create; do not auto-create
+- needsDecision + ambiguous_branch: ask which candidate task to update
+- partial: report the failed part and retry the operation named in the response
+
+Skipping when the push had no meaningful progress is OK."
 
 if [[ "$host" == "claude" || "$host" == "codex" ]]; then
   jq -n --arg ctx "$ctx" \

@@ -28,6 +28,10 @@ Code and/or Codex on macOS and Linux; Claude Cowork is macOS only; Cursor via `-
 curl -fsSL https://raw.githubusercontent.com/Kestral-Team/kestral-plugins/main/setup.sh | bash
 ```
 
+Re-running setup offers Update (existing installs) and Install (other detected apps). Enter updates existing only; type
+numbers to also add hosts. Use `--app` to force a specific set (for example `--app cursor` or
+`--app claude-code,codex`).
+
 Pick targets non-interactively (e.g. Codex or Cursor only):
 
 ```bash
@@ -65,10 +69,16 @@ bash setup.sh --no-hooks
 bash setup.sh --hooks-only
 ```
 
-**Why enable them?** Without hooks, your coding app can update Kestral when it remembers — but it's easy to forget
-after a push or pull request. With hooks, it gets a reminder at session start and after push/PR, so tasks stay up to
-date. Hooks only nudge the app; they don't change your git history. Choosing no is fine — you can re-enable anytime
-with `--hooks-only`. On Codex, trust the hooks in `/hooks` after enabling.
+**Why enable them?** Without hooks, your coding app can update Kestral when it remembers — but it's easy to forget after
+a push or pull request. With hooks, it gets a reminder at session start and after push/PR, so tasks stay up to date.
+Hooks only nudge the app; they don't change your git history. Choosing no is fine — you can re-enable anytime with
+`--hooks-only`. They never create a task automatically: if a pushed branch is not linked, the app asks you first. On
+Codex, trust the hooks in `/hooks` after enabling.
+
+**Per-folder opt-in:** Hooks only run ambient sync when `~/.kestral/hook-repos.json` says `"linked"` for this repo. In
+other folders, session start runs a light check: if the git remote matches a GitHub repo already connected in Kestral,
+auto-sync turns on; otherwise you get a one-time notice that auto-sync is off by default (saved as `"skip"`). Say
+“enable/disable Kestral auto-sync for this repo” to override. You can still use Kestral skills anytime by asking.
 
 ### Claude Code
 
@@ -125,8 +135,7 @@ In Codex CLI, use `/hooks` to review them at any time.
 
 ### Cursor
 
-**Recommended:** one command installs the full bundle (MCP, plan-day, end-day-review skills, ambient sync rule, and sync
-hooks):
+**Recommended:** one command installs the full bundle (MCP, plan-day, end-day-review skills, and sync hooks):
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/Kestral-Team/kestral-plugins/main/setup.sh | bash -s -- --app cursor
