@@ -73,7 +73,8 @@ bash setup.sh --hooks-only
 a push or pull request. With hooks, it gets a reminder at session start and after push/PR, so tasks stay up to date.
 Hooks only nudge the app; they don't change your git history. Choosing no is fine — you can re-enable anytime with
 `--hooks-only`. They never create a task automatically: if a pushed branch is not linked, the app asks you first. On
-Codex, trust the hooks in `/hooks` after enabling.
+Codex, enabling hooks installs them but does not activate them: start a new Codex CLI session, open `/hooks`, and trust
+the Kestral hooks. Codex requires this security review and may ask again after an update changes a hook.
 
 **Per-folder opt-in:** Hooks only run ambient sync when `~/.kestral/hook-repos.json` says `"linked"` for this repo. In
 other folders, session start runs a light check: if the git remote matches a GitHub repo already connected in Kestral,
@@ -95,7 +96,7 @@ auto-sync turns on; otherwise you get a one-time notice that auto-sync is off by
    ```
 
    After install, reload plugins or restart Claude Code so session-start, post-push, and Kestral request-checking hooks
-   register.
+   register. Installing the plugin is the trust step in Claude Code; there is no separate per-hook approval.
 
 3. In chat, run the setup skill:
 
@@ -128,10 +129,12 @@ auto-sync turns on; otherwise you get a one-time notice that auto-sync is off by
    Codex does **not** use Claude-style `/kestral:…` slash commands for other skills — use `$kestral-setup`,
    `$kestral-tasks`, `$kestral-context`, or type `@kestral` to target the plugin.
 
-After installing in Codex, fully quit and restart the app so it reloads the plugin cache. In a new thread, type `$` and
-look for `kestral-setup`, `kestral-tasks`, or `kestral-context`. Review and trust the Kestral hooks when Codex prompts;
-they load session context, remind the agent to sync after a push or PR, and check Kestral requests before sending them.
-In Codex CLI, use `/hooks` to review them at any time.
+After installing in Codex, fully quit and restart the app so it reloads the plugin cache. Then complete the required
+hook activation in a new Codex CLI session: open `/hooks`, review the Kestral hooks, and trust them. Until you do this,
+Codex skips session-start and push/PR sync reminders. Codex may ask again after an update changes a hook.
+
+In a new thread, type `$` and look for `kestral-setup`, `kestral-tasks`, or `kestral-context`. The trusted hooks load
+session context, remind the agent to sync after a push or PR, and check Kestral requests before sending them.
 
 ### Cursor
 

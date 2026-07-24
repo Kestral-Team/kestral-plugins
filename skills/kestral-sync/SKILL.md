@@ -50,6 +50,8 @@ Do not run Full Sync afterward.
 ## When to sync
 
 - After `git push`, `gt submit`, or `gh pr create`
+- Structured plan written — offer tracking tasks; ask one parent for the plan vs a task per phase/deliverable
+  (`intent: create` if approved)
 - Phase or feature complete
 - PR created or linked
 - Review, bugfix, or prototype conclusion

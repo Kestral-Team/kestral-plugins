@@ -100,7 +100,7 @@ If the GUI cannot see or delete the entry, remove manually:
 
 ## Version
 
-Current release: **v0.4.34**
+Current release: **v0.4.35**
 
 ## Links
 

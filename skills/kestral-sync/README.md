@@ -7,8 +7,8 @@ push.
 - **Before you build:** the agent checks who's working on what, pulls the project brain and customer feedback, and warns
   you about conflicts or overlapping work.
 - **While you work:** plain-language progress comments land on the task so PMs see outcomes without reading code.
-- **When you push:** meaningful progress and PR links land on the branch-linked task in one call. If no task is linked,
-  the agent asks before creating one.
+- **When you push:** meaningful progress and PR links land on the branch-linked task in one call. If the branch is not
+  registered yet, an existing PR link can identify the task; if neither is linked, the agent asks before creating one.
 
 ## The loop
 
@@ -57,7 +57,7 @@ Flags: `--with-hooks` / `--no-hooks` / `--hooks-only` / `--app claude-code|codex
    ```
 
 2. **Hooks (if enabled):** session-start and post-push reminders. Reload plugins or restart Claude Code after
-   install/update.
+   install/update. Installing the plugin is the trust step; Claude Code does not require separate per-hook approval.
 
 3. **Ambient sync (optional backup):** paste [`rules/agents-snippet.md`](rules/agents-snippet.md) into your project's
    `AGENTS.md` or `CLAUDE.md` if you want the same triggers in project docs.
@@ -68,7 +68,8 @@ Flags: `--with-hooks` / `--no-hooks` / `--hooks-only` / `--app claude-code|codex
 
 1. Install via `setup.sh` or **Plugins > More > Add more** with repo `Kestral-Team/kestral-plugins`.
 
-2. **Hooks (if enabled):** review and trust them in `/hooks` when Codex prompts.
+2. **Activate hooks (required if enabled):** start a new Codex CLI session, open `/hooks`, then review and trust the
+   Kestral hooks. Codex skips them until you do this and may ask again after an update changes a hook.
 
 3. **Ambient sync backup:** paste [`rules/agents-snippet.md`](rules/agents-snippet.md) into your project's `AGENTS.md`.
 

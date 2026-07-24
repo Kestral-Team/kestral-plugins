@@ -24,6 +24,12 @@ For full procedures (comment formats, task creation, acceptance check): call
 **During implementation:** post a progress comment via `execute_operation("add_task_comment", { taskId, content })`
 after each meaningful phase. Do NOT update on every commit or minor edit.
 
+**After writing a structured plan:** offer to create tracking tasks, and ask whether they want **one parent task for the
+whole plan** or **a separate task per phase/deliverable**. If the user accepts, call
+`execute_operation("sync_session_workflow", { intent: "create" })` and follow the returned **From Plan** section (use
+parent/subtask hierarchy correctly — checklists stay in descriptions unless a phase has independently shippable
+deliverables). Never auto-create.
+
 **After completing work:** call `execute_operation("sync_session_workflow", { intent: "update" })` and follow the
 returned **Acceptance Check**, then update task status based on PR merge state: use the workspace's review/pending
 status if any linked PR is open/unmerged; only mark complete/done when the PR is **merged**. Never mark a task complete
@@ -37,10 +43,12 @@ once. Do not follow it with Full Sync.
 - `synced` or `skipped` → done
 - `needsDecision: unlinked_branch` → ask once this session whether to create a task; never auto-create
 - `needsDecision: ambiguous_branch` → ask which candidate task to update
+- `needsDecision: ambiguous_pr` → ask which candidate task to update
 - `partial` → report the failed part and retry the operation named by `retryOperation`
 
 If the user approves creation, call `execute_operation("sync_session_workflow", { intent: "create" })` and follow the
-returned **Unlinked Branch — Explicit Create** section. Remember a decline for later pushes in the same session.
+returned **Unlinked Branch — Explicit Create** section. Include conversation-sourced why in the task description when
+available; omit rather than invent. Remember a decline for later pushes in the same session.
 
 **Review / bug fix / spike:** call `execute_operation("sync_session_workflow", { intent: "update" })` and use the
 returned comment templates (Review Summary, Decision Comment, Bug Fix Comment) rather than improvising.

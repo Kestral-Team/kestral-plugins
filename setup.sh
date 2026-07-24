@@ -2197,6 +2197,17 @@ _plugin_root_for_target() {
   esac
 }
 
+_print_codex_hooks_activation() {
+  cat <<'EOF'
+
+Codex hook activation required:
+  1. Start a new Codex CLI session and open /hooks.
+  2. Review and trust the Kestral hooks.
+  Until you do this, Codex skips session-start and push/PR sync reminders.
+  Codex may ask you to trust them again after a Kestral update changes a hook.
+EOF
+}
+
 _enable_hooks_only_for_targets() {
   section "Enabling sync hooks"
   _print_hooks_why
@@ -2248,7 +2259,7 @@ _enable_hooks_only_for_targets() {
   fi
 
   if _list_contains_target codex; then
-    printf '\nCodex: open /hooks in Codex CLI and trust the Kestral hooks if prompted.\n'
+    _print_codex_hooks_activation
   fi
   return 0
 }
@@ -2357,7 +2368,7 @@ _print_summary() {
     if [ "$ENABLE_HOOKS" -eq 1 ] && [ "$HOOKS_APPLIED" -eq 1 ]; then
       printf '\nSync hooks: enabled (reminders after session start and push/PR).\n'
       if [ -n "$TARGET_RESULT_CODEX" ] && [ "$TARGET_RESULT_CODEX" = "installed" ]; then
-        printf '  Codex: open /hooks and trust the Kestral hooks if prompted.\n'
+        _print_codex_hooks_activation
       fi
     elif [ "$ENABLE_HOOKS" -eq 0 ] && [ "$HOOKS_SKIPPED" -eq 1 ]; then
       printf '\nSync hooks: off (your choice). Skills and Kestral still work; sync when you ask.\n'
