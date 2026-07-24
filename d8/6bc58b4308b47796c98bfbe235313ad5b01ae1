@@ -1,0 +1,45 @@
+.agents/plugins/marketplace.json
+  s_9bd4461e35fe7b::t_c971a11599622a 9
+.claude-plugin/marketplace.json
+  s_9bd4461e35fe7b::t_41eff37f3bb974 10
+.claude-plugin/plugin.json
+  s_9bd4461e35fe7b::t_8be270fea21a23 4
+.codex-plugin/plugin.json
+  s_9bd4461e35fe7b::t_a61978d6bbcf76 3
+.cursor-plugin/marketplace.json
+  s_9bd4461e35fe7b::t_5beebd5150903c 14
+.cursor-plugin/plugin.json
+  s_9bd4461e35fe7b::t_d9cfb328ea1263 3
+README.md
+  s_9bd4461e35fe7b::t_3376f4ceb2cfd2 103
+docs/README.md
+  s_9bd4461e35fe7b::t_44f9ded9b5fddd 76-77,99,132-137
+server.json
+  s_9bd4461e35fe7b::t_d06c831bac7aa6 10
+setup.sh
+  s_9bd4461e35fe7b::t_3026e1f64b91e3 2200-2210,2262,2371
+skills/kestral-sync/README.md
+  s_9bd4461e35fe7b::t_3269997e0ea23f 10-11,60,71-72
+skills/kestral-sync/SKILL.md
+  s_9bd4461e35fe7b::t_af0eed88935f9c 53-54
+skills/kestral-sync/rules/agents-snippet.md
+  s_9bd4461e35fe7b::t_d92206db29585b 27-32,46,50-51
+version.json
+  s_9bd4461e35fe7b::t_b207641c09afe8 2
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.15",
+  "base_commit_sha": "d86bc58b4308b47796c98bfbe235313ad5b01ae1",
+  "prompts": {},
+  "sessions": {
+    "s_9bd4461e35fe7b": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "465e498c-63c5-4dfa-b7d8-74634ca59dc0",
+        "model": "grok-4.5"
+      },
+      "human_author": "Bernard Xie <bxie94@gmail.com>"
+    }
+  }
+}
