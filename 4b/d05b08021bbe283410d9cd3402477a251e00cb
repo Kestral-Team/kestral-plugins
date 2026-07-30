@@ -1,0 +1,39 @@
+.agents/plugins/marketplace.json
+  s_a10e0da4793390::t_fd27a8bf513da3 9
+.claude-plugin/marketplace.json
+  s_a10e0da4793390::t_35f89bdb09d918 10
+.claude-plugin/plugin.json
+  s_a10e0da4793390::t_71511d2a72b584 4
+.codex-plugin/plugin.json
+  s_a10e0da4793390::t_913bb6ccda8dd0 3
+.cursor-plugin/marketplace.json
+  s_a10e0da4793390::t_aa6e6a7203b364 14
+.cursor-plugin/plugin.json
+  s_a10e0da4793390::t_b93e857306f5b5 3
+README.md
+  s_a10e0da4793390::t_a70e2009b63b1d 6-7,14-17,24-27,37,39,49,53,56,59-66,69,72-74,113
+docs/README.md
+  s_a10e0da4793390::t_f8813ebf35368e 25,59-60,74-80,89,91-93,95-97,99-101,103-106,125,127-128,139,157-161,203-204
+server.json
+  s_a10e0da4793390::t_c0dff5c739eb4f 10
+setup.sh
+  s_a10e0da4793390::t_72c57424d7e2b3 15,47,74-75,113,781,1103-1104,1122-1126,1796-1812,1822-1829,1860,1867-1897,1900-1901,2015,2028,2104-2116,2118-2119,2130-2133,2148,2261-2341,2353-2408,2415,2427,2445-2447,2485,2497,2507,2516,2565-2571
+version.json
+  s_a10e0da4793390::t_39d0a710123c38 2
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.16",
+  "base_commit_sha": "4bd05b08021bbe283410d9cd3402477a251e00cb",
+  "prompts": {},
+  "sessions": {
+    "s_a10e0da4793390": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "960c871f-659c-4229-ab39-5c99e54e477f",
+        "model": "grok-4.5"
+      },
+      "human_author": "Bernard Xie <bxie94@gmail.com>"
+    }
+  }
+}
