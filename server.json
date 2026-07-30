@@ -7,7 +7,7 @@
     "url": "https://github.com/Kestral-Team/kestral-plugins",
     "source": "github"
   },
-  "version": "0.4.36",
+  "version": "0.4.37",
   "remotes": [
     {
       "type": "streamable-http",

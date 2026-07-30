@@ -110,7 +110,7 @@ If the GUI cannot see or delete the entry, remove manually:
 
 ## Version
 
-Current release: **v0.4.36**
+Current release: **v0.4.37**
 
 ## Links
 

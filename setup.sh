@@ -1802,7 +1802,7 @@ _upgrade_codex_marketplace() {
   set -e
   verbose "codex marketplace upgrade output: $_output (rc=$_rc)"
   if [ "$_rc" -ne 0 ]; then
-    warn "Marketplace upgrade failed — using existing snapshot."
+    warn "Marketplace upgrade failed."
     verbose "upgrade failure: $_output"
     return 1
   fi
@@ -1820,11 +1820,14 @@ ensure_codex_marketplace() {
   verbose "codex marketplace add output: $_output (rc=$_rc)"
 
   # "Already" must trigger upgrade whether add exits 0 or not — same UX as Claude
-  # marketplace update. Do not fall through to tarball when the marketplace exists.
+  # marketplace update. Do not soft-succeed on upgrade failure (remove+re-add would
+  # reinstall from a stale marketplace snapshot). Do not fall through to tarball
+  # while the git marketplace is still registered.
   if printf '%s' "$_output" | grep -qi 'already'; then
-    _upgrade_codex_marketplace || true
-    ok "Kestral marketplace registered"
-    return 0
+    if _upgrade_codex_marketplace; then
+      return 0
+    fi
+    return 1
   fi
 
   if [ "$_rc" -eq 0 ]; then

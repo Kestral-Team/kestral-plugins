@@ -11,7 +11,7 @@
       "name": "kestral",
       "source": "./",
       "description": "Connect Cursor to Kestral — sync tasks while you code, plan your day, and close out with an end-of-day review.",
-      "version": "0.4.36",
+      "version": "0.4.37",
       "category": "Productivity"
     }
   ]
