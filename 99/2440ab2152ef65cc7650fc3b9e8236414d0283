@@ -1,0 +1,37 @@
+.agents/plugins/marketplace.json
+  s_a10e0da4793390::t_035f4f954a4473 9
+.claude-plugin/marketplace.json
+  s_a10e0da4793390::t_141ddb09d2b4eb 10
+.claude-plugin/plugin.json
+  s_a10e0da4793390::t_89a5f53f2aee82 4
+.codex-plugin/plugin.json
+  s_a10e0da4793390::t_8ae048f1e1b72f 3
+.cursor-plugin/marketplace.json
+  s_a10e0da4793390::t_43669e3543aea2 14
+.cursor-plugin/plugin.json
+  s_a10e0da4793390::t_a0744498c6db84 3
+README.md
+  s_a10e0da4793390::t_ee9722af2e8f44 113
+server.json
+  s_a10e0da4793390::t_979ca330bbb4b4 10
+setup.sh
+  s_a10e0da4793390::t_2bf019eed048aa 1805,1823-1825,1827-1830
+version.json
+  s_a10e0da4793390::t_14b21845bcdc74 2
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.16",
+  "base_commit_sha": "992440ab2152ef65cc7650fc3b9e8236414d0283",
+  "prompts": {},
+  "sessions": {
+    "s_a10e0da4793390": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "960c871f-659c-4229-ab39-5c99e54e477f",
+        "model": "grok-4.5"
+      },
+      "human_author": "Bernard Xie <bxie94@gmail.com>"
+    }
+  }
+}
