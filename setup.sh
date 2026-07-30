@@ -12,7 +12,7 @@
 #
 # Options:
 #   --app <targets>       Non-interactive target set (comma-separated: claude-code, claude-cowork, codex, cursor)
-#   --enable-cursor       Include Cursor in first-install autodetect (off by default until marketplace publish)
+#   --enable-cursor       Accepted for older docs; Cursor is already included in first-install autodetect
 #   --full-reinstall      Remove all Kestral plugins, caches, and credentials before reinstalling
 #   --with-hooks          Enable sync hooks without prompting (recommended default when non-interactive)
 #   --no-hooks            Skip sync hooks; skills and Kestral connection still install
@@ -44,7 +44,7 @@ RUBY_BIN=""
 # --- Parsed flags ---
 APP_FLAG=""
 EXPLICIT_APP_FLAG=0
-ENABLE_CURSOR=0
+ENABLE_CURSOR=1
 FULL_REINSTALL=0
 # -1 = ask (interactive); 0 = disabled; 1 = enabled
 ENABLE_HOOKS=-1
@@ -71,6 +71,8 @@ AVAILABLE_TARGETS=()
 MENU_TARGETS=()
 SELECTED_TARGETS=()
 DESKTOP_ROOTS=()
+# Targets where sync hooks were successfully enabled (used by --hooks-only next steps).
+HOOKS_SUCCESS_TARGETS=()
 
 TARGET_RESULT_CLAUDE=""
 TARGET_RESULT_DESKTOP=""
@@ -108,7 +110,7 @@ Usage:
 
 Options:
   --app <targets>       Non-interactive target set (comma-separated: claude-code, claude-cowork, codex, cursor)
-  --enable-cursor       Include Cursor in first-install autodetect (off by default)
+  --enable-cursor       Accepted for older docs; Cursor is already included when detected
   --full-reinstall      Remove all Kestral plugins, caches, and credentials before reinstalling
   --with-hooks          Enable sync hooks without prompting (keeps tasks updated after push/PR)
   --no-hooks            Skip sync hooks; skills and Kestral connection still install
@@ -771,13 +773,12 @@ _populate_installed_targets() {
   if _kestral_plugin_installed_on "codex"; then
     INSTALLED_TARGETS+=("codex")
   fi
-  # Existing Cursor installs appear under Update even without --enable-cursor.
   if _kestral_plugin_installed_on "cursor"; then
     INSTALLED_TARGETS+=("cursor")
   fi
 }
 
-# App-detected hosts not already installed (Cursor gated by --enable-cursor).
+# App-detected hosts not already installed.
 _populate_available_targets() {
   AVAILABLE_TARGETS=()
 
@@ -1099,13 +1100,9 @@ install_or_update_plugin() {
   set -e
   verbose "plugin install output: $_output (rc=$_rc)"
 
-  if [ "$_rc" -eq 0 ]; then
-    ok "Kestral plugin installed"
-    return 0
-  fi
-
+  # Claude CLI exits 0 with "already installed" without refreshing installed_plugins.json.
+  # Check the message before treating rc=0 as a fresh install success.
   if printf '%s' "$_output" | grep -qi 'already installed'; then
-    # marketplace update alone does not refresh the installed plugin
     log "Already installed — updating plugin..."
     set +e
     _output="$(_run_claude_cmd plugin update "$PLUGIN_ID")"
@@ -1119,6 +1116,11 @@ install_or_update_plugin() {
     warn "Plugin update failed — using existing install."
     verbose "update failure: $_output"
     ok "Kestral plugin is installed"
+    return 0
+  fi
+
+  if [ "$_rc" -eq 0 ]; then
+    ok "Kestral plugin installed"
     return 0
   fi
 
@@ -1791,6 +1793,23 @@ _curl_marketplace_tarball() {
   ok "Marketplace downloaded to $_dest"
 }
 
+_upgrade_codex_marketplace() {
+  local _output _rc
+  log "Already registered — upgrading..."
+  set +e
+  _output="$(_run_codex_cmd plugin marketplace upgrade "$MARKETPLACE_NAME")"
+  _rc=$?
+  set -e
+  verbose "codex marketplace upgrade output: $_output (rc=$_rc)"
+  if [ "$_rc" -ne 0 ]; then
+    warn "Marketplace upgrade failed — using existing snapshot."
+    verbose "upgrade failure: $_output"
+    return 1
+  fi
+  ok "Kestral marketplace up to date"
+  return 0
+}
+
 ensure_codex_marketplace() {
   log "Registering Kestral marketplace..."
   local _output _rc
@@ -1800,19 +1819,15 @@ ensure_codex_marketplace() {
   set -e
   verbose "codex marketplace add output: $_output (rc=$_rc)"
 
+  # "Already" must trigger upgrade whether add exits 0 or not — same UX as Claude
+  # marketplace update. Do not fall through to tarball when the marketplace exists.
+  if printf '%s' "$_output" | grep -qi 'already'; then
+    _upgrade_codex_marketplace || true
+    ok "Kestral marketplace registered"
+    return 0
+  fi
+
   if [ "$_rc" -eq 0 ]; then
-    if printf '%s' "$_output" | grep -qi 'already'; then
-      log "Already registered — upgrading..."
-      set +e
-      _output="$(_run_codex_cmd plugin marketplace upgrade "$MARKETPLACE_NAME")"
-      _rc=$?
-      set -e
-      verbose "codex marketplace upgrade output: $_output (rc=$_rc)"
-      if [ "$_rc" -ne 0 ]; then
-        warn "Marketplace upgrade failed — using existing snapshot."
-        verbose "upgrade failure: $_output"
-      fi
-    fi
     ok "Kestral marketplace registered"
     return 0
   fi
@@ -1842,20 +1857,48 @@ ensure_codex_marketplace() {
 
 install_or_update_codex_plugin() {
   log "Installing Kestral plugin..."
-  local _output _rc
+  local _output _rc _rm_output _rm_rc
   set +e
   _output="$(_run_codex_cmd plugin add "$PLUGIN_ID")"
   _rc=$?
   set -e
   verbose "codex plugin add output: $_output (rc=$_rc)"
 
-  if [ "$_rc" -eq 0 ]; then
-    ok "Kestral plugin installed"
-    return 0
+  # Codex has no `plugin update`. "Already installed" (often rc=0) leaves the
+  # versioned cache pin stale after marketplace upgrade — remove + re-add to
+  # refresh, matching Claude's install → update path.
+  if printf '%s' "$_output" | grep -qi 'already installed'; then
+    log "Already installed — updating plugin..."
+    set +e
+    _rm_output="$(_run_codex_cmd plugin remove "$PLUGIN_ID")"
+    _rm_rc=$?
+    set -e
+    verbose "codex plugin remove output: ${_rm_output} (rc=${_rm_rc})"
+    if [ "$_rm_rc" -ne 0 ]; then
+      # Do not treat a no-op re-add as success — add would still say "already installed".
+      warn "Plugin update failed — could not remove the old install. Leaving it as-is."
+      verbose "remove failure: ${_rm_output}"
+      ok "Kestral plugin is installed"
+      return 0
+    fi
+    set +e
+    _output="$(_run_codex_cmd plugin add "$PLUGIN_ID")"
+    _rc=$?
+    set -e
+    verbose "codex plugin re-add output: $_output (rc=$_rc)"
+    if [ "$_rc" -eq 0 ]; then
+      ok "Kestral plugin updated"
+      return 0
+    fi
+    # Remove already succeeded — do not claim the old install is still present.
+    warn "Plugin update failed — the previous install was removed but re-install did not succeed."
+    printf '  → Re-run this script to install Kestral again.\n' >&2
+    verbose "re-add failure: $_output"
+    return 1
   fi
 
-  if printf '%s' "$_output" | grep -qi 'already installed'; then
-    ok "Kestral plugin is up to date"
+  if [ "$_rc" -eq 0 ]; then
+    ok "Kestral plugin installed"
     return 0
   fi
 
@@ -1969,7 +2012,7 @@ clone_or_update_cursor_plugin() {
       _print_cursor_manual_fallback
       return 1
     fi
-    ok "Kestral plugin source updated"
+    ok "Kestral plugin updated"
   elif [ -e "$_clone_dir" ]; then
     warn "Plugin source path exists but is not a git repository: $_clone_dir"
     printf '  → Remove it and re-run: rm -rf "%s"\n' "$_clone_dir" >&2
@@ -1982,7 +2025,7 @@ clone_or_update_cursor_plugin() {
       warn "Failed to download plugin source."
       return 1
     fi
-    ok "Kestral plugin source installed"
+    ok "Kestral plugin installed"
   fi
 
   _rewrite_plugin_mcp_json_remote "$_clone_dir"
@@ -2058,7 +2101,22 @@ install_to_cursor() {
 
 # --- Sync hooks preference ---
 
+_selected_targets_display_list() {
+  local _target _name _list=""
+  for _target in ${SELECTED_TARGETS[@]+"${SELECTED_TARGETS[@]}"}; do
+    _name="$(_target_display_name "$_target")"
+    if [ -z "$_list" ]; then
+      _list="$_name"
+    else
+      _list="${_list}, ${_name}"
+    fi
+  done
+  printf '%s' "$_list"
+}
+
 _print_hooks_why() {
+  local _apps
+  _apps="$(_selected_targets_display_list)"
   cat <<'EOF'
 
 Sync hooks (optional — your choice):
@@ -2068,8 +2126,11 @@ Sync hooks (optional — your choice):
   push or open a PR, so your tasks stay up to date automatically.
   Hooks only nudge the app — they don't change your git history. You can turn
   them off later by re-running setup with --no-hooks.
-
 EOF
+  if [ -n "$_apps" ]; then
+    printf '  Applies to: %s\n' "$_apps"
+  fi
+  printf '\n'
 }
 
 resolve_hooks_choice() {
@@ -2084,7 +2145,7 @@ resolve_hooks_choice() {
   section "Sync hooks"
   _print_hooks_why
   local _answer=""
-  if read_tty "Enable Kestral sync hooks? [Y/n] " _answer; then
+  if read_tty "Enable Kestral sync hooks for all selected apps? [Y/n] " _answer; then
     case "$_answer" in
       [nN] | [nN][oO])
         ENABLE_HOOKS=0
@@ -2197,6 +2258,87 @@ _plugin_root_for_target() {
   esac
 }
 
+# Marketplace clone + versioned cache dirs Claude/Codex actually load from.
+# Hooks must be toggled on every root or --with-hooks/--no-hooks only edits the
+# marketplace while the host keeps serving a stale cache copy.
+_claude_plugin_install_roots() {
+  local _mkt _cache_base _dir
+  _mkt="$(_claude_marketplace_root 2>/dev/null || true)"
+  if [ -n "$_mkt" ] && [ -d "$_mkt" ]; then
+    printf '%s\n' "$_mkt"
+  fi
+  _cache_base="${HOME}/.claude/plugins/cache/${MARKETPLACE_NAME}/kestral"
+  if [ -d "$_cache_base" ]; then
+    for _dir in "$_cache_base"/*; do
+      [ -d "$_dir" ] || continue
+      if [ -f "${_dir}/.claude-plugin/plugin.json" ]; then
+        printf '%s\n' "$_dir"
+      fi
+    done
+  fi
+}
+
+_codex_plugin_install_roots() {
+  local _mkt _cache_base _dir
+  _mkt="$(_codex_marketplace_root 2>/dev/null || true)"
+  if [ -n "$_mkt" ] && [ -d "$_mkt" ]; then
+    printf '%s\n' "$_mkt"
+  fi
+  _cache_base="${HOME}/.codex/plugins/cache/${MARKETPLACE_NAME}/kestral"
+  if [ -d "$_cache_base" ]; then
+    for _dir in "$_cache_base"/*; do
+      [ -d "$_dir" ] || continue
+      if [ -f "${_dir}/.codex-plugin/plugin.json" ]; then
+        printf '%s\n' "$_dir"
+      fi
+    done
+  fi
+}
+
+# Apply hooks preference to every install root the host may load (marketplace +
+# versioned caches for Claude/Codex; single install dir for Cursor/Cowork).
+_apply_hooks_preference_for_target() {
+  local _target="$1"
+  local _root _any=0 _failed=0
+
+  case "$_target" in
+    claude-code)
+      while IFS= read -r _root; do
+        [ -n "$_root" ] || continue
+        _any=1
+        _apply_hooks_preference_to_root "$_root" || _failed=1
+      done <<EOF
+$(_claude_plugin_install_roots)
+EOF
+      ;;
+    codex)
+      while IFS= read -r _root; do
+        [ -n "$_root" ] || continue
+        _any=1
+        _apply_hooks_preference_to_root "$_root" || _failed=1
+      done <<EOF
+$(_codex_plugin_install_roots)
+EOF
+      ;;
+    *)
+      _root="$(_plugin_root_for_target "$_target")"
+      if [ -n "$_root" ] && [ -d "$_root" ]; then
+        _any=1
+        _apply_hooks_preference_to_root "$_root" || _failed=1
+      fi
+      ;;
+  esac
+
+  if [ "$_any" -eq 0 ]; then
+    HOOKS_FAILED=1
+    return 1
+  fi
+  if [ "$_failed" -eq 1 ]; then
+    return 1
+  fi
+  return 0
+}
+
 _print_codex_hooks_activation() {
   cat <<'EOF'
 
@@ -2208,12 +2350,69 @@ Codex hook activation required:
 EOF
 }
 
+_add_hooks_success_target() {
+  local _want="$1"
+  local _t
+  for _t in ${HOOKS_SUCCESS_TARGETS[@]+"${HOOKS_SUCCESS_TARGETS[@]}"}; do
+    if [ "$_t" = "$_want" ]; then
+      return 0
+    fi
+  done
+  HOOKS_SUCCESS_TARGETS+=("$_want")
+}
+
+_hooks_next_step_targets() {
+  # Prefer --hooks-only successes; otherwise use hosts that finished a full install.
+  if [ "${#HOOKS_SUCCESS_TARGETS[@]}" -gt 0 ]; then
+    printf '%s\n' "${HOOKS_SUCCESS_TARGETS[@]}"
+    return 0
+  fi
+  if [ "$TARGET_RESULT_CLAUDE" = "installed" ]; then
+    printf '%s\n' "claude-code"
+  fi
+  if [ "$TARGET_RESULT_DESKTOP" = "installed" ]; then
+    printf '%s\n' "claude-desktop"
+  fi
+  if [ "$TARGET_RESULT_CODEX" = "installed" ]; then
+    printf '%s\n' "codex"
+  fi
+  if [ "$TARGET_RESULT_CURSOR" = "installed" ]; then
+    printf '%s\n' "cursor"
+  fi
+}
+
+_print_hooks_next_steps() {
+  local _target
+  printf '\nSync hooks: enabled (reminders after session start and push/PR).\n'
+
+  while IFS= read -r _target; do
+    [ -n "$_target" ] || continue
+    case "$_target" in
+      claude-code)
+        printf '  Claude Code: reload plugins or restart so hooks register.\n'
+        ;;
+      claude-desktop)
+        printf '  %s: fully quit and reopen, then start a new task.\n' "$(_desktop_app_name)"
+        ;;
+      cursor)
+        printf '  Cursor: fully quit and reopen so hooks reload.\n'
+        ;;
+      codex)
+        _print_codex_hooks_activation
+        ;;
+    esac
+  done <<EOF
+$(_hooks_next_step_targets)
+EOF
+}
+
 _enable_hooks_only_for_targets() {
   section "Enabling sync hooks"
   _print_hooks_why
   ensure_ruby 2>/dev/null || true
 
   local _target _root _any=0 _desk_root
+  HOOKS_SUCCESS_TARGETS=()
   for _target in ${SELECTED_TARGETS[@]+"${SELECTED_TARGETS[@]}"}; do
     if [ "$_target" = "claude-desktop" ] && [ "${#DESKTOP_ROOTS[@]}" -gt 0 ]; then
       for _desk_root in "${DESKTOP_ROOTS[@]}"; do
@@ -2225,6 +2424,7 @@ _enable_hooks_only_for_targets() {
         fi
         if _apply_hooks_preference_to_root "$_root"; then
           ok "Sync hooks enabled for Cowork (${_desk_root}) → ${_root}"
+          _add_hooks_success_target "claude-desktop"
           _any=1
         fi
       done
@@ -2242,8 +2442,9 @@ _enable_hooks_only_for_targets() {
       warn "Plugin files incomplete at ${_root} — skipping ${_target}."
       continue
     fi
-    if _apply_hooks_preference_to_root "$_root"; then
-      ok "Sync hooks enabled for ${_target} → ${_root}"
+    if _apply_hooks_preference_for_target "$_target"; then
+      ok "Sync hooks enabled for ${_target}"
+      _add_hooks_success_target "$_target"
       _any=1
     fi
   done
@@ -2258,9 +2459,6 @@ _enable_hooks_only_for_targets() {
     return 1
   fi
 
-  if _list_contains_target codex; then
-    _print_codex_hooks_activation
-  fi
   return 0
 }
 
@@ -2284,7 +2482,7 @@ _run_target() {
       section "Installing Kestral to Claude Code"
       if install_to_claude_code; then
         TARGET_RESULT_CLAUDE="installed"
-        _apply_hooks_preference_to_root "$(_plugin_root_for_target claude-code)"
+        _apply_hooks_preference_for_target claude-code
       else
         TARGET_RESULT_CLAUDE="FAILED"
       fi
@@ -2296,7 +2494,7 @@ _run_target() {
         local _desk_root
         for _desk_root in ${DESKTOP_ROOTS[@]+"${DESKTOP_ROOTS[@]}"}; do
           DESKTOP_SELECTED_ROOT="$_desk_root"
-          _apply_hooks_preference_to_root "$(_plugin_root_for_target claude-desktop)"
+          _apply_hooks_preference_for_target claude-desktop
         done
       else
         TARGET_RESULT_DESKTOP="FAILED"
@@ -2306,7 +2504,7 @@ _run_target() {
       section "Installing Kestral to Codex"
       if install_to_codex; then
         TARGET_RESULT_CODEX="installed"
-        _apply_hooks_preference_to_root "$(_plugin_root_for_target codex)"
+        _apply_hooks_preference_for_target codex
       else
         TARGET_RESULT_CODEX="FAILED"
       fi
@@ -2315,7 +2513,7 @@ _run_target() {
       section "Installing Kestral to Cursor"
       if install_to_cursor; then
         TARGET_RESULT_CURSOR="installed"
-        _apply_hooks_preference_to_root "$(_plugin_root_for_target cursor)"
+        _apply_hooks_preference_for_target cursor
       else
         TARGET_RESULT_CURSOR="FAILED"
       fi
@@ -2364,16 +2562,13 @@ _print_summary() {
   if [ "$HOOKS_FAILED" -eq 1 ]; then
     warn "Sync hooks: could not update plugin manifests (see warnings above)."
     _exit=1
-  elif [ "$HOOKS_ONLY" -eq 0 ]; then
-    if [ "$ENABLE_HOOKS" -eq 1 ] && [ "$HOOKS_APPLIED" -eq 1 ]; then
-      printf '\nSync hooks: enabled (reminders after session start and push/PR).\n'
-      if [ -n "$TARGET_RESULT_CODEX" ] && [ "$TARGET_RESULT_CODEX" = "installed" ]; then
-        _print_codex_hooks_activation
-      fi
-    elif [ "$ENABLE_HOOKS" -eq 0 ] && [ "$HOOKS_SKIPPED" -eq 1 ]; then
-      printf '\nSync hooks: off (your choice). Skills and Kestral still work; sync when you ask.\n'
-      printf '  Re-enable later: bash setup.sh --hooks-only\n'
-    fi
+  fi
+  if [ "$ENABLE_HOOKS" -eq 1 ] && [ "$HOOKS_APPLIED" -eq 1 ]; then
+    # Full install and --hooks-only both land here so restart / Codex trust text is not skipped.
+    _print_hooks_next_steps
+  elif [ "$HOOKS_ONLY" -eq 0 ] && [ "$ENABLE_HOOKS" -eq 0 ] && [ "$HOOKS_SKIPPED" -eq 1 ]; then
+    printf '\nSync hooks: off (your choice). Skills and Kestral still work; sync when you ask.\n'
+    printf '  Re-enable later: bash setup.sh --hooks-only\n'
   fi
   if [ "$_exit" -ne 0 ]; then
     printf '\n  Full logs: %s\n' "$LOGFILE"

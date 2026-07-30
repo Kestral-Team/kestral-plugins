@@ -22,7 +22,7 @@ update tasks, pull workspace knowledge into a conversation, or scaffold a new pr
 ## Install
 
 **Recommended:** one command connects to Kestral at `https://app.kestral.ai/mcp` and installs to detected apps (Claude
-Code and/or Codex on macOS and Linux; Claude Cowork is macOS only; Cursor via `--app cursor`):
+Code, Codex, and Cursor on macOS and Linux; Claude Cowork is macOS only):
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/Kestral-Team/kestral-plugins/main/setup.sh | bash
@@ -56,7 +56,8 @@ Pick your app below for manual steps (the same steps the script automates).
 
 ### Sync hooks (optional)
 
-During setup, the script explains sync hooks and asks whether to enable them (default: yes). You can also pass a flag:
+During setup, the script explains sync hooks and asks whether to enable them for **all apps you selected** (default:
+yes). You can also pass a flag:
 
 ```bash
 # Recommended — keep tasks updated after push / pull request
@@ -70,11 +71,13 @@ bash setup.sh --hooks-only
 ```
 
 **Why enable them?** Without hooks, your coding app can update Kestral when it remembers — but it's easy to forget after
-a push or pull request. With hooks, it gets a reminder at session start and after push/PR, so tasks stay up to date.
-Hooks only nudge the app; they don't change your git history. Choosing no is fine — you can re-enable anytime with
-`--hooks-only`. They never create a task automatically: if a pushed branch is not linked, the app asks you first. On
-Codex, enabling hooks installs them but does not activate them: start a new Codex CLI session, open `/hooks`, and trust
-the Kestral hooks. Codex requires this security review and may ask again after an update changes a hook.
+a push or pull request. With hooks, each selected app (Claude Code, Cowork, Codex, Cursor) gets a reminder at session
+start and after push/PR, so tasks stay up to date. Hooks only nudge the app; they don't change your git history.
+Choosing no is fine — you can re-enable anytime with `--hooks-only`. They never create a task automatically: if a pushed
+branch is not linked, the app asks you first. On Codex, enabling hooks installs them but does not activate them: start a
+new Codex CLI session, open `/hooks`, and trust the Kestral hooks. Codex requires this security review and may ask again
+after an update changes a hook. Claude Code, Cowork, and Cursor need a full quit/reopen (or plugin reload) so hooks
+register.
 
 **Per-folder opt-in:** Hooks only run ambient sync when `~/.kestral/hook-repos.json` says `"linked"` for this repo. In
 other folders, session start runs a light check: if the git remote matches a GitHub repo already connected in Kestral,
@@ -83,29 +86,24 @@ auto-sync turns on; otherwise you get a one-time notice that auto-sync is off by
 
 ### Claude Code
 
-1. From your terminal or within Claude Code, add the Kestral plugin marketplace:
+**Recommended:** the plain setup one-liner installs Claude Code when it is detected. To install Claude Code only:
 
-   ```
-   claude plugin marketplace add Kestral-Team/kestral-plugins
-   ```
+```bash
+curl -fsSL https://raw.githubusercontent.com/Kestral-Team/kestral-plugins/main/setup.sh | bash -s -- --app claude-code
+```
 
-2. Install the Kestral plugin:
+Then reload plugins or restart Claude Code so session-start, post-push, and Kestral request-checking hooks register.
+Installing the plugin is the trust step in Claude Code; there is no separate per-hook approval. In chat, run the setup
+skill:
 
-   ```
-   claude plugin install kestral@kestral-plugins
-   ```
+```
+/kestral:kestral-setup
+```
 
-   After install, reload plugins or restart Claude Code so session-start, post-push, and Kestral request-checking hooks
-   register. Installing the plugin is the trust step in Claude Code; there is no separate per-hook approval.
-
-3. In chat, run the setup skill:
-
-   ```
-   /kestral:kestral-setup
-   ```
-
-   You can also use slash commands in chat instead of the CLI: `/plugin marketplace add Kestral-Team/kestral-plugins`
-   then `/plugin install kestral@kestral-plugins`.
+**By hand:** `/plugin marketplace add Kestral-Team/kestral-plugins` then `/plugin install kestral@kestral-plugins` (the
+same commands work as `claude plugin …` from your terminal). To update an existing install, run
+`claude plugin update kestral@kestral-plugins` — `plugin install` reports "already installed" and leaves the old version
+in place.
 
 ### Claude Cowork
 
@@ -124,10 +122,10 @@ auto-sync turns on; otherwise you get a one-time notice that auto-sync is off by
 2. In the repository field, enter `Kestral-Team/kestral-plugins` and leave the bottom two fields blank.
 3. Click **More** again, then find **Kestral Plugins**.
 4. Click **+** in the **Productivity** section for the plugin called **Kestral**.
-5. Run `/kestral-setup` in Codex to connect your workspace.
+5. Run `$kestral-setup` in Codex to connect your workspace.
 
-   Codex does **not** use Claude-style `/kestral:…` slash commands for other skills — use `$kestral-setup`,
-   `$kestral-tasks`, `$kestral-context`, or type `@kestral` to target the plugin.
+   Codex does **not** use Claude-style `/kestral:…` slash commands — use `$kestral-setup`, `$kestral-tasks`,
+   `$kestral-context`, or type `@kestral` to target the plugin.
 
 After installing in Codex, fully quit and restart the app so it reloads the plugin cache. Then complete the required
 hook activation in a new Codex CLI session: open `/hooks`, review the Kestral hooks, and trust them. Until you do this,
@@ -138,7 +136,7 @@ session context, remind the agent to sync after a push or PR, and check Kestral 
 
 ### Cursor
 
-**Recommended:** one command installs the full bundle (MCP, plan-day, end-day-review skills, and sync hooks):
+**Recommended:** the plain setup one-liner installs Cursor when it is detected. To install Cursor only:
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/Kestral-Team/kestral-plugins/main/setup.sh | bash -s -- --app cursor
@@ -156,11 +154,11 @@ one-click install link from the Kestral Integrations page.
 
 ## What you can do
 
-| Command                  | What it does                                                                  | Example                                                                                               |
-| ------------------------ | ----------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------- |
-| `/kestral:kestral-setup` | Set up a Kestral project with a Project Brain from connected tools and goals. | `/kestral:kestral-setup` → authenticates, finds your work, shows a manifest, creates project + brain. |
-| `/kestral:tasks`         | Search, view, and update tasks in your workspace.                             | `/kestral:tasks show my open tasks in the auth project` → returns a filtered task list.               |
-| `/kestral:context`       | Pull docs, projects, and tasks into the chat as context.                      | `/kestral:context auth migration` → finds matching docs and tasks, asks which to load.                |
+| Command                    | What it does                                                                  | Example                                                                                                    |
+| -------------------------- | ----------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------ |
+| `/kestral:kestral-setup`   | Set up a Kestral project with a Project Brain from connected tools and goals. | `/kestral:kestral-setup` → authenticates, finds your work, shows a manifest, creates project + brain.      |
+| `/kestral:kestral-tasks`   | Search, view, and update tasks in your workspace.                             | `/kestral:kestral-tasks show my open tasks in the auth project` → returns a filtered task list.            |
+| `/kestral:kestral-context` | Pull docs, projects, and tasks into the chat as context.                      | `/kestral:kestral-context auth migration` → finds matching docs and tasks, asks which to load.             |
 
 In Claude Code, type `/kestral:` and use autocomplete to see all available commands. In Codex, type `@kestral` to target
 the plugin, or invoke a bundled skill directly with `$kestral-setup`, `$kestral-tasks`, or `$kestral-context`.
@@ -202,8 +200,8 @@ Say "create these", "only create Auth Migration", "rename Billing Automation to 
 or "import all matching tasks into Auth Migration".
 ```
 
-After onboarding, use `/kestral:tasks` to work with your tasks and `/kestral:context` to pull knowledge into
-conversations.
+After onboarding, use `/kestral:kestral-tasks` to work with your tasks and `/kestral:kestral-context` to pull knowledge
+into conversations.
 
 ## Supported document and task sources
 
