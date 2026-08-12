@@ -59,8 +59,10 @@ When opening a PR (`gh pr create`), choose one:
 
 - **Tracked feature/fix (has a Kestral task):** omit skip directive; after create use the one-call `sync_after_push`
   path above with the current branch and PR URL. Optionally include the task slug in the title for webhook auto-link.
-- **Chore / manifest bump / no task:** add `<!-- kestral:skip-auto-link -->` (or `Kestral: skip auto-link`) to the PR
-  body so Kestral does not enqueue AI auto-link or post no-task-linked bot comments.
+- **Chore / manifest bump / no task:** prefer `execute_operation("set_pr_tracking", { tracked: false, branchName })` as
+  soon as the branch is known (works before a PR exists). After the PR exists, pass `prUrl` too. If MCP is unavailable,
+  add `<!-- kestral:skip-auto-link -->` (or a line `Kestral: skip auto-link`) to the PR body. To undo an auto-created
+  task: `set_pr_tracking({ tracked: false, prUrl, removeAutoCreatedTask: true })`.
 
 ### Conflict Check
 

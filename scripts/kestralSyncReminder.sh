@@ -19,7 +19,7 @@ if ! command -v jq >/dev/null 2>&1; then
   exit 0
 fi
 
-command=$(echo "$input" | jq -r '.tool_input.command // empty')
+command=$(printf '%s' "$input" | jq -r '.tool_input.command // empty' 2>/dev/null || true)
 
 if [[ -z "$command" ]]; then
   echo '{}'
@@ -32,12 +32,22 @@ if [[ ! "$command" =~ (^|[;&|[:space:]])(git[[:space:]]+push|gt[[:space:]]+(s|su
   exit 0
 fi
 
-if ! kestral_project_linked; then
+repo_root=""
+if [[ "$host" == "cursor" ]]; then
+  repo_root="$(kestral_resolve_cursor_project_root "$input")"
+  if [[ -z "$repo_root" ]]; then
+    echo '{}'
+    exit 0
+  fi
+fi
+
+if ! kestral_project_linked "$repo_root"; then
   echo '{}'
   exit 0
 fi
 
-branch=$(git branch --show-current 2>/dev/null || true)
+branch=$(kestral_git "$repo_root" branch --show-current 2>/dev/null || true)
+
 if [[ -z "$branch" ]]; then
   branch='<current-branch>'
 fi

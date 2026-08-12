@@ -20,6 +20,71 @@ kestral_realpath() {
   fi
 }
 
+kestral_git() {
+  local repo_root="${1:-}"
+  shift
+
+  if [[ -n "$repo_root" ]]; then
+    git -C "$repo_root" "$@"
+  else
+    git "$@"
+  fi
+}
+
+kestral_git_toplevel() {
+  local path="${1:-}"
+  local toplevel
+
+  if [[ -z "$path" ]] || [[ ! -d "$path" ]] || ! command -v git >/dev/null 2>&1; then
+    return 0
+  fi
+
+  toplevel="$(kestral_git "$path" rev-parse --show-toplevel 2>/dev/null || true)"
+  if [[ -n "$toplevel" ]]; then
+    kestral_realpath "$toplevel"
+  fi
+}
+
+# Resolve the repository open in Cursor without falling back to the plugin install directory.
+kestral_resolve_cursor_project_root() {
+  local input="${1:-}"
+  local candidate root resolved_root=""
+  local resolved_count=0
+
+  root="$(kestral_git_toplevel "${CURSOR_PROJECT_DIR:-}")"
+  if [[ -n "$root" ]]; then
+    echo "$root"
+    return 0
+  fi
+
+  if [[ -z "$input" ]] || ! command -v jq >/dev/null 2>&1; then
+    return 0
+  fi
+
+  while IFS= read -r candidate; do
+    [[ -n "$candidate" ]] || continue
+    root="$(kestral_git_toplevel "$candidate")"
+    [[ -n "$root" ]] || continue
+    if [[ "$root" == "$resolved_root" ]]; then
+      continue
+    fi
+    resolved_root="$root"
+    resolved_count=$((resolved_count + 1))
+    if [[ $resolved_count -gt 1 ]]; then
+      return 0
+    fi
+  done < <(printf '%s' "$input" | jq -r '
+    .workspace_roots
+    | select(type == "array")
+    | .[]
+    | select(type == "string")
+  ' 2>/dev/null || true)
+
+  if [[ $resolved_count -eq 1 ]]; then
+    echo "$resolved_root"
+  fi
+}
+
 # Strip userinfo from https/http remotes (e.g. https://user:token@host/o/r.git → https://host/o/r.git).
 # SSH remotes are unchanged. Safe to embed in hook context / MCP params for repo matching.
 kestral_sanitize_git_remote() {
@@ -103,12 +168,13 @@ kestral_parse_github_repo_key() {
   echo "$(echo "${owner}/${name}" | tr '[:upper:]' '[:lower:]')"
 }
 
-# Resolve the prefs key for the current git repo: owner/repo or dir:<realpath>.
+# Resolve the prefs key for a git repo: owner/repo or dir:<realpath>.
 kestral_repo_prefs_key() {
+  local repo_root="${1:-}"
   local remote key toplevel
 
   if command -v git >/dev/null 2>&1; then
-    remote="$(git remote get-url origin 2>/dev/null || true)"
+    remote="$(kestral_git "$repo_root" remote get-url origin 2>/dev/null || true)"
     remote="$(kestral_sanitize_git_remote "$remote")"
     if [[ -n "$remote" ]]; then
       key="$(kestral_parse_github_repo_key "$remote")"
@@ -117,24 +183,29 @@ kestral_repo_prefs_key() {
         return 0
       fi
     fi
-    toplevel="$(git rev-parse --show-toplevel 2>/dev/null || true)"
+    toplevel="$(kestral_git "$repo_root" rev-parse --show-toplevel 2>/dev/null || true)"
     if [[ -n "$toplevel" ]]; then
       echo "dir:$(kestral_realpath "$toplevel")"
       return 0
     fi
   fi
 
-  echo "dir:$(pwd -P)"
+  if [[ -n "$repo_root" ]]; then
+    echo "dir:$(kestral_realpath "$repo_root")"
+  else
+    echo "dir:$(pwd -P)"
+  fi
 }
 
-# Look up linked|skip for the current repo in $KESTRAL_HOME/hook-repos.json (empty if missing).
+# Look up linked|skip for a repo in $KESTRAL_HOME/hook-repos.json (empty if missing).
 kestral_home_repo_pref() {
+  local repo_root="${1:-}"
   local prefs_file key value
   prefs_file="$(kestral_home_dir)/hook-repos.json"
   if [[ ! -f "$prefs_file" ]] || ! command -v jq >/dev/null 2>&1; then
     return 0
   fi
-  key="$(kestral_repo_prefs_key)"
+  key="$(kestral_repo_prefs_key "$repo_root")"
   if [[ -z "$key" ]]; then
     return 0
   fi
@@ -145,7 +216,8 @@ kestral_home_repo_pref() {
 }
 
 kestral_hook_link_state() {
-  case "$(kestral_home_repo_pref)" in
+  local repo_root="${1:-}"
+  case "$(kestral_home_repo_pref "$repo_root")" in
     skip)
       echo "declined"
       ;;
@@ -159,5 +231,6 @@ kestral_hook_link_state() {
 }
 
 kestral_project_linked() {
-  [[ "$(kestral_hook_link_state)" == "linked" ]]
+  local repo_root="${1:-}"
+  [[ "$(kestral_hook_link_state "$repo_root")" == "linked" ]]
 }

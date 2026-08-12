@@ -2527,6 +2527,34 @@ _run_target() {
   esac
 }
 
+_print_mcp_auth_next_steps() {
+  local _has_installed_target=0
+  if [ "$TARGET_RESULT_CLAUDE" = "installed" ] \
+    || [ "$TARGET_RESULT_DESKTOP" = "installed" ] \
+    || [ "$TARGET_RESULT_CODEX" = "installed" ] \
+    || [ "$TARGET_RESULT_CURSOR" = "installed" ]; then
+    _has_installed_target=1
+  fi
+
+  [ "$_has_installed_target" -eq 1 ] || return 0
+
+  printf '\nFinish Kestral authentication:\n'
+  printf '  Installing the plugin does not sign you into the Kestral MCP. Authenticate in each app if prompted:\n'
+  if [ "$TARGET_RESULT_CLAUDE" = "installed" ]; then
+    printf '  Claude Code: run /mcp, select Kestral, and authenticate.\n'
+  fi
+  if [ "$TARGET_RESULT_DESKTOP" = "installed" ]; then
+    printf '  %s: open Customize → Connectors → Kestral, then connect and sign in.\n' "$(_desktop_app_name)"
+  fi
+  if [ "$TARGET_RESULT_CODEX" = "installed" ]; then
+    printf '  Codex: open Settings → MCP Servers → Kestral → Authenticate, then start a new task.\n'
+  fi
+  if [ "$TARGET_RESULT_CURSOR" = "installed" ]; then
+    printf '  Cursor: open Settings → Tools & MCPs → Kestral. If it says Needs authentication, click Connect.\n'
+  fi
+  printf '  If Kestral already shows Connected, you are done.\n'
+}
+
 _print_summary() {
   local _exit=0
   section "Done!"
@@ -2562,6 +2590,7 @@ _print_summary() {
       _exit=1
     fi
   fi
+  _print_mcp_auth_next_steps
   if [ "$HOOKS_FAILED" -eq 1 ]; then
     warn "Sync hooks: could not update plugin manifests (see warnings above)."
     _exit=1

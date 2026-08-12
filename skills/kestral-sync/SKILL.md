@@ -43,6 +43,13 @@ execute_operation("sync_after_push", { branchName, summary?, prUrl? })
 
 Do not run Full Sync afterward.
 
+### Opt out of GitHub auto-link / auto-create
+
+For chore or one-off work with no Kestral task, call
+`execute_operation("set_pr_tracking", { tracked: false, branchName, prUrl? })` as soon as the branch is known (before
+the PR exists). Fall back to `<!-- kestral:skip-auto-link -->` in the PR body only if MCP is unavailable. To undo an
+auto-created task: pass `removeAutoCreatedTask: true` with `prUrl`.
+
 ## Never write MCP into product code
 
 `execute_operation` / MCP tool calls are agent-session actions only. Never write them into application source.

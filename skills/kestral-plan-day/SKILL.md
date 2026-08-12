@@ -77,19 +77,37 @@ Default order:
 4. If the bundled response is insufficient (e.g. need project-scoped searches, stale-task sweep, or cross-team work), or
    `load_status` marks a section failed, run targeted task searches:
    - Prefer `my_overdue_tasks` from the bundle for overdue work before extra searches.
-   - `execute_operation("list_stale_tasks", { staleDays: 7, assigneeFilter: "me" })` — active tasks not updated
-     in the last 7 days (stale/forgotten commitments).
-   - `execute_operation("search_tasks_by_time", { timeFilter: "due in the next two business days", assigneeFilter: "me", sortBy: "dueDate" })` —
-     tasks due today through the next two business days (weekends skipped; anchored to caller local time via MCP context).
+   - `execute_operation("list_stale_tasks", { staleDays: 7, assigneeFilter: "me" })` — active tasks not updated in the
+     last 7 days (stale/forgotten commitments).
+   - `execute_operation("search_tasks_by_time", { timeFilter: "due in the next two business days", assigneeFilter: "me", sortBy: "dueDate" })`
+     — tasks due today through the next two business days (weekends skipped; anchored to caller local time via MCP
+     context).
    - For blocked work, prefer `execute_operation("list_blocked_tasks", { assigneeFilter: "me" })` over semantic
      `search_tasks` with query "blocked tasks".
 5. Search or fetch Kestral projects only when the brief or task search names a project without enough detail to plan
    around it.
 6. Use deeper Kestral research only when cross-project state is ambiguous and the extra latency is justified.
 
-Task search results include slug, assignee name, status, priority, due date, blocker counts, and URL. Use these fields
-directly for the Morning Readout — do not call `entity_lookup` to re-verify search results. Reserve `entity_lookup` for
-tasks referenced by slug/URL in the brief that were not returned by search.
+Task search results include slug, assignee name, status, priority, due date, blocker counts, up to five
+`recentComments`, `doabilityState`, `doabilityReason`, and URL. Use these fields directly for the Morning Readout —
+do not call `entity_lookup` to re-verify search results. Reserve `entity_lookup` for tasks referenced by slug/URL in the
+brief that were not returned by search, or when you need older comment history.
+
+Treat priority as importance, not executability. A high priority or near due date never overrides
+`doabilityState: waiting` or `doabilityState: blocked`. Use the shared doability result whenever it is present:
+
+- `doable` — eligible for focus work **only after** you read `recentComments`. If comments show an external wait, treat
+  the task as waiting even when `doabilityState` is still `doable`.
+- `waiting` or `blocked` — never schedule execution of the task. Put it in a separate **Blocked/Waiting** lane and, when
+  useful, schedule only a communication or unblock follow-up such as contacting a vendor.
+- `unknown` — do not present the task as confidently executable. Verify it when it is central to the day; otherwise
+  label the uncertainty and keep it out of the must-win focus.
+
+Structured doability covers formal blocker relationships and holding/waiting statuses only (Project Brain blockers are
+a Daily Brief hard gate, not Plan Day). For Plan Day, read the last few task comments on every candidate before
+scheduling execution. The planning context also uses project involvement/activity, assignment, status, priority, due
+date, and staleness to decide relevance and urgency. These signals rank what deserves attention; they do not rewrite
+stored priorities or due dates.
 
 Start data gathering immediately. Run independent reads in parallel whenever the host supports it: bundled planning
 context, local preferences, and calendar do not need to block one another. Do not parallelize dependent checks; fetch
@@ -146,7 +164,8 @@ Summarize the most important inputs before asking the user to plan:
 
 - Major project updates since the last brief, only when they affect today's choices.
 - Critical blockers, pending Project Brain changes, and decisions needing user attention.
-- The top 3-5 urgent, overdue, stale, or due-soon tasks; do not list every candidate task.
+- The top 3-5 urgent, overdue, stale, or due-soon **doable** tasks; do not list every candidate task.
+- A short Blocked/Waiting callout for important non-doable tasks, clearly separated from do-now recommendations.
 - Calendar constraints: today's real meeting pressure, best focus windows, and only notable events in the next two
   business days.
 - Saved planning preferences that materially affect today's plan.
@@ -161,6 +180,9 @@ referenced task just because it appears in the brief. Do not call `entity_lookup
 `get_daily_planning_context` or `search_tasks` — those results already include slug, assignee, status, and URL. When
 generated Project Brain knowledge conflicts with live task/project fields, label the generated knowledge as stale and
 prefer the live record for planning.
+
+Before naming a must-win or placing work in a focus block, check its `doabilityState`. Keep `waiting`, `blocked`, and
+unverified `unknown` tasks out of do-now work even when they are high priority, overdue, or due today.
 
 ### 2. Ask constraints before planning
 
@@ -192,9 +214,12 @@ Produce a ranked plan with:
 - Quick wins that reduce risk or clear stale commitments.
 - Decision or communication checkpoints.
 - Prep/follow-up blocks for meetings today or in the next two business days.
+- A separate **Blocked/Waiting** lane for non-doable tasks, including the reason and an optional communication or
+  unblock follow-up. Never schedule execution of the blocked task itself.
 - Deferred/non-priority work with a short reason.
 
 Make the plan realistic. Do not fill every free minute. Reserve buffer when the calendar is fragmented or blocker-heavy.
+Rank focus work by urgency only after applying the doability gate.
 
 ### 4. Adjust conversationally
 
@@ -264,6 +289,10 @@ Use this structure unless the user asks for something else:
 ## Quick Wins
 
 - ...
+
+## Blocked/Waiting
+
+- [task] — [waiting/blocked reason]; [optional communication or unblock follow-up]
 
 ## Defer
 

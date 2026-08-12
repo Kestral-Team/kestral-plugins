@@ -7,29 +7,34 @@
 set -euo pipefail
 
 host="${1:-cursor}"
-cat >/dev/null || true
+input=$(cat)
 
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck source=_kestralProjectLinked.sh
 source "${script_dir}/_kestralProjectLinked.sh"
 
-if ! command -v git >/dev/null 2>&1; then
+if ! command -v git >/dev/null 2>&1 || ! command -v jq >/dev/null 2>&1; then
   echo '{}'
   exit 0
 fi
 
-branch=$(git branch --show-current 2>/dev/null || true)
+repo_root=""
+if [[ "$host" == "cursor" ]]; then
+  repo_root="$(kestral_resolve_cursor_project_root "$input")"
+  if [[ -z "$repo_root" ]]; then
+    echo '{}'
+    exit 0
+  fi
+fi
+
+branch=$(kestral_git "$repo_root" branch --show-current 2>/dev/null || true)
+
 if [[ -z "$branch" ]]; then
   echo '{}'
   exit 0
 fi
 
-if ! command -v jq >/dev/null 2>&1; then
-  echo '{}'
-  exit 0
-fi
-
-link_state="$(kestral_hook_link_state)"
+link_state="$(kestral_hook_link_state "$repo_root")"
 
 if [[ "$link_state" == "declined" ]]; then
   echo '{}'
@@ -55,9 +60,9 @@ fi
 if [[ "$link_state" == "linked" ]]; then
   ctx="REQUIRED FIRST ACTION: Call execute_operation on the Kestral MCP server (registered as \"Kestral\") with operationId=\"sync_session_workflow\", params={ intent: \"session_start\"${plugin_version_param} }, explanation=\"Loading sync trigger instructions for session on branch ${branch}\". Do this before answering the user's question. The response configures sync triggers for the rest of the session."
 else
-  git_remote=$(git remote get-url origin 2>/dev/null || true)
+  git_remote=$(kestral_git "$repo_root" remote get-url origin 2>/dev/null || true)
   git_remote="$(kestral_sanitize_git_remote "$git_remote")"
-  prefs_key="$(kestral_repo_prefs_key)"
+  prefs_key="$(kestral_repo_prefs_key "$repo_root")"
   prefs_json=$(jq -n --arg k "$prefs_key" '$k')
   if [[ -n "$git_remote" ]]; then
     remote_json=$(jq -n --arg r "$git_remote" '$r')
