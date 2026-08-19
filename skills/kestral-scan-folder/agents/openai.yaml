@@ -1,7 +1,0 @@
-interface:
-  display_name: "Kestral Scan Folder"
-  short_description: "Scan local files for setup evidence"
-  default_prompt: "Use $kestral-scan-folder to scan this folder for Kestral setup evidence."
-
-policy:
-  allow_implicit_invocation: false

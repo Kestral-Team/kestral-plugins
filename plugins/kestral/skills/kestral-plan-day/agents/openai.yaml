@@ -1,0 +1,7 @@
+interface:
+  display_name: "Kestral Plan Day"
+  short_description: "Plan the day from Kestral and calendar"
+  default_prompt: "Use $kestral-plan-day to turn my Kestral brief into a realistic plan for today."
+
+policy:
+  allow_implicit_invocation: true

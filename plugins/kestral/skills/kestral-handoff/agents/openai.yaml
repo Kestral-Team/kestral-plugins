@@ -1,0 +1,7 @@
+interface:
+  display_name: "Kestral Plan Handoff"
+  short_description: "Repush the multi-phase plan to Kestral"
+  default_prompt: "Use $kestral-handoff to reconcile this worktree and sync the plan back to Kestral."
+
+policy:
+  allow_implicit_invocation: true

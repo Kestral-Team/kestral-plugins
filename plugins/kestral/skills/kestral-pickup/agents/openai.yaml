@@ -1,0 +1,7 @@
+interface:
+  display_name: "Kestral Plan Pickup"
+  short_description: "Resume a Kestral multi-phase plan in this worktree"
+  default_prompt: "Use $kestral-pickup to download the Kestral plan and claim the next unblocked lane."
+
+policy:
+  allow_implicit_invocation: true

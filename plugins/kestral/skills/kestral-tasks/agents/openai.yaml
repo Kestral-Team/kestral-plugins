@@ -1,0 +1,7 @@
+interface:
+  display_name: "Kestral Tasks"
+  short_description: "List and update Kestral tasks"
+  default_prompt: "Use $kestral-tasks to show my open Kestral tasks."
+
+policy:
+  allow_implicit_invocation: false

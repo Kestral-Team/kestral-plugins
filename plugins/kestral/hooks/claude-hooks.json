@@ -1,0 +1,40 @@
+{
+  "description": "Kestral sync: load session instructions, remind after push/PR, and validate Kestral requests",
+  "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash \"${CLAUDE_PLUGIN_ROOT}/scripts/kestralSessionContext.sh\" claude",
+            "timeout": 10
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash \"${CLAUDE_PLUGIN_ROOT}/scripts/kestralSyncReminder.sh\" claude",
+            "timeout": 10
+          }
+        ]
+      }
+    ],
+    "PreToolUse": [
+      {
+        "matcher": "mcp__.*(Kestral|kestral).*__execute_operation",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash \"${CLAUDE_PLUGIN_ROOT}/scripts/kestralMcpSchemaCheck.sh\" claude",
+            "timeout": 10
+          }
+        ]
+      }
+    ]
+  }
+}

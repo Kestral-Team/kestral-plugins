@@ -1,0 +1,7 @@
+interface:
+  display_name: "Kestral End Day Review"
+  short_description: "Review today and plan tomorrow"
+  default_prompt: "Use $kestral-end-day-review to review today and identify tomorrow's priorities."
+
+policy:
+  allow_implicit_invocation: true

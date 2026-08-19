@@ -1,0 +1,7 @@
+interface:
+  display_name: "Kestral Context"
+  short_description: "Search and load Kestral workspace context"
+  default_prompt: "Use $kestral-context to find relevant Kestral context for this topic."
+
+policy:
+  allow_implicit_invocation: false

@@ -1,7 +1,0 @@
-interface:
-  display_name: "Kestral Scan Tasks"
-  short_description: "Scan task tools for importable work"
-  default_prompt: "Use $kestral-scan-tasks to find importable tasks for Kestral setup."
-
-policy:
-  allow_implicit_invocation: false

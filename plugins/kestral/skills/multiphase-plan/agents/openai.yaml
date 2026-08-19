@@ -1,0 +1,7 @@
+interface:
+  display_name: "Kestral Multi-Phase Plan"
+  short_description: "Break work into phases and publish to Kestral"
+  default_prompt: "Use $multiphase-plan to turn this goal into a multi-phase Kestral plan."
+
+policy:
+  allow_implicit_invocation: true

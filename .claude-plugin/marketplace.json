@@ -1,14 +1,13 @@
 {
   "name": "kestral-plugins",
   "owner": { "name": "Kestral" },
-  "interface": {
-    "displayName": "Kestral Plugins"
-  },
   "plugins": [
     {
       "name": "kestral",
-      "version": "0.4.38",
-      "source": "./",
+      "displayName": "Kestral",
+      "version": "0.4.39",
+      "description": "Connect Claude Code and Claude Cowork to Kestral — Authorize, start a first plan, search tasks, and plan or review workdays.",
+      "source": "./plugins/kestral",
       "category": "Productivity"
     }
   ]

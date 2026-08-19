@@ -1,0 +1,10 @@
+{
+  "name": "kestral",
+  "displayName": "Kestral",
+  "version": "0.4.39",
+  "description": "Connect Claude Code and Claude Cowork to Kestral — Authorize, start a first plan, search tasks, and plan or review workdays.",
+  "author": {
+    "name": "Kestral"
+  },
+  "hooks": "./hooks/claude-hooks.json"
+}
