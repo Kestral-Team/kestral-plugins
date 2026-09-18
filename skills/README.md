@@ -16,7 +16,7 @@ docs, see the [plugin README](../README.md).
 the **Kestral** MCP server in this session. Authentication is handled by the MCP connection itself (OAuth) — skills do
 not need to call `whoami` to verify auth, except `kestral-setup`, which calls it to confirm the session. If any MCP
 call returns auth failure (401, unauthorized, or `Not authenticated`), guide the user to re-authenticate through their
-app's UI (Cowork: Customize → Connectors; Codex: authenticate then start a new thread using `/new` — CLI: `codex mcp login Kestral`;
+app's UI (Cowork: Customize → Plugins → Yours → Kestral; Codex: authenticate then start a new thread using `/new` — CLI: `codex mcp login Kestral`;
 app: Plugins → Kestral → MCP servers gear; Claude Code: `/mcp` → reconnect; Cursor: Settings → Tools & MCPs → Connect).
 See the plugin [README](../README.md#troubleshooting) for platform-specific troubleshooting.
 

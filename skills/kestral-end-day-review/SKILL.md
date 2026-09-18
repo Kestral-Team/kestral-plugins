@@ -13,7 +13,7 @@ covered by the User preferences rules.
 
 The `Kestral` MCP server must be in this session (`/mcp`). Authentication is handled by the MCP connection — proceed
 directly with data-fetching calls. If any call returns auth failure (401, unauthorized, or `Not authenticated`), ask the
-user to reconnect or authenticate the **Kestral** MCP server through their app's UI (Cowork: Customize → Connectors;
+user to reconnect or authenticate the **Kestral** MCP server through their app's UI (Cowork: Customize → Plugins → Yours → Kestral;
 Codex: authenticate then start a new thread using `/new` — CLI: `codex mcp login Kestral`; app: Plugins → Kestral → MCP servers
 gear; Claude Code: `/mcp` → reconnect). Calendar access is optional, but use it
 when tomorrow prioritization depends on schedule realism.

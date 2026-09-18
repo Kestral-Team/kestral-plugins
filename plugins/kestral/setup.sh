@@ -1330,11 +1330,11 @@ print_claude_success() {
 
 Claude Code: Kestral plugin is ready (connects to Kestral at ${REMOTE_MCP_URL}).
   In the terminal: In chat, run /reload-plugins, then /kestral:kestral-setup.
-  In the Claude desktop app: Fully quit and reopen so the plugin appears. Go to Customize → Plugins → Kestral → Connectors and click Install for the Kestral MCP connector, then fully quit and reopen again. Start a new chat and run /kestral:kestral-setup (open chats keep their old plugin and tool snapshot).
+  In the Claude desktop app: Fully quit and reopen so the plugin appears. Go to Customize → Plugins → Yours → Kestral. In Connectors, click Connect, then fully quit and reopen again. Start a new chat and run /kestral:kestral-setup (open chats keep their old plugin and tool snapshot).
 EOF
 
   if [ "$HAS_DESKTOP_APP" -eq 1 ] && [ "${DESKTOP_REOPENED:-0}" -ne 1 ] && ! _is_cowork_selected; then
-    printf '  → Claude Code Desktop: follow the restart and connector-install steps above before starting a new chat.\n'
+    printf '  → Claude Code Desktop: follow the restart and Connect steps above before starting a new chat.\n'
   fi
 }
 
@@ -1372,7 +1372,7 @@ Claude Cowork manual install (GUI fallback):
   4. In the URL field, enter Kestral-Team/kestral-plugins, then click Sync.
   5. Click + on the Kestral card to install the plugin.
   6. If the This plugin includes local MCP servers dialog appears, click Continue to install the MCP server.
-  7. The Kestral MCP connector registers with the plugin. Check Customize → Connectors; if it is missing, fully quit and restart Cowork.
+  7. Open Customize → Plugins → Yours → Kestral. In Connectors, click Connect if it is not already connected. If Kestral is missing, fully quit and restart Cowork.
   8. The first Kestral tool call opens a browser window for OAuth sign-in.
   9. In Cowork, run /kestral:kestral-setup to connect Kestral and start your first plan.
 EOF
@@ -1670,7 +1670,9 @@ print_desktop_success() {
     printf '  %d. Fully quit and reopen %s (required — running sessions won'\''t see disk edits).\n' "$_step" "$_name"
     _step=$((_step + 1))
   fi
-  printf '  %d. Start a new task (+ New task — running tasks never reload plugin content).\n' "$_step"
+  printf '  %d. Go to Customize → Plugins → Yours → Kestral. In Connectors, click Connect.\n' "$_step"
+  _step=$((_step + 1))
+  printf '  %d. Fully quit and reopen %s again, then start a new task (+ New task — running tasks never reload plugin content).\n' "$_step" "$_name"
   _step=$((_step + 1))
   printf '  %d. In Cowork, run /kestral:kestral-setup — connect Kestral and start your first plan.\n' "$_step"
 
@@ -2710,7 +2712,7 @@ _print_mcp_auth_next_steps() {
     printf '  Claude Code: run /mcp, select Kestral, and authenticate.\n'
   fi
   if [ "$TARGET_RESULT_DESKTOP" = "installed" ]; then
-    printf '  %s: open Customize → Connectors → Kestral, then connect and sign in.\n' "$(_desktop_app_name)"
+    printf '  %s: open Customize → Plugins → Yours → Kestral. In Connectors, click Connect and sign in.\n' "$(_desktop_app_name)"
   fi
   if [ "$TARGET_RESULT_CODEX" = "installed" ]; then
     printf '  Codex app: open Plugins → Kestral → MCP servers gear icon, find Kestral under From plugins, and click Authenticate, then start a new thread.\n'

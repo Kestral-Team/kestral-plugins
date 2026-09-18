@@ -33,7 +33,7 @@ Fill --app with the host you are running in: cursor, claude-code, or codex.
 
 After install, load the plugin, then run kestral-setup:
 - Cursor: skills are in this session. If Kestral needs authentication, open Settings → Tools & MCPs and click Connect. Then run kestral-setup.
-- Claude Code: First detect whether you're running in Desktop or CLI. Check your shell's process ancestry using whatever method is native to your OS, walking up a bounded number of levels and stopping immediately on an empty, missing, or repeated parent PID. If any ancestor is a Claude.app (or equivalent packaged desktop app) process, output exactly desktop; otherwise output exactly cli. cli: /reload-plugins, then /kestral:kestral-setup. desktop: fully quit and reopen so the plugin appears. Go to Customize → Plugins → Kestral → Connectors and click Install for the Kestral MCP connector, then fully quit and reopen again. Start a new chat and run /kestral:kestral-setup (open chats keep their old plugin and tool snapshot).
+- Claude Code: First detect whether you're running in Desktop or CLI. Check your shell's process ancestry using whatever method is native to your OS, walking up a bounded number of levels and stopping immediately on an empty, missing, or repeated parent PID. If any ancestor is a Claude.app (or equivalent packaged desktop app) process, output exactly desktop; otherwise output exactly cli. cli: /reload-plugins, then /kestral:kestral-setup. desktop: fully quit and reopen so the plugin appears. Go to Customize → Plugins → Yours → Kestral. In Connectors, click Connect, then fully quit and reopen again. Start a new chat and run /kestral:kestral-setup (open chats keep their old plugin and tool snapshot).
 - Codex: fully quit and reopen. Authenticate (CLI: `codex mcp login Kestral`; app: Plugins → Kestral → MCP servers gear), then start a new thread using /new and run $kestral-setup.
 
 kestral-setup walks Authorize, asks what you want to plan, and puts a multi-phase plan in Kestral.
@@ -68,6 +68,9 @@ curl -fsSL https://raw.githubusercontent.com/Kestral-Team/kestral-plugins/main/s
 directly to Cowork's plugin files under `~/Library/Application Support/Claude/`.
 [View the script source](https://github.com/Kestral-Team/kestral-plugins/blob/main/setup.sh) before running.
 
+If setup fails, follow the actionable message in Terminal, then inspect `~/.kestral/setup.log` for the host command
+output. The file is replaced at the start of every run, so copy it before retrying if you need to preserve the failure.
+
 ### Claude Code
 
 Paste the install prompt above (fill `--app claude-code`), or use this terminal fallback:
@@ -78,8 +81,9 @@ curl -fsSL https://raw.githubusercontent.com/Kestral-Team/kestral-plugins/main/s
 
 **CLI:** In chat, run `/reload-plugins`, then `/kestral:kestral-setup`. No full quit.
 
-**Desktop:** After install, fully quit and reopen Claude so the plugin appears. Go to
-**Customize → Plugins → Kestral → Connectors**, click **Install** for the Kestral MCP connector, then fully quit and reopen
+**Desktop:** After install, fully quit the Claude process — not only its window — so the plugin appears. On macOS use
+**Claude → Quit** or `Cmd+Q`; on Windows use the app menu or system tray instead of only the `X`. Reopen Claude, go to
+**Customize → Plugins → Yours → Kestral**. In **Connectors**, click **Connect**, then fully quit and reopen
 Claude again. Start a **new** chat and run `/kestral:kestral-setup`. Open chats keep the plugin and tool snapshot they
 started with.
 
@@ -142,7 +146,7 @@ If the GUI cannot see or delete the entry, remove manually:
 
 ## Version
 
-Current release: **v0.4.39**
+Current release: **v0.4.40**
 
 ## Links
 

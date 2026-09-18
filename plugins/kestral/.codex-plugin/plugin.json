@@ -1,6 +1,6 @@
 {
   "name": "kestral",
-  "version": "0.4.39",
+  "version": "0.4.40",
   "description": "Connect Codex to Kestral — Authorize, start a first plan, search tasks, and plan or review workdays.",
   "skills": "./skills/",
   "mcpServers": "./.mcp.json",

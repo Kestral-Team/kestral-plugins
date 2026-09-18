@@ -49,8 +49,8 @@ one matching entry below. Do not combine hosts or synthesize generic "interactiv
 Connect first. Cursor loads plugin skills in this session after install.
 
 - **cli:** Run `/reload-plugins` if the skill is missing, then run this skill again.
-- **desktop:** Fully quit and reopen so the plugin appears. Go to **Customize → Plugins → Kestral → Connectors** and click
-  **Install** for the Kestral MCP connector. Fully quit and reopen again, then start a **new** chat and run
+- **desktop:** Fully quit and reopen so the plugin appears. Go to **Customize → Plugins → Yours → Kestral**. In
+  **Connectors**, click **Connect**. Fully quit and reopen again, then start a **new** chat and run
   `/kestral:kestral-setup` — open chats keep their old plugin and tool snapshot.
 
 On Codex, after MCP login always start a **new** thread (CLI: `/new`) — the thread where you authenticated will not see
@@ -67,11 +67,11 @@ Kestral tools.
 > **Kestral** if it shows disconnected.
 >
 > **Claude Code Desktop:** Fully quit and reopen so the plugin appears. Go to
-> **Customize → Plugins → Kestral → Connectors**, click **Install** for the Kestral MCP connector, then fully quit and reopen
+> **Customize → Plugins → Yours → Kestral**. In **Connectors**, click **Connect**, then fully quit and reopen
 > again. Start a **new** chat and run `/kestral:kestral-setup`. Open chats keep their old plugin and tool snapshot.
 >
-> **Claude Cowork:** Fully quit and reopen so the plugin appears. Go to **Customize → Plugins → Kestral → Connectors**, click
-> **Install** for the Kestral MCP connector, then fully quit and reopen again. Start a **new** task before running
+> **Claude Cowork:** Fully quit and reopen so the plugin appears. Go to **Customize → Plugins → Yours → Kestral**. In
+> **Connectors**, click **Connect**, then fully quit and reopen again. Start a **new** task before running
 > `/kestral:kestral-setup`.
 >
 > **Codex app:** Open **Plugins → Kestral**, click the **MCP servers** gear icon, find **Kestral** under **From

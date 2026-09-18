@@ -11,7 +11,7 @@ Search, view, and update tasks in your Kestral workspace without leaving the cha
 
 The `Kestral` MCP server must be in this session (`/mcp`). Authentication is handled by the MCP connection (OAuth) —
 proceed directly with operations. If any call returns auth failure (401, unauthorized, or `Not authenticated`), ask the
-user to reconnect or authenticate through their app's UI (Cowork: Customize → Connectors; Codex: authenticate then
+user to reconnect or authenticate through their app's UI (Cowork: Customize → Plugins → Yours → Kestral; Codex: authenticate then
 start a new thread using `/new` — CLI: `codex mcp login Kestral`; app: Plugins → Kestral → MCP servers gear; Claude Code: `/mcp` →
 reconnect).
 

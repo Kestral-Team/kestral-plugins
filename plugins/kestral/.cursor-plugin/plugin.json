@@ -1,6 +1,6 @@
 {
   "name": "kestral",
-  "version": "0.4.39",
+  "version": "0.4.40",
   "description": "Connect Cursor to Kestral — Authorize, start a first plan, sync tasks while you code, and close out with an end-of-day review.",
   "author": {
     "name": "Kestral"
